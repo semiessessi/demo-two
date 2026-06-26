@@ -4,6 +4,7 @@ import { createRenderer } from './renderer.js';
 import { createNebula } from './nebula.js';
 import { buildStarfield } from './starfield.js';
 import { loadShip } from './ship.js';
+import { loadChig, spawnChig, layoutChigGlows, chigThruster } from './enemyShip.js';
 import { createThrusters } from './thruster.js';
 import { createFlight } from './flight.js';
 import { createAudioManager } from './audio.js';
@@ -87,6 +88,21 @@ let ship = null;
 let thrusters = null;
 let flight = null;
 let stars = null;
+let chigKit = null;
+let testChig = null; // TEMP single Chig for previewing the model / tuning its thrusters
+let chigTuning = false;
+
+// TEMP: pose the preview Chig either alongside the player or centred ahead for thruster tuning.
+function setChigPose(mode) {
+  if (!testChig) return;
+  if (mode === 'tuning') {
+    testChig.position.set(0, 0, -11); // centred ahead, tail toward the camera so all 3 glows spread out
+    testChig.rotation.set(0.18, 0, 0); // slight nose-down so the top reads too
+  } else {
+    testChig.position.set(9, 1, -16); // flying alongside, rear-3/4
+    testChig.rotation.set(0.12, 2.4, 0);
+  }
+}
 
 async function init() {
   stars = await buildStarfield(starUniforms);
@@ -108,8 +124,14 @@ async function init() {
   thrusters = createThrusters(ship.pivot, ship.nozzles, ship.rearDir, ship.radius);
   flight = createFlight(ship.pivot, camera, renderer.domElement);
 
+  // TEMP: one Chig flying alongside so the new look is visible until enemies.js lands (phase 3).
+  chigKit = await loadChig();
+  testChig = spawnChig(chigKit.template);
+  ship.pivot.add(testChig);
+  setChigPose('alongside');
+
   // TEMP debug handle for live orientation/thruster tuning
-  window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight };
+  window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, chig: testChig };
   buildTweakGui();
 
   startLoop();
@@ -234,6 +256,10 @@ window.addEventListener('keydown', (e) => {
     setTimeout(setPlayIcon, 60);
   } else if (e.code === 'KeyF') {
     setStats(!statsOn);
+  } else if (e.code === 'KeyC') {
+    // TEMP: toggle the Chig thruster-tuning pose (centred ahead, side-on)
+    chigTuning = !chigTuning;
+    setChigPose(chigTuning ? 'tuning' : 'alongside');
   }
 });
 
@@ -254,6 +280,16 @@ function buildTweakGui() {
   const cf = gui.addFolder('Camera');
   cf.add(flight, 'camDist', 6, 50, 0.5).name('distance (wheel)').listen();
   cf.add(flight, 'heightRatio', 0, 1, 0.02).name('height ratio');
+
+  // Chig thrusters (press C to pose a Chig ahead for tuning). Tweaks the 3 rear glows.
+  const ct = gui.addFolder('Chig Thrusters');
+  const relayoutChig = () => testChig && layoutChigGlows(testChig, chigThruster);
+  ct.add(chigThruster, 'x', 0, 2, 0.02).name('side spread ±X').onChange(relayoutChig);
+  ct.add(chigThruster, 'y', -1, 1, 0.02).name('offset Y').onChange(relayoutChig);
+  ct.add(chigThruster, 'zCenter', 0, 3, 0.02).name('centre Z').onChange(relayoutChig);
+  ct.add(chigThruster, 'zSide', 0, 3, 0.02).name('sides Z').onChange(relayoutChig);
+  ct.add(chigThruster, 'size', 0.2, 2.5, 0.02).name('glow size').onChange(relayoutChig);
+  ct.close();
 }
 
 init().catch((e) => {
