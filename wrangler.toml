@@ -1,0 +1,14 @@
+name = "demo-two"
+compatibility_date = "2026-06-01"
+workers_dev = true
+
+# Static-assets-only Worker: serves the Vite build output (dist/).
+[assets]
+directory = "./dist"
+
+# Custom domain (optional). Uncomment to attach; Cloudflare creates the DNS record + TLS
+# cert on first `wrangler deploy`. Requires the redmarmosetstudios.com zone on the same
+# account as the deploy token. Without this it deploys to <name>.workers.dev.
+# [[routes]]
+# pattern = "d2.redmarmosetstudios.com"
+# custom_domain = true

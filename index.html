@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SA-43 Hammerhead — In Space</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23030308'/><path d='M16 6 L24 24 L16 20 L8 24 Z' fill='%23bcd2ff'/><circle cx='16' cy='19' r='1.6' fill='%23ff8a5a'/></svg>"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #030308;
+        overflow: hidden;
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        color: #8a93a6;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+      canvas {
+        display: block;
+      }
+
+      /* Bottom control bar — audio transport */
+      #controls {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 14px 18px 12px;
+        width: min(560px, calc(100vw - 40px));
+        background: rgba(12, 14, 22, 0.55);
+        border: 1px solid rgba(150, 180, 255, 0.1);
+        border-radius: 22px;
+        backdrop-filter: blur(8px);
+        user-select: none;
+      }
+      #row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      #playToggle,
+      #muteToggle {
+        flex: none;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        border: 1px solid rgba(150, 180, 255, 0.16);
+        background: rgba(150, 180, 255, 0.05);
+        color: #cdd6ea;
+        font-size: 15px;
+        line-height: 1;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+      #playToggle:hover,
+      #muteToggle:hover {
+        background: rgba(150, 180, 255, 0.13);
+      }
+      #volume {
+        flex: 1 1 auto;
+        accent-color: #6f9bff;
+        cursor: pointer;
+      }
+      #label {
+        text-align: center;
+        font-size: 12px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #7f8aa3;
+        height: 1em;
+        line-height: 1;
+      }
+      #stats {
+        position: fixed;
+        top: 10px;
+        right: 12px;
+        text-align: right;
+        margin: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.4;
+        color: #7fd08a;
+        text-shadow:
+          -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000,
+          -2px 0 0 #000, 2px 0 0 #000, 0 -2px 0 #000, 0 2px 0 #000,
+          0 0 4px #000;
+        white-space: pre;
+        pointer-events: none;
+        display: none;
+      }
+
+      /* Info / controls pane (toggle with Tab; shown on load) */
+      #info {
+        position: fixed;
+        top: 50%;
+        right: 24px;
+        transform: translate(calc(100% + 28px), -50%);
+        width: min(330px, calc(100vw - 40px));
+        max-height: calc(100vh - 48px);
+        overflow: auto;
+        padding: 20px 22px;
+        background: rgba(12, 14, 22, 0.6);
+        border: 1px solid rgba(150, 180, 255, 0.1);
+        border-radius: 22px;
+        backdrop-filter: blur(8px);
+        color: #8a93a6;
+        font-size: 13px;
+        line-height: 1.5;
+        user-select: none;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 0.34s ease;
+      }
+      #info.open {
+        transform: translate(0, -50%);
+        opacity: 1;
+        pointer-events: auto;
+      }
+      #info h2 {
+        margin: 0 0 14px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #cdd6ea;
+      }
+      #info dl {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 7px 14px;
+        margin: 0;
+      }
+      #info dt {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        color: #e6ecf7;
+        white-space: nowrap;
+      }
+      #info dd {
+        margin: 0;
+      }
+      #info .credit {
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(150, 180, 255, 0.12);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      #info .credit a {
+        color: #9ec7ff;
+        text-decoration: none;
+      }
+      #info .credit a:hover {
+        text-decoration: underline;
+      }
+
+      /* Top toast — slides down to hint the Tab pane, then retracts */
+      #toast {
+        position: fixed;
+        top: 18px;
+        left: 50%;
+        transform: translate(-50%, -160%);
+        padding: 9px 16px;
+        background: rgba(12, 14, 22, 0.7);
+        border: 1px solid rgba(150, 180, 255, 0.12);
+        border-radius: 999px;
+        backdrop-filter: blur(8px);
+        color: #cdd6ea;
+        font-size: 12.5px;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+        user-select: none;
+        pointer-events: none;
+        transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      #toast.show {
+        transform: translate(-50%, 0);
+      }
+      #toast kbd {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        color: #fff;
+        background: rgba(150, 180, 255, 0.14);
+        border: 1px solid rgba(150, 180, 255, 0.2);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+
+      /* "Click for sound" prompt — appears when the browser blocks audio until a user gesture. */
+      #start {
+        position: fixed;
+        left: 50%;
+        top: 20px;
+        transform: translateX(-50%);
+        z-index: 100;
+        padding: 11px 20px;
+        background: rgba(12, 14, 22, 0.75);
+        border: 1px solid rgba(150, 180, 255, 0.16);
+        border-radius: 999px;
+        backdrop-filter: blur(8px);
+        color: #eaeefc;
+        font-size: 14px;
+        letter-spacing: 0.05em;
+        cursor: pointer;
+        transition: opacity 0.5s ease;
+        animation: startPulse 2.2s ease-in-out infinite;
+      }
+      @keyframes startPulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(158, 199, 255, 0);
+        }
+        50% {
+          box-shadow: 0 0 20px 2px rgba(158, 199, 255, 0.28);
+        }
+      }
+      #start.hidden {
+        opacity: 0;
+        pointer-events: none;
+        animation: none;
+      }
+
+      /* Fade-up from black on load — covers the bundle load + model load + first frame. */
+      #fade {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        background: #030308;
+        opacity: 1;
+        pointer-events: none;
+        transition: opacity 1.1s ease;
+      }
+      #fade.gone {
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <pre id="stats"></pre>
+    <div id="controls">
+      <div id="row">
+        <button id="playToggle" title="Play / pause music (P)" aria-label="Play or pause">▶</button>
+        <input id="volume" type="range" min="0" max="100" value="70" step="1" aria-label="Volume" />
+        <button id="muteToggle" title="Mute / unmute" aria-label="Mute or unmute">🔊</button>
+      </div>
+      <span id="label">SA-43 Hammerhead</span>
+    </div>
+    <aside id="info" aria-label="Controls and credits">
+      <h2>Flight Controls</h2>
+      <dl>
+        <dt>W / S</dt>
+        <dd>pitch down / up</dd>
+        <dt>A / D</dt>
+        <dd>yaw left / right</dd>
+        <dt>Q / E</dt>
+        <dd>roll left / right</dd>
+        <dt>Shift</dt>
+        <dd>boost (afterburner)</dd>
+        <dt>Ctrl</dt>
+        <dd>brake</dd>
+        <dt>Wheel</dt>
+        <dd>zoom in / out</dd>
+        <dt>P</dt>
+        <dd>play / pause music</dd>
+        <dt>Tab</dt>
+        <dd>show / hide this panel</dd>
+        <dt>F</dt>
+        <dd>fps overlay</dd>
+      </dl>
+      <div class="credit">
+        &#9670; <strong>SA-43 &ldquo;Hammerhead&rdquo;</strong><br />
+        Endo/exo-atmospheric attack craft.<br />
+        &#9834; Music: drop an MP3 at <code>public/music/track.mp3</code>
+      </div>
+    </aside>
+    <div id="toast"><span>Press <kbd>Tab</kbd> for controls</span></div>
+    <div id="start" class="hidden">&#128266;&nbsp; Click anywhere to play with sound</div>
+    <div id="fade"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

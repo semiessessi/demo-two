@@ -1,1 +1,8 @@
-*.zip 
+*.zip
+node_modules/
+dist/
+assets-src/
+.playwright-mcp/
+.serena/
+.DS_Store
+*.local
