@@ -46,6 +46,8 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
     holdRange: 340, // keep tracking a locked target out to here
     targetCone: 0.5, // half-angle to acquire a target near the crosshair
     holdCone: 1.2, // much wider hold so a lock sticks through the target's manoeuvres
+    lockRange: 360, // manual lock can reach further than auto-acquire
+    lockCone: 0.7, // half-angle in which a manual lock looks for a target near the crosshair
     muzzle: { x: 0, y: 0, z: -ship.radius * 0.95 }, // gun exit point
   };
   let cooldown = 0;
@@ -53,6 +55,8 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
   let gimbalPitch = 0;
   let flashLife = 0;
   let target = null;
+  let locked = false; // manual lock — pins the target until it dies (suppresses auto-acquire)
+  const lockList = [];
 
   const muzzleLocal = new THREE.Vector3();
   const muzzleWorld = new THREE.Vector3();
@@ -108,22 +112,62 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
     return target;
   }
 
+  // Manual lock/cycle: pick the enemy nearest the crosshair (within a generous cone/range) and pin
+  // it; pressing again cycles to the next. Falls back to the nearest enemy anywhere if none are near
+  // the crosshair. The pinned target is held until it dies (auto-acquire is suppressed while locked).
+  function cycleLock() {
+    const shipPos = ship.pivot.position;
+    lockList.length = 0;
+    for (const e of getEnemies()) {
+      if (!e.alive) continue;
+      toE.copy(e.pos).sub(shipPos);
+      const d = toE.length() || 1;
+      if (d > params.lockRange) continue;
+      const dot = fwd.dot(toE.multiplyScalar(1 / d));
+      if (dot >= Math.cos(params.lockCone)) lockList.push({ e, dot });
+    }
+    if (lockList.length === 0) {
+      // nothing near the crosshair — lock the nearest enemy anywhere
+      let best = null;
+      let bd = Infinity;
+      for (const e of getEnemies()) {
+        if (!e.alive) continue;
+        const d = e.pos.distanceToSquared(shipPos);
+        if (d < bd) { bd = d; best = e; }
+      }
+      target = best;
+      locked = !!best;
+      return;
+    }
+    lockList.sort((a, b) => b.dot - a.dot); // nearest the crosshair first
+    const order = lockList.map((c) => c.e);
+    const idx = order.indexOf(target);
+    target = order[(idx + 1) % order.length]; // idx === -1 -> first; otherwise cycle to next
+    locked = true;
+  }
+
   function update(dt, input, player) {
     const shipQ = ship.pivot.quaternion;
     up.set(0, 1, 0).applyQuaternion(shipQ);
     right.set(1, 0, 0).applyQuaternion(shipQ);
     fwd.set(0, 0, -1).applyQuaternion(shipQ);
 
+    // --- target resolution (independent of how the gun is being aimed) ---
+    if (input?.lockPressed) cycleLock();
+    if (locked && (!target || !target.alive)) locked = false; // pinned target gone -> release
+    if (!locked) target = params.autoTrack ? acquireTarget(getEnemies(), ship.pivot.position) : null;
+
+    // --- aim ---
     const manual = Math.abs(input?.gunAimX || 0) > MANUAL_DEADZONE || Math.abs(input?.gunAimY || 0) > MANUAL_DEADZONE;
     let tYaw = 0;
     let tPitch = 0;
-    if (manual || !params.autoTrack) {
-      target = null;
-      tYaw = -(input?.gunAimX || 0) * params.gimbalMax; // stick-left aims left
+    if (manual) {
+      // hand control overrides tracking, but the locked/auto target stays selected for the display
+      tYaw = -(input?.gunAimX || 0) * params.gimbalMax; // left aims left
       // the cannon can only depress (aim down), never elevate above level
       tPitch = THREE.MathUtils.clamp(-(input?.gunAimY || 0) * params.gimbalMaxV, -params.gimbalMaxV, 0);
     } else {
-      const tgt = acquireTarget(getEnemies(), ship.pivot.position);
+      const tgt = target;
       if (tgt) {
         // Linear-intercept lead: aim where the target will be when the bolt arrives. In the player's
         // frame the bolt travels at boltSpeed along aim; the target moves at its velocity relative to
@@ -187,7 +231,7 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
       if (flashLife <= 0) flash.visible = false;
     }
 
-    return { aimDir, target };
+    return { aimDir, target, locked };
   }
 
   return {
@@ -198,6 +242,9 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
     },
     get target() {
       return target;
+    },
+    get locked() {
+      return locked;
     },
   };
 }

@@ -18,6 +18,7 @@ import { createVfx } from './vfx.js';
 import { createCombat } from './combat.js';
 import { createDamageModel } from './damage.js';
 import { createHud } from './hud.js';
+import { createTargetDisplay } from './targetDisplay.js';
 import { createGameState } from './gameState.js';
 import { createDebug } from './debug.js';
 
@@ -118,6 +119,7 @@ let vfx = null;
 let combat = null;
 let damage = null;
 let hud = null;
+let targetDisplay = null;
 let gameState = null;
 const playerVel = new THREE.Vector3();
 const playerFwd = new THREE.Vector3();
@@ -195,12 +197,13 @@ async function init() {
   combat.setOnPlayerHit((pt, dmg) => damage.applyHit(pt, dmg));
 
   hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
+  targetDisplay = createTargetDisplay(chigKit.template);
   gameState = createGameState({ ship, camera, flight, hud, vfx, onRestart: restartWorld });
   damage.setCallbacks({ onEject: () => gameState.eject(), onDestroyed: () => gameState.destroyed() });
 
   if (DEBUG) {
     // debug handle + live-tuning GUI — local dev only, never on the deployed site
-    window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves, damage, cannon, gameState };
+    window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves, damage, cannon, gameState, targetDisplay };
     debug = createDebug({
       renderer, scene, camera, render, bloom,
       ship, chigKit, flight, thrusters,
@@ -247,6 +250,7 @@ function startLoop() {
     enemyMgr.prune();
     gameState.update(dt, input);
     hud.update({ waves, enemies: enemyMgr.enemies, player, ejectProgress: gameState.ejectProgress });
+    targetDisplay.update(cannon.target, ship.pivot.quaternion, ship.pivot.position, cannon.locked);
 
     const amp = audio.getAmplitude();
     const bands = audio.getBands();

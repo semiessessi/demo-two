@@ -35,12 +35,14 @@ export function createInput() {
     fire: 0,
     gunAimX: 0,
     gunAimY: 0,
+    lockPressed: false, // edge: target lock pressed this frame (X / right-stick click)
     ejectHeld: false,
     gamepad: false,
     keys,
     poll,
     dispose,
   };
+  let lockPrev = false;
 
   const axisKey = (neg, pos) => (keys.has(neg) ? -1 : 0) + (keys.has(pos) ? 1 : 0);
 
@@ -51,16 +53,18 @@ export function createInput() {
   }
 
   function poll() {
-    // keyboard (same mapping/signs as the original flight.js)
-    let pitch = axisKey('KeyW', 'KeyS') + axisKey('ArrowUp', 'ArrowDown'); // W/Up = nose down (-1)
-    let yaw = axisKey('KeyD', 'KeyA') + axisKey('ArrowRight', 'ArrowLeft'); // A/Left = yaw left (+1)
+    // keyboard — WASD flies (arrows now drive the gun, not flight)
+    let pitch = axisKey('KeyW', 'KeyS'); // W = nose down (-1)
+    let yaw = axisKey('KeyD', 'KeyA'); // A = yaw left (+1)
     let roll = axisKey('KeyE', 'KeyQ'); // Q = roll left (+1)
     let boost = keys.has('ShiftLeft') || keys.has('ShiftRight');
     let brake = keys.has('ControlLeft') || keys.has('ControlRight');
     let fire = keys.has('Space') ? 1 : 0;
     let eject = keys.has('KeyJ');
-    let gunAimX = 0;
-    let gunAimY = 0;
+    // arrow keys aim the front gun: left/right swing, down depresses (up is clamped out — gun is down-only)
+    let gunAimX = axisKey('ArrowLeft', 'ArrowRight');
+    let gunAimY = axisKey('ArrowUp', 'ArrowDown');
+    let lock = keys.has('KeyX'); // X = lock / cycle target
 
     const gp = firstPad();
     input.gamepad = !!gp;
@@ -74,8 +78,9 @@ export function createInput() {
       fire = Math.max(fire, btn(7)); // right trigger
       boost = boost || btn(6) > 0.3; // left trigger
       brake = brake || btn(1) > 0.5; // B
-      gunAimX = dz(ax[2] || 0); // right stick X -> gun gimbal (yaw)
-      gunAimY = dz(ax[3] || 0); // right stick Y -> gun gimbal (pitch)
+      gunAimX = dz(ax[2] || 0) || gunAimX; // right stick X -> gun gimbal (yaw); falls back to arrows
+      gunAimY = dz(ax[3] || 0) || gunAimY; // right stick Y -> gun gimbal (pitch)
+      lock = lock || btn(10) > 0.5; // right-stick click (R3) = lock target
       eject = eject || btn(3) > 0.5 || btn(8) > 0.5; // Y or View/Back
     }
 
@@ -87,6 +92,8 @@ export function createInput() {
     input.fire = fire;
     input.gunAimX = clamp1(gunAimX);
     input.gunAimY = clamp1(gunAimY);
+    input.lockPressed = lock && !lockPrev; // rising edge only
+    lockPrev = lock;
     input.ejectHeld = eject;
     return input;
   }

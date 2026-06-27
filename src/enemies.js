@@ -55,6 +55,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   const enemies = [];
   const formations = [];
   let kills = 0;
+  let serial = 0; // monotonic — gives every Chig a unique trackable hash
 
   const FWD = new THREE.Vector3(0, 0, -1);
   const ZAX = new THREE.Vector3(0, 0, 1);
@@ -107,6 +108,8 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         egress: 0,
         p: makePersonality(difficulty), // pilot personality
         jinkPhase: Math.random() * Math.PI * 2, // evasive-weave phase
+        name: 'Chig Fighter',
+        hash: ((serial++ * 0x9e37 + 0x3b9f) & 0xffff).toString(16).toUpperCase().padStart(4, '0'), // unique id
       };
       obj.position.copy(e.pos);
       scene.add(obj);
