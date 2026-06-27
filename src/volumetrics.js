@@ -362,14 +362,12 @@ export function createVolumetrics(scene, camera, opts = {}) {
     s.mesh.castShadow = false;
   }
 
+  // Each of spawnDist/spawnInterval/life/radius/density/blobs may be a number OR a live getter — so a
+  // caller (e.g. the damage model) can ramp the smoke denser + faster as a subsystem's HP falls.
   function createTrail(opts = {}) {
     const getPos = opts.getPos;
     const getVel = opts.getVel ?? (() => _zero);
-    const spawnDist = opts.spawnDist ?? 3.0;
-    const spawnInterval = opts.spawnInterval ?? 0.14;
-    const life = opts.life ?? 3.0;
-    const radius = opts.radius ?? 3.2;
-    const density = opts.density ?? 1;
+    const ev = (v, d) => (typeof v === 'function' ? v() : v != null ? v : d);
     const last = new THREE.Vector3();
     let started = false;
     let accT = 0;
@@ -384,7 +382,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
         if (!started) { last.copy(pos); started = true; }
         accT += dt;
         const moved = _p.copy(pos).sub(last).length();
-        if (moved >= spawnDist || accT >= spawnInterval) {
+        if (moved >= ev(opts.spawnDist, 3.0) || accT >= ev(opts.spawnInterval, 0.14)) {
           accT = 0;
           last.copy(pos);
           const vel = getVel() || _zero;
@@ -392,7 +390,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
           _drift.y += 1.0;
           _drift.x += (Math.random() - 0.5) * 1.2;
           _drift.z += (Math.random() - 0.5) * 1.2;
-          puff(pos, { life, radius, drift: _drift, blobs: 3, density });
+          puff(pos, { life: ev(opts.life, 3.0), radius: ev(opts.radius, 3.2), drift: _drift, blobs: Math.round(ev(opts.blobs, 3)), density: ev(opts.density, 1) });
         }
       },
       stop() { stopped = true; },

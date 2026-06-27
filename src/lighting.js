@@ -26,11 +26,12 @@ export function createLighting(scene, camera, renderer, opts = {}) {
   const sunColor = new THREE.Color(opts.sunColor ?? 0xffb070);
   const sunDir = (opts.sunDir ? opts.sunDir.clone() : new THREE.Vector3(-55, 30, -30)).normalize(); // points TO the sun
   const sunIntensity = opts.sunIntensity ?? 2.6;
+  let sunMult = opts.sunMult ?? 1; // live brightness multiplier (debug slider), persists across CSM rebuilds
   const travelDir = sunDir.clone().negate(); // direction the sunlight travels (scene-ward)
 
   // Plain (non-shadow) sun used on the lowest tiers where CSM is disabled, and while the debug viewer
   // owns the frame. Parallel light → direction is all that matters.
-  const plainSun = new THREE.DirectionalLight(sunColor.getHex(), sunIntensity);
+  const plainSun = new THREE.DirectionalLight(sunColor.getHex(), sunIntensity * sunMult);
   plainSun.position.copy(sunDir).multiplyScalar(200);
   plainSun.visible = false;
   scene.add(plainSun);
@@ -44,7 +45,6 @@ export function createLighting(scene, camera, renderer, opts = {}) {
   let suspended = false; // debug viewer owns the frame
   let cascades = 3;
   let shadowMapSize = 2048;
-  let sunMult = 1; // live brightness multiplier (debug slider), persists across CSM rebuilds
 
   function normalBiasFor(size) {
     return size >= 4096 ? 0.05 : size >= 2048 ? 0.08 : 0.12;
@@ -154,10 +154,12 @@ export function createLighting(scene, camera, renderer, opts = {}) {
   // SHADOWS from the engines are produced by the proximity transient pool (so they only cost a shadow
   // map when there's actually a ship near a thruster to shadow). Intensity tracks thrust each frame.
   const thrusterLights = [];
-  const thrusterParams = { color: 0x66c0ff, peak: 55, idle: 2, distance: 70 };
+  // Confined to a small bubble around the nozzles (short `distance`) so the engines light just their
+  // immediate hull + anything right behind, instead of washing the whole rear blue.
+  const thrusterParams = { color: 0x66c0ff, peak: 20, idle: 1, distance: 12 };
 
   function attachThrusters(pivot, nozzles, rearDir, shipRadius) {
-    thrusterParams.distance = shipRadius * 14;
+    thrusterParams.distance = shipRadius * 2.5;
     for (const noz of nozzles) {
       const pl = new THREE.PointLight(thrusterParams.color, 0, thrusterParams.distance, 2);
       pl.position.copy(noz);

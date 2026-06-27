@@ -47,7 +47,7 @@ const rim = new THREE.DirectionalLight(0xb8b8b8, 0.7); // neutral grey back-ligh
 rim.position.set(45, -8, 40);
 scene.add(rim);
 scene.add(new THREE.HemisphereLight(0x6e6e74, 0x141414, 0.95)); // neutral grey fill
-const lighting = createLighting(scene, camera, renderer, { sunColor: 0xffb070, sunDir, sunIntensity: 2.6 });
+const lighting = createLighting(scene, camera, renderer, { sunColor: 0xffb070, sunDir, sunIntensity: 2.6, sunMult: 7 });
 window.addEventListener('resize', () => lighting.onResize());
 
 // Visible sun disc in the sky, in the sun's direction, kept at infinity (moved with the camera).
@@ -406,8 +406,9 @@ function buildTweakGui() {
   // Engine light spill — real PointLights at the nozzles (peak = full throttle, idle = at rest).
   const el = lighting.thrusterParams;
   const elf = gui.addFolder('Engine Lights');
-  elf.add(el, 'peak', 0, 200, 1).name('peak intensity');
-  elf.add(el, 'idle', 0, 40, 0.5).name('idle intensity');
+  elf.add(el, 'peak', 0, 80, 1).name('peak intensity');
+  elf.add(el, 'idle', 0, 20, 0.5).name('idle intensity');
+  elf.add(el, 'distance', 2, 60, 0.5).name('reach').onChange(() => lighting.setThrusterParams({}));
   elf.addColor(el, 'color').name('color').onChange(() => lighting.setThrusterParams({}));
   elf.close();
 

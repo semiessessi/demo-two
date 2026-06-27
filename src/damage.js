@@ -109,14 +109,17 @@ export function createDamageModel(ship, opts = {}) {
       if (useTrail) {
         // raymarched smoke trail: thicker + larger the more wounded the zone is
         if (!z.trail) {
-          const hurt = (SMOKE_AT - frac) / SMOKE_AT; // 0..1 as it worsens
+          // Ramp the smoke live (read each spawn) so it gets denser + lumpier + MORE puffs as the
+          // zone keeps losing HP — not fixed at the moment trailing started.
+          const hurt = () => Math.max(0, Math.min(1, (SMOKE_AT - z.hp / z.maxHp) / SMOKE_AT));
           z.trail = vfx.createTrail({
             getPos: zonePos(z),
             life: 2.6,
-            radius: 2.4 + hurt * 2.0,
-            spawnDist: 5.0,
-            spawnInterval: 0.4,
-            density: 0.9 + hurt * 0.7, // thick, occluding — heavier the more wounded
+            radius: () => 2.4 + hurt() * 2.6,
+            spawnDist: () => 5.0 - hurt() * 3.2, // tighter spacing -> more puffs when worse
+            spawnInterval: () => 0.4 - hurt() * 0.28, // faster cadence -> more particles when worse
+            density: () => 0.9 + hurt() * 1.3, // thicker, more occluding the more wounded
+            blobs: () => (hurt() > 0.55 ? 4 : 3), // lumpier when badly hurt
           });
         }
         z.trail.update(stepDt);

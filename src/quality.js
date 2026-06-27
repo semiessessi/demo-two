@@ -21,8 +21,8 @@ const TIERS = [
   { name: 'vlow', csm: false, size: 1024, casc: 2, transient: 0, smokeCast: false, vfx: 'high' },
   { name: 'low', csm: true, size: 1024, casc: 3, transient: 0, smokeCast: false, vfx: 'high' },
   { name: 'med', csm: true, size: 2048, casc: 3, transient: 1, smokeCast: false, vfx: 'high' },
-  { name: 'high', csm: true, size: 4096, casc: 3, transient: 2, smokeCast: true, vfx: 'high' },
-  { name: 'ultra', csm: true, size: 4096, casc: 4, transient: 3, smokeCast: true, vfx: 'high' },
+  { name: 'high', csm: true, size: 4096, casc: 3, transient: 2, smokeCast: false, vfx: 'high' },
+  { name: 'ultra', csm: true, size: 4096, casc: 4, transient: 3, smokeCast: false, vfx: 'high' },
 ];
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
