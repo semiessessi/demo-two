@@ -51,7 +51,7 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
         const rr = params.playerHitRadius + b.radius;
         if (segDistSq(segStart, b.pos, pp) <= rr * rr) {
           vfx.spark(b.pos, 0x9fd0ff);
-          if (onPlayerHit) onPlayerHit(b.pos, b.damage);
+          if (onPlayerHit) onPlayerHit(b.pos, b.damage, segStart); // segStart = bolt path start, for direct-hit (segment) routing
           projectiles.kill(b);
         }
       }

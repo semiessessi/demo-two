@@ -39,10 +39,38 @@ export function createDamageModel(ship, opts = {}) {
   add('R Fuel', new THREE.Vector3(R * 0.3, -R * 0.05, R * 0.18), R * 0.4, 25, 'fuel');
   add('Fuselage', new THREE.Vector3(0, 0, 0), R * 0.7, 120, 'fuselage');
 
+  // Forward canards: small, hard-to-hit control surfaces. Only DIRECT hits (the bolt's travel segment
+  // passes inside the sphere — see applyHit) take them out, so they're rare and don't steal nearby hits.
+  const findNode = (re) => { let n = null; pivot.traverse((o) => { if (!n && re.test(o.name)) n = o; }); return n; };
+  function addCanard(name, re, sx) {
+    const node = findNode(re);
+    const center = node
+      ? pivot.worldToLocal(new THREE.Box3().setFromObject(node).getCenter(new THREE.Vector3()))
+      : new THREE.Vector3(sx * 0.86, -0.12, -2.94);
+    add(name, center, 1.2, 10, 'canard'); // hp 10 = one enemy pulse; tune radius/hp live in the editor
+    const z = zones[zones.length - 1];
+    z.node = node; // the L_Canard / R_Canard group — hidden + cloned to debris when destroyed
+    z.sparkPoint = new THREE.Vector3(sx * 0.4, -0.1, -2.7); // inboard root near the cockpit (stub sparks)
+  }
+  addCanard('L Canard', /^L_Canard$/i, -1);
+  addCanard('R Canard', /^R_Canard$/i, 1);
+
   let onEject = opts.onEject || null;
   let onDestroyed = opts.onDestroyed || null;
   let onFuelRupture = opts.onFuelRupture || null;
+  let onCanardLost = opts.onCanardLost || null;
   const localPt = new THREE.Vector3();
+  const segB = new THREE.Vector3();
+  const _segAB = new THREE.Vector3(), _segAC = new THREE.Vector3(), _segCl = new THREE.Vector3();
+  // squared distance from point c to segment [a -> b] (all pivot-local) — mirrors combat.js segDistSq
+  function segPointDistSq(a, b, c) {
+    _segAB.copy(b).sub(a);
+    const len2 = _segAB.lengthSq();
+    let t = len2 > 1e-9 ? _segAC.copy(c).sub(a).dot(_segAB) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    _segCl.copy(a).addScaledVector(_segAB, t);
+    return _segCl.distanceToSquared(c);
+  }
 
   // The front gun is offline once its zone is destroyed (the player cannon checks this each frame).
   function canFire() {
@@ -50,16 +78,29 @@ export function createDamageModel(ship, opts = {}) {
     return true;
   }
 
-  function applyHit(worldPoint, dmg) {
+  // `fromPoint` (the bolt's start-of-frame world pos) is optional; when present, canards use the bolt's
+  // full travel SEGMENT for a true direct-hit test (the end point alone often lands past the canard).
+  function applyHit(worldPoint, dmg, fromPoint) {
     pivot.worldToLocal(localPt.copy(worldPoint));
-    let best = null;
-    let bestD = Infinity;
+    // Canards: excluded from normal routing; only a DIRECT hit (segment passes within the small sphere)
+    // counts — keeps them rare and stops them stealing nearby hits.
+    if (fromPoint) pivot.worldToLocal(segB.copy(fromPoint)); else segB.copy(localPt);
+    let canard = null, canardD = Infinity;
     for (const z of zones) {
-      if (!z.alive) continue;
-      const d = localPt.distanceTo(z.center);
-      if (d < bestD) {
-        bestD = d;
-        best = z;
+      if (z.kind !== 'canard' || !z.alive) continue;
+      const d2 = segPointDistSq(segB, localPt, z.center);
+      if (d2 <= z.radius * z.radius && d2 < canardD) { canardD = d2; canard = z; }
+    }
+    let best = canard;
+    if (!best) {
+      let bestD = Infinity;
+      for (const z of zones) {
+        if (!z.alive || z.kind === 'canard') continue;
+        const d = localPt.distanceTo(z.center);
+        if (d < bestD) {
+          bestD = d;
+          best = z;
+        }
       }
     }
     if (!best) return null;
@@ -70,6 +111,7 @@ export function createDamageModel(ship, opts = {}) {
       if (best.kind === 'cockpit' && onEject) onEject();
       else if (best.kind === 'fuselage' && onDestroyed) onDestroyed();
       else if (best.kind === 'fuel' && onFuelRupture) onFuelRupture(best); // tank rupture is catastrophic
+      else if (best.kind === 'canard') { if (best.node) best.node.visible = false; if (onCanardLost) onCanardLost(best, best.node, worldPoint); }
       // gun: no callback — canFire() reads its zone state and disables the cannon
     }
     return best;
@@ -79,6 +121,12 @@ export function createDamageModel(ship, opts = {}) {
     const dead = zones.filter((z) => z.kind === 'engine' && !z.alive).length;
     return [1, 0.6, 0.3][Math.min(dead, 2)];
   }
+
+  // Forward canards drive control authority: lose one -> roll halves / pitch to 75%; lose both -> roll
+  // to a quarter / pitch to a third. (Read each frame by flight via setRollScale/setPitchScale.)
+  const deadCanards = () => zones.filter((z) => z.kind === 'canard' && !z.alive).length;
+  function rollScale() { return [1, 0.5, 0.25][Math.min(deadCanards(), 2)]; }
+  function pitchScale() { return [1, 0.75, 0.33][Math.min(deadCanards(), 2)]; }
 
   let acc = 0;
   const wp = new THREE.Vector3();
@@ -134,6 +182,14 @@ export function createDamageModel(ship, opts = {}) {
         vfx.ember(wp, frac);
       }
     }
+    // ongoing electric sparks from the stub of any blown-off canard
+    for (const z of zones) {
+      if (z.kind === 'canard' && !z.alive && z.sparkPoint && vfx.spark && Math.random() < 0.5) {
+        wp.copy(z.sparkPoint);
+        pivot.localToWorld(wp);
+        vfx.spark(wp, 0xcfe8ff);
+      }
+    }
   }
 
   function totalHp() {
@@ -151,6 +207,7 @@ export function createDamageModel(ship, opts = {}) {
       z.hp = z.maxHp;
       z.alive = true;
       if (z.trail) { z.trail.stop(); z.trail = null; }
+      if (z.node) z.node.visible = true; // restore a blown-off canard
     }
   }
 
@@ -158,6 +215,8 @@ export function createDamageModel(ship, opts = {}) {
     zones,
     applyHit,
     speedScale,
+    rollScale,
+    pitchScale,
     canFire,
     update,
     totalHp,
@@ -166,6 +225,7 @@ export function createDamageModel(ship, opts = {}) {
       if (c.onEject) onEject = c.onEject;
       if (c.onDestroyed) onDestroyed = c.onDestroyed;
       if (c.onFuelRupture) onFuelRupture = c.onFuelRupture;
+      if (c.onCanardLost) onCanardLost = c.onCanardLost;
     },
   };
 }

@@ -229,10 +229,45 @@ export function createVfx(scene, camera, opts = {}) {
     }
   }
 
+  // ---- blown-off part debris (a CLONE of a hull group tumbling away in world space) -------------
+  // The caller hides the real node and hands it here; we clone it (clone(true) SHARES geometry + the
+  // CSM-registered material, so it stays lit + shadowed), pin the clone at the node's world transform,
+  // and tumble it away. NEVER dispose the geometry/material (shared with the live ship) and never touch
+  // material.opacity — fade by shrinking the Object3D's scale only.
+  const debrisLive = [];
+  const _dEuler = new THREE.Euler();
+  const _dQuat = new THREE.Quaternion();
+  function spawnDebris(node, { vel, angVel, life = 2.0 } = {}) {
+    if (!node) return;
+    node.updateWorldMatrix(true, false);
+    const clone = node.clone(true);
+    node.matrixWorld.decompose(clone.position, clone.quaternion, clone.scale);
+    clone.traverse((o) => { o.visible = true; }); // the original is hidden by now
+    clone.userData.baseScale = clone.scale.x;
+    scene.add(clone);
+    debrisLive.push({ obj: clone, vel: vel ? vel.clone() : new THREE.Vector3(), angVel: angVel ? angVel.clone() : new THREE.Vector3(), life, maxLife: life });
+  }
+  function stepDebris(dt) {
+    for (let i = debrisLive.length - 1; i >= 0; i--) {
+      const d = debrisLive[i];
+      d.life -= dt;
+      if (d.life <= 0) { scene.remove(d.obj); debrisLive.splice(i, 1); continue; } // shared geom/mat -> no dispose
+      d.obj.position.addScaledVector(d.vel, dt);
+      _dEuler.set(d.angVel.x * dt, d.angVel.y * dt, d.angVel.z * dt, 'XYZ');
+      d.obj.quaternion.multiply(_dQuat.setFromEuler(_dEuler));
+      d.obj.scale.setScalar(d.obj.userData.baseScale * Math.min(1, d.life / 0.4)); // shrink out over the last 0.4s
+    }
+  }
+  function clearDebris() {
+    for (const d of debrisLive) scene.remove(d.obj);
+    debrisLive.length = 0;
+  }
+
   function update(dt) {
     step(live, dt);
     step(smokeLive, dt);
     stepStreaks(dt);
+    stepDebris(dt);
     vol.update(dt);
   }
 
@@ -241,5 +276,5 @@ export function createVfx(scene, camera, opts = {}) {
     vol.setQuality(q);
   }
 
-  return { explosion, spark, ember, smoke, update, setQuality, setSmokeShadows: vol.setSmokeShadows, createTrail: vol.createTrail, get quality() { return quality; }, _vol: vol };
+  return { explosion, spark, ember, smoke, spawnDebris, clearDebris, update, setQuality, setSmokeShadows: vol.setSmokeShadows, createTrail: vol.createTrail, get quality() { return quality; }, _vol: vol };
 }

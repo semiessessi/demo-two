@@ -172,6 +172,9 @@ function restartWorld() {
   projectiles.reset();
   waves.reset();
   flight.setSpeedScale(1);
+  flight.setRollScale(1);
+  flight.setPitchScale(1);
+  if (vfx.clearDebris) vfx.clearDebris();
 }
 
 async function init() {
@@ -217,7 +220,7 @@ async function init() {
     playerHitRadius: ship.radius * 0.85,
   });
   damage = createDamageModel(ship);
-  combat.setOnPlayerHit((pt, dmg) => damage.applyHit(pt, dmg));
+  combat.setOnPlayerHit((pt, dmg, from) => damage.applyHit(pt, dmg, from)); // pass the bolt segment for direct-hit routing
 
   hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
   targetDisplay = createTargetDisplay(chigKit.template);
@@ -226,6 +229,18 @@ async function init() {
     onEject: () => gameState.eject(),
     onDestroyed: () => gameState.destroyed(),
     onFuelRupture: () => gameState.destroyed(), // tank rupture -> fireball + ship lost
+    onCanardLost: (zone, node, pt) => {
+      // blow the canard off as tumbling debris (inherits ship velocity + an outboard/up kick), then a
+      // burst at the break; the sparking stub is handled per-frame in damage.update().
+      const sign = zone.center.x < 0 ? -1 : 1;
+      const out = new THREE.Vector3(sign, 0, 0).applyQuaternion(ship.pivot.quaternion);
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(ship.pivot.quaternion);
+      const vel = playerVel.clone().addScaledVector(out, 10).addScaledVector(up, 4);
+      const angVel = new THREE.Vector3((Math.random() * 2 - 1) * 6, (Math.random() * 2 - 1) * 6, (Math.random() * 2 - 1) * 6);
+      vfx.spawnDebris(node, { vel, angVel, life: 2.0 });
+      vfx.firework(pt, 0.5);
+      vfx.spark(pt, 0xcfe8ff);
+    },
   });
 
   if (DEBUG) {
@@ -259,6 +274,8 @@ function startLoop() {
     let res = { throttle: 0, speed: 0, boosting: false };
     if (flying) {
       flight.setSpeedScale(damage.speedScale()); // engine damage cuts top speed
+      flight.setRollScale(damage.rollScale()); // canard loss saps roll authority
+      flight.setPitchScale(damage.pitchScale()); // canard loss saps pitch authority
       res = flight.update(dt);
     }
 

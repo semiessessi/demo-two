@@ -33,6 +33,8 @@ const TUNE = {
 export function createFlight(ship, camera, domElement, input) {
   let enabled = true;
   let speedScale = 1; // reduced by engine damage
+  let rollScale = 1; // reduced as forward canards are shot off (roll authority)
+  let pitchScale = 1; // reduced as forward canards are shot off (pitch authority)
   let camDist = TUNE.camDist;
   let heightRatio = TUNE.heightRatio;
 
@@ -100,9 +102,9 @@ export function createFlight(ship, camera, domElement, input) {
     const yawIn = input.yaw; // +1 = yaw left (A / stick left)
     const rollIn = input.roll; // +1 = roll left (Q / LB)
 
-    const tPitch = pitchIn * TUNE.pitchRate;
+    const tPitch = pitchIn * TUNE.pitchRate * pitchScale;
     const tYaw = yawIn * TUNE.yawRate;
-    const tRoll = rollIn * TUNE.rollRate - yawIn * TUNE.autoBank;
+    const tRoll = rollIn * TUNE.rollRate * rollScale - yawIn * TUNE.autoBank; // canard loss saps commanded roll (auto-bank kept)
 
     const k = 1 - Math.exp(-TUNE.damp * dt);
     rPitch += (tPitch - rPitch) * k;
@@ -203,6 +205,12 @@ export function createFlight(ship, camera, domElement, input) {
     },
     setSpeedScale(v) {
       speedScale = v;
+    },
+    setRollScale(v) {
+      rollScale = v;
+    },
+    setPitchScale(v) {
+      pitchScale = v;
     },
   };
 }

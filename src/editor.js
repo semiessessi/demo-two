@@ -8,7 +8,7 @@ import * as THREE from 'three';
 // code/JSON to paste back into damage.js / rcs.js. Built only under the DEBUG flag.
 
 const KIND_COLOR = {
-  cockpit: 0x66ccff, engine: 0xff8a3a, wing: 0x9f7dff, gun: 0xffe04a, fuel: 0xff4a4a, fuselage: 0x66ff8c,
+  cockpit: 0x66ccff, engine: 0xff8a3a, wing: 0x9f7dff, gun: 0xffe04a, fuel: 0xff4a4a, fuselage: 0x66ff8c, canard: 0x4ad0ff,
 };
 
 export function createEditor(gui, { scene, ship, damage, rcs }) {
@@ -42,15 +42,40 @@ export function createEditor(gui, { scene, ship, damage, rcs }) {
   }
   syncZones();
 
+  // L/R mirror + focus highlight. Editing one side of a mirrored pair (L/R Engine, Wing, Fuel, Canard)
+  // updates the other (X-flipped); opening a zone's folder highlights it (and optionally isolates it).
+  const ui = { mirror: true, isolate: false };
+  const byName = new Map(damage.zones.map((z) => [z.name, z]));
+  const mirrorName = (n) => (n.startsWith('L ') ? 'R ' + n.slice(2) : n.startsWith('R ') ? 'L ' + n.slice(2) : null);
+  const mirrorOf = (z) => { const mn = mirrorName(z.name); return mn ? byName.get(mn) : null; };
+  function onZoneChange(z) {
+    if (ui.mirror) {
+      const p = mirrorOf(z);
+      if (p) { p.center.set(-z.center.x, z.center.y, z.center.z); p.radius = z.radius; p.maxHp = z.maxHp; }
+    }
+    syncZones();
+  }
+  let focusZone = null;
+  function applyHighlight() {
+    for (const { z, m } of zoneMeshes) {
+      if (!focusZone) { m.visible = true; m.material.opacity = 0.45; }
+      else if (z === focusZone) { m.visible = true; m.material.opacity = 0.95; }
+      else { m.visible = !ui.isolate; m.material.opacity = 0.1; }
+    }
+  }
+
   const zf = gui.addFolder('Damage Zones (edit)');
   zf.add(zoneGroup, 'visible').name('show zones');
+  zf.add(ui, 'mirror').name('mirror L/R edits');
+  zf.add(ui, 'isolate').name('isolate focused').onChange(applyHighlight);
   for (const { z } of zoneMeshes) {
     const f = zf.addFolder(z.name);
-    f.add(z.center, 'x', -8, 8, 0.05).onChange(syncZones);
-    f.add(z.center, 'y', -8, 8, 0.05).onChange(syncZones);
-    f.add(z.center, 'z', -8, 8, 0.05).onChange(syncZones);
-    f.add(z, 'radius', 0.3, 6, 0.05).onChange(syncZones);
-    f.add(z, 'maxHp', 5, 200, 5).name('max HP');
+    f.add(z.center, 'x', -8, 8, 0.05).onChange(() => onZoneChange(z)).listen();
+    f.add(z.center, 'y', -8, 8, 0.05).onChange(() => onZoneChange(z)).listen();
+    f.add(z.center, 'z', -8, 8, 0.05).onChange(() => onZoneChange(z)).listen();
+    f.add(z, 'radius', 0.3, 6, 0.05).onChange(() => onZoneChange(z)).listen();
+    f.add(z, 'maxHp', 5, 200, 5).name('max HP').onChange(() => onZoneChange(z)).listen();
+    f.onOpenClose((folder) => { focusZone = folder._closed ? null : z; applyHighlight(); }); // highlight the open zone
     f.close();
   }
   zf.add({
