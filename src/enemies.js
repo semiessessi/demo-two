@@ -15,15 +15,15 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   const params = {
     speed: 40,
     turnRate: 1.4, // lower = can't perfectly stick to the player's tail (overshoots, makes passes)
-    aimTurnRate: 3.2, // sharper turn while locked on a target in gun range -> nails a straight-flying player
+    aimTurnRate: 5.0, // sharper turn while locked on a target in gun range -> nails a straight-flying player
     passDist: 70,
     egressTime: 2.0, // longer break-off after a run -> looser, easier to catch
     passesBeforeDogfight: 3, // spend more time in formation strafing runs before breaking up
     formationSpacing: 14, // looser formation
-    fireRate: 1.2,
+    fireRate: 1.8, // more bolts in the air
     fireRange: 260,
     fireConeCos: Math.cos(0.32),
-    pulseSpeed: 290, // faster bolts -> less lead error, harder to outrun
+    pulseSpeed: 360, // faster bolts -> less lead error, harder to dodge/outrun
     pulseDamage: 10,
     hp: 30,
     color: 0xffffff, // pure white-hot bolts that bloom hard
@@ -306,7 +306,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         const threat = player.quat ? Math.max(0, pfwd.dot(awayDir)) : 0; // 1 = player aiming at it
         e.jinkPhase += dt * (3 + e.p.evasion * 5);
         jinkAxis.crossVectors(e.vel, UP).normalize();
-        st.addScaledVector(jinkAxis, Math.sin(e.jinkPhase) * params.jinkStrength * e.p.evasion * (0.1 + threat * 1.4)); // steady up vs a non-threatening (straight) player; weave hard only when they aim at you
+        st.addScaledVector(jinkAxis, Math.sin(e.jinkPhase) * params.jinkStrength * e.p.evasion * (0.04 + threat * 1.4)); // steady up vs a non-threatening (straight) player; weave hard only when they aim at you
       }
 
       // collision avoidance — peel away when too close so they don't ram the player
