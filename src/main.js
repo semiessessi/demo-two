@@ -390,6 +390,11 @@ function buildTweakGui() {
   ct.add(chigThruster, 'y', -1.5, 1, 0.02).name('offset Y').onChange(relayoutChig);
   ct.add(chigThruster, 'z', 0, 3, 0.02).name('offset Z').onChange(relayoutChig);
   ct.add(chigThruster, 'size', 0.05, 1.5, 0.01).name('glow size').onChange(relayoutChig);
+  const rimU = chigKit && chigKit.material && chigKit.material.userData.rimUniforms;
+  if (rimU) {
+    ct.add(rimU.uRimStrength, 'value', 0, 1.5, 0.05).name('rim strength');
+    ct.add(rimU.uRimPower, 'value', 0.5, 6, 0.1).name('rim power');
+  }
   ct.close();
 
   // Player cannon — fire rate, gimbal, and the gun exit point (muzzle).
@@ -411,16 +416,27 @@ function buildTweakGui() {
   // Enemies + waves
   const ef = gui.addFolder('Enemies');
   ef.add(enemyMgr.params, 'speed', 10, 90, 1);
-  ef.add(enemyMgr.params, 'fireRate', 0.2, 5, 0.1).name('fire rate');
+  ef.add(enemyMgr.params, 'turnRate', 0.5, 4, 0.1).name('turn rate');
+  ef.add(enemyMgr.params, 'fireRate', 0.2, 5, 0.1).name('base fire rate');
   ef.add(enemyMgr.params, 'fireRange', 80, 500, 10).name('fire range');
   ef.add(enemyMgr.params, 'passesBeforeDogfight', 0, 5, 1).name('passes->dogfight');
+  ef.add(enemyMgr.params, 'maxSpread', 0, 0.5, 0.01).name('inaccuracy spread');
+  ef.add(enemyMgr.params, 'jinkStrength', 0, 40, 1).name('evasion jink');
+  ef.add(enemyMgr.params, 'persSpread', 0, 1.2, 0.05).name('personality spread');
   ef.close();
   const wf = gui.addFolder('Waves');
   wf.add(waves.params, 'gap', 0, 12, 0.5).name('gap after clear (s)');
   wf.add(waves.params, 'minSize', 1, 8, 1).name('min size');
   wf.add(waves.params, 'maxSize', 1, 12, 1).name('max size');
   wf.add(waves.params, 'spawnDist', 150, 700, 10).name('spawn dist');
+  wf.add(waves.params, 'rampRate', 0, 0.3, 0.01).name('difficulty/wave');
   wf.close();
+
+  // Sky — Milky Way band
+  const sf = gui.addFolder('Sky');
+  sf.add(nebula.uniforms.uMilkyWay, 'value', 0, 0.4, 0.01).name('milky way');
+  sf.add(nebula.uniforms.uMwTilt, 'value', -1.6, 1.6, 0.02).name('mw tilt');
+  sf.close();
 }
 
 init().catch((e) => {
