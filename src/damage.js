@@ -30,8 +30,8 @@ export function createDamageModel(ship, opts = {}) {
     zones.push({ name, center, radius, hp, maxHp: hp, kind, alive: true });
 
   add('Cockpit', meshCenterLocal(/canopy/i, new THREE.Vector3(0, 0.3, -R * 0.4)), R * 0.5, 55, 'cockpit');
-  add('L Engine', lEng, R * 0.5, 70, 'engine');
-  add('R Engine', rEng, R * 0.5, 70, 'engine');
+  add('L Engine', lEng, R * 0.5, 20, 'engine'); // fragile: ~2 enemy pulses (10 dmg) knock it out
+  add('R Engine', rEng, R * 0.5, 20, 'engine');
   add('L Wing', meshCenterLocal(/l_aileron/i, new THREE.Vector3(-R * 0.8, 0, 0.3)), R * 0.7, 80, 'wing');
   add('R Wing', meshCenterLocal(/r_aileron/i, new THREE.Vector3(R * 0.8, 0, 0.3)), R * 0.7, 80, 'wing');
   add('Fuselage', new THREE.Vector3(0, 0, 0), R * 0.7, 120, 'fuselage');
@@ -75,12 +75,14 @@ export function createDamageModel(ship, opts = {}) {
     if (acc < 0.1) return;
     acc = 0;
     for (const z of zones) {
+      // Smoke once a zone has been hit and while it's still alive; stop the moment it's destroyed
+      // ("goes out"). So an engine starts smoking on the first hit and stops when the second kills it.
+      if (!z.alive || z.hp >= z.maxHp) continue;
+      wp.copy(z.center);
+      pivot.localToWorld(wp);
+      if (vfx.smoke) vfx.smoke(wp);
       const frac = z.hp / z.maxHp;
-      if (frac < 0.6 && vfx.ember) {
-        wp.copy(z.center);
-        pivot.localToWorld(wp);
-        vfx.ember(wp, frac);
-      }
+      if (frac < 0.5 && vfx.ember && Math.random() < 0.5) vfx.ember(wp, frac); // a few flames when badly hurt
     }
   }
 
