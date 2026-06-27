@@ -100,11 +100,11 @@ export function createDamageModel(ship, opts = {}) {
           const hurt = (SMOKE_AT - frac) / SMOKE_AT; // 0..1 as it worsens
           z.trail = vfx.createTrail({
             getPos: zonePos(z),
-            life: 2.2,
-            radius: 2.0 + hurt * 1.8,
-            spawnDist: 5.5,
+            life: 2.6,
+            radius: 2.4 + hurt * 2.0,
+            spawnDist: 5.0,
             spawnInterval: 0.4,
-            density: 0.55 + hurt * 0.5,
+            density: 0.9 + hurt * 0.7, // thick, occluding — heavier the more wounded
           });
         }
         z.trail.update(stepDt);

@@ -1,18 +1,20 @@
 import * as THREE from 'three';
 
-// GPU raymarched volumetric VFX — explosions and smoke puffs/trails.
+// GPU raymarched volumetric VFX — thick fire + smoke explosions and occluding smoke trails.
 //
-// Each effect is ONE icosahedron mesh used purely as a bounding proxy; the look is a fragment-shader
-// raymarch through an FBM density field (the hash/value-noise/fbm is the same one the nebula uses).
-// The density is multiplied by a SPHERE falloff so it dies well before the icosahedron faces — the
-// noise is fully "contained" in the volume with no hard clipping at the hull. Integration is the
-// classic emission–absorption model with premultiplied front-to-back accumulation, so the same
-// material does hot emissive fireballs (rgb > 1 -> feeds bloom) and absorptive grey smoke just by
-// changing uniforms. Output is premultiplied RGBA composited with CustomBlending "over".
+// Each effect is ONE icosphere mesh used purely as a bounding proxy; the look is a fragment-shader
+// raymarch through an FBM density field (same hash/value-noise as the nebula). Density is multiplied
+// by a SPHERE falloff so it dies before the hull (contained, no hard clipping).
 //
-// Explosions = one expanding emissive->cooling volume. Smoke puffs = longer-lived, drifting, lumpy
-// (multi-blob) volumes; a trail is a managed stream of puffs. Across volumes we composite by sorting
-// the live meshes far->near each frame and assigning renderOrder, so the "over" blend is correct.
+// Shading is a proper emission–absorption volume with TWO coupled components (like demo-1's clouds +
+// a fire model):
+//   • SMOKE  — absorptive. Lit by a key light via a short SELF-SHADOW light-march (Beer-Lambert) so
+//     it reads as a thick, 3D, occluding volume rather than a flat haze; Beer-Powder darkens edges.
+//   • FIRE   — emissive. A temperature field (hot in the dense core, cooling outward + with age) maps
+//     through a blackbody ramp; emission is added on top and pushes >1 in HDR so it blooms.
+// Extinction (uSigma) is high so smoke builds opacity fast and OCCLUDES what's behind it. Output is
+// premultiplied RGBA composited with CustomBlending "over"; live volumes are sorted far->near each
+// frame (renderOrder) so the "over" blend is correct across overlaps.
 
 const vertexShader = /* glsl */ `
 varying vec3 vWorldPos;
@@ -30,24 +32,25 @@ uniform vec3 uCenter;
 uniform float uRadius;
 uniform float uTime;
 uniform float uSeed;
-uniform float uDensity;
-uniform float uEmissive;
+uniform float uDensity;   // density multiplier
+uniform float uSigma;     // extinction coefficient -> thickness / occlusion
+uniform float uEmissive;  // 0 = pure smoke; >0 = hot fire amount (explosions, fades with age)
 uniform float uNoiseScale;
 uniform float uDrift;
 uniform float uSteps;
-uniform vec3 uColHot;
-uniform vec3 uColMid;
-uniform vec3 uColSmoke;
-uniform vec4 uBlobs[4]; // xyz = unit offset from centre, w = weight
+uniform vec3 uColSmoke;   // smoke albedo (gets lit)
+uniform vec3 uLightDir;   // toward the key light (normalized)
+uniform vec3 uLightColor;
+uniform vec3 uAmbient;
+uniform vec4 uBlobs[4];   // xyz = unit offset from centre, w = weight
 uniform int uBlobCount;
 
-// hash / value noise / fbm — lifted from the nebula backdrop (cheap, good enough for a volume)
 float hash(vec3 p) {
   p = fract(p * 0.3183099 + 0.1);
   p *= 17.0;
   return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
 }
-float noise(vec3 x) {
+float vnoise(vec3 x) {
   vec3 i = floor(x);
   vec3 f = fract(x);
   f = f * f * (3.0 - 2.0 * f);
@@ -56,83 +59,110 @@ float noise(vec3 x) {
              mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
                  mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
 }
-float fbm(vec3 p) {
-  float v = 0.0, a = 0.5;
-  for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.02; a *= 0.5; }
-  return v;
-}
+float fbm5(vec3 p) { float v=0.0,a=0.5; for(int i=0;i<5;i++){ v+=a*vnoise(p); p*=2.02; a*=0.5; } return v; }
+float fbm3(vec3 p) { float v=0.0,a=0.5; for(int i=0;i<3;i++){ v+=a*vnoise(p); p*=2.02; a*=0.5; } return v; }
 
-const int MAX_STEPS = 64;
+const int MAX_STEPS = 80;
 
-// p is the sample point relative to uCenter, in world units.
-float densityAt(vec3 p) {
-  float r = length(p) / uRadius;
-  float fall = 1.0 - smoothstep(0.45, 1.0, r); // SPHERE fadeoff -> 0 before the hull
-  if (fall <= 0.0) return 0.0;
-  // lumpiness: smooth-union (max) of a few offset blobs so one puff reads as several overlaps
-  float blob = (uBlobCount > 0) ? 0.0 : 1.0;
+float fall(vec3 p) { return 1.0 - smoothstep(0.40, 1.0, length(p) / uRadius); }
+float blobMask(vec3 p) {
+  float b = (uBlobCount > 0) ? 0.0 : 1.0;
   for (int k = 0; k < 4; k++) {
     if (k >= uBlobCount) break;
     vec3 off = uBlobs[k].xyz * uRadius;
-    float d = length(p - off) / uRadius;
-    blob = max(blob, uBlobs[k].w * (1.0 - smoothstep(0.0, 0.8, d)));
+    b = max(b, uBlobs[k].w * (1.0 - smoothstep(0.0, 0.8, length(p - off) / uRadius)));
   }
+  return b;
+}
+// full-detail density (main march)
+float densityFull(vec3 p) {
+  float f = fall(p);
+  if (f <= 0.0) return 0.0;
   vec3 q = (p / uRadius) * uNoiseScale + vec3(uSeed) + vec3(0.0, uTime * uDrift, uSeed * 0.37);
-  float n = fbm(q);
-  return max((n - 0.42) * 1.9, 0.0) * fall * blob * uDensity;
+  return max((fbm5(q) - 0.40) * 2.0, 0.0) * f * blobMask(p) * uDensity;
+}
+// cheaper density for the shadow light-march (3 octaves)
+float densityLite(vec3 p) {
+  float f = fall(p);
+  if (f <= 0.0) return 0.0;
+  vec3 q = (p / uRadius) * uNoiseScale + vec3(uSeed) + vec3(0.0, uTime * uDrift, uSeed * 0.37);
+  return max((fbm3(q) - 0.40) * 2.0, 0.0) * f * blobMask(p) * uDensity;
+}
+
+// blackbody-ish fire ramp: deep red -> orange -> yellow -> white
+vec3 fireRamp(float t) {
+  vec3 c = mix(vec3(0.65, 0.05, 0.0), vec3(1.0, 0.32, 0.05), smoothstep(0.0, 0.35, t));
+  c = mix(c, vec3(1.0, 0.74, 0.30), smoothstep(0.35, 0.65, t));
+  c = mix(c, vec3(1.0, 0.97, 0.88), smoothstep(0.65, 1.0, t));
+  return c;
 }
 
 void main() {
   vec3 ro = cameraPosition;
   vec3 rd = normalize(vWorldPos - cameraPosition);
-  // ray vs the falloff sphere — march only the interval that can hold density
   vec3 oc = ro - uCenter;
   float b = dot(oc, rd);
   float c = dot(oc, oc) - uRadius * uRadius;
   float disc = b * b - c;
   if (disc < 0.0) discard;
   float sq = sqrt(disc);
-  float t0 = max(-b - sq, 0.0); // camera may be inside the volume -> start at itself
+  float t0 = max(-b - sq, 0.0);
   float t1 = -b + sq;
   if (t1 <= t0) discard;
 
   float steps = clamp(uSteps, 4.0, float(MAX_STEPS));
   float dt = (t1 - t0) / steps;
-  float jitter = hash(vec3(gl_FragCoord.xy, uTime)); // dither the start -> kills low-step banding
+  float jitter = hash(vec3(gl_FragCoord.xy, uTime));
   float t = t0 + dt * jitter;
+  float lstep = uRadius * 0.22; // shadow tap spacing
 
-  vec4 acc = vec4(0.0); // premultiplied
+  vec3 scat = vec3(0.0);
+  float T = 1.0; // transmittance
   for (int i = 0; i < MAX_STEPS; i++) {
-    if (float(i) >= steps || acc.a > 0.99) break;
+    if (float(i) >= steps || T < 0.02) break;
     vec3 p = ro + rd * t - uCenter;
-    float d = densityAt(p);
-    if (d > 0.001) {
-      float heat = clamp(d * uEmissive, 0.0, 1.0);
-      vec3 col = mix(uColSmoke, uColMid, smoothstep(0.0, 0.5, d));
-      col = mix(col, uColHot, smoothstep(0.35, 1.0, heat));
-      vec3 emit = uColHot * heat * 2.5; // pushes > 1 in HDR -> bloom
-      float a = 1.0 - exp(-d * dt * 1.6); // Beer-Lambert
-      vec3 src = col + emit;
-      acc.rgb += (1.0 - acc.a) * src * a;
-      acc.a += (1.0 - acc.a) * a;
+    float d = densityFull(p);
+    if (d > 0.002) {
+      float ext = d * uSigma;
+      float dT = exp(-ext * dt);
+
+      // --- smoke: self-shadow toward the key light (3-tap Beer-Lambert) ---
+      float sh = 0.0;
+      for (int j = 1; j <= 3; j++) sh += densityLite(p + uLightDir * lstep * float(j));
+      float lit = exp(-sh * lstep * uSigma * 1.1);
+      vec3 smoke = uColSmoke * (uAmbient + uLightColor * lit);
+      smoke *= 1.0 - 0.55 * exp(-d * 3.0); // Beer-Powder: darker thin edges
+
+      // --- fire: temperature field -> blackbody emission (only when uEmissive > 0) ---
+      vec3 emit = vec3(0.0);
+      if (uEmissive > 0.001) {
+        float rc = clamp(1.0 - length(p) / uRadius, 0.0, 1.0); // hotter toward the core
+        float heat = clamp(uEmissive * clamp(d * 1.3, 0.0, 1.0) * (0.4 + 0.6 * rc), 0.0, 1.0);
+        emit = fireRamp(heat) * (0.3 + heat * heat * 4.5);
+      }
+
+      vec3 S = smoke + emit;
+      scat += T * (1.0 - dT) * S;
+      T *= dT;
     }
     t += dt;
   }
-  if (acc.a < 0.004) discard;
-  gl_FragColor = acc;
+
+  float a = 1.0 - T;
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(scat, a); // premultiplied
 }`;
 
 const COL = {
-  explHot: new THREE.Color(0xfff2d0),
-  explMid: new THREE.Color(0xff7a30),
-  explSmoke: new THREE.Color(0x47403a),
-  smokeHot: new THREE.Color(0x9aa0a8),
-  smokeMid: new THREE.Color(0x595e66),
-  smokeLow: new THREE.Color(0x7b818a),
+  explSmoke: new THREE.Color(0x4a423a), // warm dark smoke for explosions
+  trailSmoke: new THREE.Color(0x6a6f76), // greyer smoke for damage trails
+  light: new THREE.Color(0xfff0d8),
+  ambient: new THREE.Color(0x12161f),
 };
+const LIGHT_DIR = new THREE.Vector3(0.4, 0.85, 0.3).normalize();
 
 export function createVolumetrics(scene, camera) {
-  const geo = new THREE.IcosahedronGeometry(1, 1); // detail 1: a tight icosphere bound on the falloff sphere
+  const geo = new THREE.IcosahedronGeometry(1, 1);
 
   function makeMaterial() {
     return new THREE.ShaderMaterial({
@@ -144,13 +174,15 @@ export function createVolumetrics(scene, camera) {
         uTime: { value: 0 },
         uSeed: { value: 0 },
         uDensity: { value: 1 },
+        uSigma: { value: 2.5 },
         uEmissive: { value: 0 },
         uNoiseScale: { value: 2.4 },
         uDrift: { value: 0.3 },
         uSteps: { value: 32 },
-        uColHot: { value: new THREE.Color() },
-        uColMid: { value: new THREE.Color() },
         uColSmoke: { value: new THREE.Color() },
+        uLightDir: { value: LIGHT_DIR.clone() },
+        uLightColor: { value: COL.light.clone() },
+        uAmbient: { value: COL.ambient.clone() },
         uBlobs: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
         uBlobCount: { value: 0 },
       },
@@ -177,70 +209,72 @@ export function createVolumetrics(scene, camera) {
       mesh.frustumCulled = true;
       mesh.renderOrder = 10;
       scene.add(mesh);
-      arr.push({ mesh, mat, alive: false, kind: 'expl', age: 0, maxLife: 1, baseScale: 1, seed: 0, drift: new THREE.Vector3() });
+      arr.push({ mesh, mat, alive: false, kind: 'expl', age: 0, maxLife: 1, baseScale: 1, seed: 0, densMul: 1, sigma: 2.5, drift: new THREE.Vector3() });
     }
     return arr;
   }
 
   const EXPL_MAX = 8;
-  const PUFF_MAX = 40;
+  const PUFF_MAX = 44;
   const explPool = makePool(EXPL_MAX);
   const puffPool = makePool(PUFF_MAX);
 
   let elapsed = 0;
   let quality = 'high';
-  const tunable = { explSteps: 56, puffSteps: 28, densityMul: 1 };
+  const tunable = { explSteps: 48, puffSteps: 22, densityMul: 1, fireSigma: 2.2, smokeSigma: 3.6 };
 
   function pick(pool) {
     for (const s of pool) if (!s.alive) return s;
-    // steal the oldest live slot so trails stay continuous instead of gapping
     let oldest = pool[0];
     for (const s of pool) if (s.age / s.maxLife > oldest.age / oldest.maxLife) oldest = s;
     return oldest;
   }
+
+  const _tmp = new THREE.Vector3();
 
   function explosion(pos, scale = 1) {
     const s = pick(explPool);
     s.alive = true;
     s.kind = 'expl';
     s.age = 0;
-    s.maxLife = 1.7;
+    s.maxLife = 1.8;
     s.baseScale = 9 * scale;
     s.seed = Math.random() * 100;
-    s.drift.set(0, 0.6 * scale, 0);
+    s.densMul = 1;
+    s.drift.set(0, 0.7 * scale, 0);
     const u = s.mat.uniforms;
     u.uCenter.value.copy(pos);
     u.uSeed.value = s.seed;
-    u.uNoiseScale.value = 2.2;
-    u.uDrift.value = 0.55;
-    u.uColHot.value.copy(COL.explHot);
-    u.uColMid.value.copy(COL.explMid);
+    u.uNoiseScale.value = 2.1;
+    u.uDrift.value = 0.5;
     u.uColSmoke.value.copy(COL.explSmoke);
     u.uBlobCount.value = 0;
     s.mesh.position.copy(pos);
     s.mesh.visible = true;
     stepExplosion(s, 0);
+    // lingering thick smoke left behind after the fireball cools
+    for (let i = 0; i < 2; i++) {
+      _tmp.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 4 * scale, (Math.random() - 0.5) * 3 * scale, (Math.random() - 0.5) * 4 * scale));
+      puff(_tmp, { life: 2.8, radius: 3.2 * scale, density: 1.1, drift: new THREE.Vector3((Math.random() - 0.5) * 1.5, 1.6, (Math.random() - 0.5) * 1.5), blobs: 3 });
+    }
   }
 
-  const _blobTmp = new THREE.Vector3();
   function puff(pos, opts = {}) {
     const s = pick(puffPool);
     s.alive = true;
     s.kind = 'puff';
     s.age = 0;
     s.maxLife = opts.life ?? 3.0;
-    s.baseScale = (opts.radius ?? 3.5);
+    s.baseScale = opts.radius ?? 3.5;
     s.seed = Math.random() * 100;
     s.densMul = opts.density ?? 1;
-    s.drift.copy(opts.drift ?? _blobTmp.set(0, 1.2, 0));
+    s.drift.copy(opts.drift ?? _tmp.set(0, 1.2, 0));
     const u = s.mat.uniforms;
     u.uCenter.value.copy(pos);
     u.uSeed.value = s.seed;
     u.uNoiseScale.value = 2.7;
-    u.uDrift.value = 0.4;
-    u.uColHot.value.copy(opts.colorHot ? _colTmp.set(opts.colorHot) : COL.smokeHot);
-    u.uColMid.value.copy(COL.smokeMid);
-    u.uColSmoke.value.copy(COL.smokeLow);
+    u.uDrift.value = 0.35;
+    u.uColSmoke.value.copy(COL.trailSmoke);
     const nb = opts.blobs ?? 3;
     u.uBlobCount.value = nb;
     for (let k = 0; k < 4; k++) {
@@ -252,7 +286,6 @@ export function createVolumetrics(scene, camera) {
     s.mesh.visible = true;
     stepPuff(s, 0);
   }
-  const _colTmp = new THREE.Color();
 
   function stepExplosion(s, dt) {
     s.age += dt;
@@ -265,10 +298,11 @@ export function createVolumetrics(scene, camera) {
     const u = s.mat.uniforms;
     u.uCenter.value.copy(s.mesh.position);
     u.uRadius.value = cur * 0.78;
-    u.uDensity.value = 1.6 * Math.exp(-age * 1.4) * tunable.densityMul;
-    u.uEmissive.value = Math.max(0, 1 - age / 0.6); // white-hot ~0.6s, then cools to dark smoke
+    u.uDensity.value = 1.7 * Math.exp(-age * 1.2) * tunable.densityMul;
+    u.uEmissive.value = Math.max(0, 1 - age / 0.55); // white-hot ~0.55s, then cools to thick smoke
+    u.uSigma.value = tunable.fireSigma;
     u.uTime.value = elapsed;
-    u.uSteps.value = quality === 'low' ? 26 : tunable.explSteps;
+    u.uSteps.value = quality === 'low' ? 24 : tunable.explSteps;
   }
 
   function stepPuff(s, dt) {
@@ -282,17 +316,17 @@ export function createVolumetrics(scene, camera) {
     const u = s.mat.uniforms;
     u.uCenter.value.copy(s.mesh.position);
     u.uRadius.value = cur * 0.78;
-    const fadeIn = THREE.MathUtils.smoothstep(k, 0, 0.08);
+    const fadeIn = THREE.MathUtils.smoothstep(k, 0, 0.1);
     const fadeOut = 1 - THREE.MathUtils.smoothstep(k, 0.7, 1.0);
-    u.uDensity.value = 0.95 * s.densMul * fadeIn * fadeOut * tunable.densityMul;
-    u.uEmissive.value = 0;
+    u.uDensity.value = 1.15 * s.densMul * fadeIn * fadeOut * tunable.densityMul;
+    u.uEmissive.value = 0; // pure smoke
+    u.uSigma.value = tunable.smokeSigma;
     u.uTime.value = elapsed;
-    // LOD: fewer steps for distant / old puffs
     const distSq = s.mesh.position.distanceToSquared(camera.position);
     let st = quality === 'low' ? 12 : tunable.puffSteps;
     if (distSq > 140 * 140) st = quality === 'low' ? 9 : 14;
-    else if (distSq > 70 * 70) st = quality === 'low' ? 11 : 20;
-    if (k > 0.6) st = Math.max(9, st - 6);
+    else if (distSq > 70 * 70) st = quality === 'low' ? 11 : 18;
+    if (k > 0.6) st = Math.max(9, st - 5);
     u.uSteps.value = st;
   }
 
@@ -301,8 +335,6 @@ export function createVolumetrics(scene, camera) {
     s.mesh.visible = false;
   }
 
-  // A trail emitter: spawns puffs as the source moves (by distance) or over time (so a near-still
-  // source still wisps). Returns { update, stop }. getPos/getVel return live Vector3s.
   function createTrail(opts = {}) {
     const getPos = opts.getPos;
     const getVel = opts.getVel ?? (() => _zero);
@@ -330,7 +362,7 @@ export function createVolumetrics(scene, camera) {
           last.copy(pos);
           const vel = getVel() || _zero;
           _drift.copy(vel).multiplyScalar(0.3);
-          _drift.y += 1.0; // buoyancy
+          _drift.y += 1.0;
           _drift.x += (Math.random() - 0.5) * 1.2;
           _drift.z += (Math.random() - 0.5) * 1.2;
           puff(pos, { life, radius, drift: _drift, blobs: 3, density });
@@ -341,15 +373,12 @@ export function createVolumetrics(scene, camera) {
   }
   const _zero = new THREE.Vector3();
 
-  // collected each frame for the back-to-front sort
   const _liveAll = [];
   function update(dt) {
     elapsed += dt;
     for (let i = 0; i < explPool.length; i++) if (explPool[i].alive) stepExplosion(explPool[i], dt);
     for (let i = 0; i < puffPool.length; i++) if (puffPool[i].alive) stepPuff(puffPool[i], dt);
 
-    // "render carefully in order": sort live volumes far->near, assign renderOrder so premultiplied
-    // "over" composites correctly across overlapping volumes.
     _liveAll.length = 0;
     for (const s of explPool) if (s.alive) _liveAll.push(s);
     for (const s of puffPool) if (s.alive) _liveAll.push(s);

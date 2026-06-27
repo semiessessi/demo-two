@@ -453,9 +453,11 @@ function buildTweakGui() {
   vf.add(vfxTest, 'explode').name('explosion at ship');
   vf.add(vfxTest, 'smoke').name('smoke puff at ship');
   if (vfx._vol) {
-    vf.add(vfx._vol.tunable, 'explSteps', 8, 64, 1).name('expl steps');
+    vf.add(vfx._vol.tunable, 'explSteps', 8, 80, 1).name('expl steps');
     vf.add(vfx._vol.tunable, 'puffSteps', 8, 48, 1).name('puff steps');
     vf.add(vfx._vol.tunable, 'densityMul', 0.2, 3, 0.05).name('density');
+    vf.add(vfx._vol.tunable, 'fireSigma', 0.5, 6, 0.1).name('fire thickness');
+    vf.add(vfx._vol.tunable, 'smokeSigma', 0.5, 8, 0.1).name('smoke thickness');
   }
   vf.close();
 }
