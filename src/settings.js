@@ -44,6 +44,22 @@ export const ENVIRONMENT = {
     nebula: { uColorA: 0x05030a, uColorB: 0x1a1030, uColorC: 0x4a1830, uBrightness: 0.04, uSaturation: 0.40, uMilkyWay: 0.045 },
     sun: { disc: 220, glow: 520, halo: 0, color: 0xeef0ff, glowAlpha: 0.4, haloAlpha: 0.0, white: true },
   },
+  tartarus: {
+    label: 'Tartarus', body: 'cloudplanet', sunMult: 0.7, // distant white dwarf -> dim
+    nebula: { uColorA: 0x05060f, uColorB: 0x182840, uColorC: 0x40342a, uBrightness: 0.05, uSaturation: 0.35, uMilkyWay: 0.10 },
+    sun: { disc: 130, glow: 260, halo: 0, color: 0xffffff, glowAlpha: 0.5, haloAlpha: 0.0, white: true }, // small white-dwarf
+  },
+  achilles: {
+    label: 'Achilles System Outer Edge', body: 'none', sunMult: 0.3, // very distant star, barely illuminating
+    // deep space: the blue (uColorB) + red (uColorC) background elements at 25%; the Milky Way is the feature
+    nebula: { uColorA: 0x04050f, uColorB: 0x080c20, uColorC: 0x361008, uBrightness: 0.05, uSaturation: 0.40, uMilkyWay: 0.13 },
+    sun: { disc: 90, glow: 150, halo: 0, color: 0xffffff, glowAlpha: 0.35, haloAlpha: 0.0, white: true },
+  },
+  ixion: {
+    label: 'Ixion', body: 'habitable', sunMult: 5, // inhabited world -> a sun-like star, decent daylight
+    nebula: { uColorA: 0x04050f, uColorB: 0x1e2c66, uColorC: 0x8a4a2a, uBrightness: 0.08, uSaturation: 0.34, uMilkyWay: 0.10 },
+    sun: { disc: 480, glow: 2200, halo: 5200, color: 0xfff6e8, glowAlpha: 0.85, haloAlpha: 0.7 }, // warm-white G-type
+  },
 };
 
 const clone = (o) => JSON.parse(JSON.stringify(o));

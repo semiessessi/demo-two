@@ -29,7 +29,7 @@ import { createDebris } from './debris.js';
 import { createPregame } from './pregame.js';
 import { loadSettings, DIFFICULTY, ENVIRONMENT } from './settings.js';
 import { createAttract } from './attract.js';
-import { createJupiter, createBlackHole } from './celestial.js';
+import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlanet } from './celestial.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin. It can also be opted into on the deployed
@@ -135,12 +135,38 @@ scene.add(nebula.mesh);
 // per-environment background bodies (shown/hidden by applyEnvironment), kept at infinity in the loop
 const jupiter = createJupiter(renderer);
 const blackhole = createBlackHole();
-scene.add(jupiter.group, blackhole.group);
+const cloudplanet = createCloudPlanet();
+const habitable = createHabitablePlanet();
+scene.add(jupiter.group, blackhole.group, cloudplanet.group, habitable.group);
 const JUP_DIR = new THREE.Vector3(0.35, 0.12, -0.93).normalize();
 const BH_DIR = new THREE.Vector3(0.40, 0.18, -0.90).normalize();
-function updateBackdropBodies() {
-  if (jupiter.group.visible) jupiter.group.position.copy(camera.position).addScaledVector(JUP_DIR, 3400);
-  if (blackhole.group.visible) blackhole.group.position.copy(camera.position).addScaledVector(BH_DIR, 3600);
+const CLOUD_DIR = new THREE.Vector3(0.30, 0.15, -0.94).normalize();
+// Ixion sits toward the sun (blend of forward + sunDir) so it's strongly back-lit -> a thin crescent,
+// with the sun ~40deg off to the side (not directly behind).
+const IXION_DIR = new THREE.Vector3(0, 0, -1).addScaledVector(sunDir, 0.6).normalize();
+function updateBackdropBodies(dt) {
+  if (jupiter.group.visible) {
+    jupiter.group.position.copy(camera.position).addScaledVector(JUP_DIR, 3400);
+    jupiter.planet.rotation.y += 0.006 * dt; // slow spin
+  }
+  if (cloudplanet.group.visible) {
+    cloudplanet.group.position.copy(camera.position).addScaledVector(CLOUD_DIR, 3300);
+    cloudplanet.mat.uniforms.uTime.value += dt; // animate the swirling clouds
+    cloudplanet.planet && (cloudplanet.planet.rotation.y += 0.004 * dt);
+  }
+  if (habitable.group.visible) {
+    habitable.group.position.copy(camera.position).addScaledVector(IXION_DIR, 2500); // big + close
+    habitable.mat.uniforms.uTime.value += dt;
+    habitable.planet.rotation.y += 0.005 * dt; // spin under the fixed crescent terminator
+  }
+  if (blackhole.group.visible) {
+    blackhole.group.position.copy(camera.position).addScaledVector(BH_DIR, 3600);
+    blackhole.plane.quaternion.copy(camera.quaternion); // billboard: face the camera
+    const u = blackhole.mat.uniforms;
+    u.uCamPos.value.copy(camera.position);
+    u.uCenter.value.copy(blackhole.group.position);
+    u.uTime.value += dt;
+  }
 }
 const starUniforms = {
   uTime: { value: 0 },
@@ -249,6 +275,8 @@ function applySun(c) {
 function applyBody(kind) {
   jupiter.group.visible = kind === 'jupiter';
   blackhole.group.visible = kind === 'blackhole';
+  cloudplanet.group.visible = kind === 'cloudplanet';
+  habitable.group.visible = kind === 'habitable';
 }
 function applySettings(s) {
   applyDifficulty(s);
@@ -426,7 +454,7 @@ function attractFrame(dt) {
   sun.position.copy(camera.position).addScaledVector(sunDir, 3600);
   sunGlow.position.copy(camera.position).addScaledVector(sunDir, 3650);
   sunHalo.position.copy(camera.position).addScaledVector(sunDir, 3700);
-  updateBackdropBodies(); // keep the environment's Jupiter / black hole at infinity
+  updateBackdropBodies(dt); // keep the environment's background body at infinity (+ animate it)
   nebula.uniforms.uTime.value += dt;
   starUniforms.uTime.value += dt;
   lighting.update(dt, { player: attract.focus, thrust: 0.8, projectiles, enemies: enemyMgr.enemies }); // cascades fit to the camera; dynamic lights around the action
@@ -489,7 +517,7 @@ function startLoop() {
     sun.position.copy(camera.position).addScaledVector(sunDir, 3600);
     sunGlow.position.copy(camera.position).addScaledVector(sunDir, 3650);
     sunHalo.position.copy(camera.position).addScaledVector(sunDir, 3700);
-  updateBackdropBodies(); // keep the environment's Jupiter / black hole at infinity
+  updateBackdropBodies(dt); // keep the environment's background body at infinity (+ animate it)
     nebula.uniforms.uTime.value += dt;
     starUniforms.uTime.value += dt;
 
