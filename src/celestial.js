@@ -12,14 +12,36 @@ export function createJupiter(renderer) {
 
   const loader = new THREE.TextureLoader();
   const tex = loader.load('/jupiter.png');
-  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.colorSpace = THREE.NoColorSpace; // raw ShaderMaterial decodes sRGB manually (pow 2.2) below
   if (renderer) tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 
   const R = 520; // apparent size; placed ~3400 units out (in front of the stars) -> a big sky planet
-  const planet = new THREE.Mesh(
-    new THREE.SphereGeometry(R, 96, 64),
-    new THREE.MeshStandardMaterial({ map: tex, roughness: 1.0, metalness: 0.0 }),
-  );
+  // Custom-lit so its brightness / terminator / night-side ambient / saturation are independent of the
+  // scene's gameplay lighting (otherwise it blows out + the dark side reads too bright). Tunable.
+  const planetMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uMap: { value: tex },
+      uSunDir: { value: new THREE.Vector3(-55, 30, -30).normalize() },
+      uExposure: { value: 0.5 }, // overall brightness
+      uAmbient: { value: 0.04 }, // night-side fill (keep low so the dark limb stays dark)
+      uSat: { value: 0.6 }, // desaturate the (very saturated) Hubble map
+    },
+    vertexShader: /* glsl */`
+      varying vec2 vUv; varying vec3 vN;
+      void main(){ vUv = uv; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */`
+      uniform sampler2D uMap; uniform vec3 uSunDir; uniform float uExposure; uniform float uAmbient; uniform float uSat;
+      varying vec2 vUv; varying vec3 vN;
+      void main(){
+        vec3 base = pow(texture2D(uMap, vUv).rgb, vec3(2.2)); // sRGB -> linear
+        float l = dot(base, vec3(0.299, 0.587, 0.114));
+        base = mix(vec3(l), base, uSat);
+        float ndl = max(dot(normalize(vN), normalize(uSunDir)), 0.0);
+        float light = uAmbient + (1.0 - uAmbient) * ndl; // lambert + small ambient
+        gl_FragColor = vec4(base * light * uExposure, 1.0); // linear; OutputPass tone-maps + encodes
+      }`,
+  });
+  const planet = new THREE.Mesh(new THREE.SphereGeometry(R, 96, 64), planetMat);
   planet.renderOrder = -3; // behind the action, in front of stars/nebula
 
   // Soft atmosphere limb: a slightly larger additive shell glowing at the rim (fresnel), brightest on
@@ -58,7 +80,7 @@ export function createJupiter(renderer) {
   atmo.renderOrder = -2;
   group.add(planet, atmo);
 
-  return { group, planet, atmoMat, radius: R };
+  return { group, planet, planetMat, atmoMat, radius: R };
 }
 
 // --- Cerberus black hole (basic; iterate later) ------------------------------

@@ -25,20 +25,20 @@ export const DIFFICULTY = {
 // direction (kept fixed so lighting stays simple). We iterate on the exact look later.
 export const ENVIRONMENT = {
   groombridge34: {
-    label: 'Groombridge 34', body: 'none',
-    nebula: { uColorA: 0x04050f, uColorB: 0x223080, uColorC: 0xd8401f, uBrightness: 0.10, uSaturation: 0.32, uMilkyWay: 0.12 },
+    label: 'Groombridge 34', body: 'none', sunMult: 7, // close binary -> full, warm sunlight
+    nebula: { uColorA: 0x04050f, uColorB: 0x223080, uColorC: 0xd8401f, uBrightness: 0.10, uSaturation: 0.32, uMilkyWay: 0.08 },
     sun: { disc: 560, glow: 2900, halo: 7600, color: 0xffffff, glowAlpha: 1.0, haloAlpha: 1.0 }, // white tint = original baked look
   },
   jupiterTrojans: {
-    label: 'Jupiter Trojans', body: 'jupiter',
-    nebula: { uColorA: 0x03040c, uColorB: 0x14224a, uColorC: 0x6a4a30, uBrightness: 0.05, uSaturation: 0.42, uMilkyWay: 0.18 },
-    // Sol seen from ~5 AU: small, yellow-white, and producing far less corona/halo glow.
-    sun: { disc: 300, glow: 720, halo: 0, color: 0xfff4e0, glowAlpha: 0.45, haloAlpha: 0.0 },
+    label: 'Jupiter Trojans', body: 'jupiter', sunMult: 1, // ~5 AU from Sol -> much dimmer scene light
+    nebula: { uColorA: 0x03040c, uColorB: 0x14224a, uColorC: 0x6a4a30, uBrightness: 0.05, uSaturation: 0.28, uMilkyWay: 0.11 },
+    // Sol seen from ~5 AU: small, white, and producing far less corona/halo glow.
+    sun: { disc: 280, glow: 620, halo: 0, color: 0xffffff, glowAlpha: 0.4, haloAlpha: 0.0, white: true },
   },
   cerberus: {
-    label: 'Cerberus', body: 'blackhole',
-    nebula: { uColorA: 0x05030a, uColorB: 0x1a1030, uColorC: 0x4a1830, uBrightness: 0.04, uSaturation: 0.45, uMilkyWay: 0.06 },
-    sun: { disc: 220, glow: 520, halo: 0, color: 0xcdd0ff, glowAlpha: 0.4, haloAlpha: 0.0 },
+    label: 'Cerberus', body: 'blackhole', sunMult: 2,
+    nebula: { uColorA: 0x05030a, uColorB: 0x1a1030, uColorC: 0x4a1830, uBrightness: 0.04, uSaturation: 0.40, uMilkyWay: 0.045 },
+    sun: { disc: 220, glow: 520, halo: 0, color: 0xeef0ff, glowAlpha: 0.4, haloAlpha: 0.0, white: true },
   },
 };
 

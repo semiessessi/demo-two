@@ -70,6 +70,9 @@ const sunHalo = makeSprite(haloGradient, 7600, -7); // huge faint wash over ~1/3
 scene.add(sunHalo);
 scene.add(sunGlow);
 scene.add(sun);
+// the warm baked disc + a whiter disc, swapped per environment (distant Sol reads white, not orange)
+const sunDiscWarm = sun.material.map;
+const sunDiscWhite = makeCanvasTex(sunGradientWhite);
 
 function makeCanvasTex(paint) {
   const s = 256;
@@ -90,6 +93,14 @@ function sunGradient(g) {
   g.addColorStop(0.32, 'rgba(255,140,60,0.7)');
   g.addColorStop(0.65, 'rgba(255,96,34,0.16)');
   g.addColorStop(1.0, 'rgba(255,70,24,0)');
+}
+// A white/pale-yellow disc for a distant Sol (vs the warm close-in star) — stays white, not orange.
+function sunGradientWhite(g) {
+  g.addColorStop(0.0, 'rgba(255,255,253,1)');
+  g.addColorStop(0.30, 'rgba(255,253,242,1)');
+  g.addColorStop(0.55, 'rgba(255,247,220,0.5)');
+  g.addColorStop(0.80, 'rgba(255,242,205,0.10)');
+  g.addColorStop(1.0, 'rgba(255,240,200,0)');
 }
 function glowGradient(g) {
   // soft, wide warm halo — fades gently to nothing at the edge
@@ -220,12 +231,14 @@ function applyEnvironment(s) {
   if (u.uBrightness) u.uBrightness.value = e.nebula.uBrightness;
   if (u.uSaturation) u.uSaturation.value = e.nebula.uSaturation;
   if (u.uMilkyWay) u.uMilkyWay.value = e.nebula.uMilkyWay;
+  lighting.setSunIntensity(e.sunMult != null ? e.sunMult : 7); // 7 close-in, ~1 out at Jupiter's distance
   applySun(e.sun);
   applyBody(e.body);
 }
-// Retune the existing sun sprites per environment (size/tint/glow) — not the light direction.
+// Retune the existing sun sprites per environment (size/tint/glow/whiteness) — not the light direction.
 function applySun(c) {
   if (!c) return;
+  sun.material.map = c.white ? sunDiscWhite : sunDiscWarm; sun.material.needsUpdate = true; // whiter disc for distant Sol
   sun.scale.setScalar(c.disc); sun.material.color.setHex(c.color != null ? c.color : 0xffffff);
   sunGlow.scale.setScalar(c.glow || 1); sunGlow.material.opacity = c.glowAlpha != null ? c.glowAlpha : 1;
   sunGlow.visible = (c.glow || 0) > 0 && sunGlow.material.opacity > 0.001;

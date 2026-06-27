@@ -84,13 +84,15 @@ void main() {
   // Milky Way: a narrower, brighter band on a tilted plane, broken up by the fbm into dust lanes,
   // tinted warm-grey. Added AFTER the nebula dimming so it sits above the 10% backdrop and reads as
   // the brightest diffuse feature. uMilkyWay scales it; uMwTilt rotates the band plane.
-  float mw = exp(-pow(gy * 4.2, 2.0));            // tight bright core of the band (on the galactic plane)
-  float lanes = mix(0.4, 1.0, clamp(detail * 1.3, 0.0, 1.0)); // overall dust mottling from the noise
-  // a dark wispy dust lane down the MIDDLE of the band (the Great Rift): a narrow dip at gy~0, ragged
-  // because the fbm breaks it up. Darkens only the Milky Way nebulosity — the stars are a separate pass.
-  float rift = exp(-pow(gy * 12.0, 2.0)) * clamp(detail * 1.7, 0.0, 1.0);
+  float mw = exp(-pow(gy * 4.2, 2.0));            // band envelope (Gaussian on the galactic plane)
+  // wispy filaments: HIGH-frequency fbm breaks the smooth band into ragged bright streaks + dark gaps
+  float wisp = fbmDetail(dir * 12.0 + vec3(0.0, 0.0, uTime * 0.004));
+  float wisp2 = fbmDetail(dir * 26.0 - vec3(0.0, uTime * 0.003, 0.0)); // finer detail on top
+  float fil = mix(0.06, 1.1, smoothstep(0.34, 0.86, wisp)) * mix(0.6, 1.15, wisp2); // contrasty -> filaments
+  // a dark wispy dust lane down the MIDDLE of the band (the Great Rift), also broken up by the noise
+  float rift = exp(-pow(gy * 13.0, 2.0)) * smoothstep(0.28, 0.85, wisp);
   vec3 mwTint = mix(vec3(0.62, 0.66, 0.78), uColorC, 0.18);    // warm-grey, a hint of the core colour
-  col += mwTint * mw * lanes * mix(1.0, 0.12, rift) * uMilkyWay;
+  col += mwTint * mw * fil * mix(1.0, 0.06, rift) * uMilkyWay;
 
   gl_FragColor = vec4(col, 1.0);
 }`;
