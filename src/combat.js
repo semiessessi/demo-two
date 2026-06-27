@@ -28,6 +28,21 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
     return closest.distanceToSquared(c);
   }
 
+  // Progressive battle damage: a wounded enemy trails LIGHT smoke once it's ~2 hits in, HEAVY at ~3
+  // (sparks fly on every impact; the 4th is the kill, whose blast enemyMgr owns).
+  function enemyDamageTrail(e, heavy) {
+    return vfx.createTrail({
+      getPos: () => e.pos,
+      getVel: () => e.vel,
+      life: heavy ? 2.2 : 1.6,
+      radius: heavy ? 2.0 : 1.1,
+      spawnDist: heavy ? 3.5 : 6.0,
+      spawnInterval: heavy ? 0.28 : 0.5,
+      density: heavy ? 1.1 : 0.45,
+      blobs: heavy ? 4 : 2,
+    });
+  }
+
   function update(dt = 0) {
     const bolts = projectiles.live;
     for (let i = bolts.length - 1; i >= 0; i--) {
@@ -55,6 +70,23 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
           projectiles.kill(b);
         }
       }
+    }
+
+    // progressive battle-damage smoke on wounded enemies (light once ~2 hits in, heavy at ~3); the
+    // per-impact sparks above and the 4th-hit kill blast (enemyMgr) bracket it. Skipped on low quality.
+    const useTrails = vfx.quality !== 'low';
+    for (const e of enemyMgr.enemies) {
+      if (!useTrails || !e.alive || e.death) {
+        if (e.trail) { e.trail.stop(); e.trail = null; e.smokeLvl = 0; }
+        continue;
+      }
+      const lvl = e.hp <= e.maxHp * 0.2 ? 2 : e.hp <= e.maxHp * 0.5 ? 1 : 0;
+      if (lvl !== (e.smokeLvl || 0)) {
+        if (e.trail) e.trail.stop();
+        e.trail = lvl > 0 ? enemyDamageTrail(e, lvl === 2) : null;
+        e.smokeLvl = lvl;
+      }
+      if (e.trail) e.trail.update(dt);
     }
   }
 

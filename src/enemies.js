@@ -98,6 +98,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         pos: pos.clone(),
         vel: heading.clone().setLength(params.speed),
         hp: params.hp,
+        maxHp: params.hp, // for the progressive battle-damage smoke (combat.js)
         radius: chigKit.radius,
         fireCd: Math.random(),
         formation: f,
@@ -419,7 +420,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   }
 
   function reset() {
-    for (const e of enemies) scene.remove(e.obj);
+    for (const e of enemies) { if (e.trail) e.trail.stop(); scene.remove(e.obj); } // stop battle-damage smoke
     enemies.length = 0;
     formations.length = 0;
     kills = 0;
