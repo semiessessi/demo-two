@@ -198,30 +198,10 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     if (!aiming || e.fireCd > 0) return;
     e.fireCd = 1 / (params.fireRate * e.p.fireMult); // some pilots fire far more/less often
     muzzle.copy(efwd).multiplyScalar(e.radius * 1.2).add(e.pos);
-    // Lead the player so the bolt arrives where they'll be (the bolt does NOT inherit enemy velocity):
-    // t ~ range/speed, then aim at player.pos + player.vel * t (one refinement). This is what makes
-    // them actually connect against a moving target instead of always shooting behind.
-    const S = params.pulseSpeed;
-    let t = toLead.copy(player.pos).sub(muzzle).length() / S;
-    if (player.vel) {
-      leadPt.copy(player.pos).addScaledVector(player.vel, t);
-      t = leadPt.distanceTo(muzzle) / S;
-      leadPt.copy(player.pos).addScaledVector(player.vel, t);
-    } else {
-      leadPt.copy(player.pos);
-    }
-    fireDir.copy(leadPt).sub(muzzle).normalize();
-    // accuracy: precise pilots fire dead on the lead; sloppy ones spray within a cone around it
-    const spread = params.maxSpread * (1 - e.p.accuracy);
-    if (spread > 0.001) {
-      eright.crossVectors(fireDir, UP).normalize();
-      eup.crossVectors(eright, fireDir).normalize();
-      fireDir
-        .addScaledVector(eright, (Math.random() * 2 - 1) * spread)
-        .addScaledVector(eup, (Math.random() * 2 - 1) * spread)
-        .normalize();
-    }
-    evel.copy(fireDir).multiplyScalar(S);
+    // Fire BORESIGHT — straight down the nose, so the bolt ALWAYS travels exactly where the ship is
+    // pointed and flying. Leading is done by turning the nose onto the player's lead (in the steering),
+    // never by angling the bolt off the line of travel.
+    evel.copy(efwd).multiplyScalar(params.pulseSpeed);
     projectiles.spawn({ pos: muzzle, vel: evel, color: params.color, team: 'enemy', damage: params.pulseDamage, life: 2.6, radius: 0.7, scale: 1.35 });
   }
 
@@ -306,6 +286,14 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
           .addScaledVector(pfwd, -params.pursueDist)
           .addScaledVector(flank, Math.cos(e.attackAngle || 0) * params.pursueFlank)
           .addScaledVector(UP, Math.sin(e.attackAngle || 0) * params.pursueFlank * 0.5);
+      }
+
+      // In gun range, point the nose at the player's LEAD so the boresight shot connects AND the ship
+      // visibly flies toward where it shoots (precise aiming now = turning onto the lead, not angling the
+      // bolt). Out of range, the mode station above (six approach / wing slot) sets up the run.
+      if (e.mode !== 'formation' && e.mode !== 'scatter' && distP < params.fireRange) {
+        st.copy(player.pos);
+        if (player.vel) st.addScaledVector(player.vel, distP / params.pulseSpeed); // lead by the bolt's travel time
       }
 
       // evasive weave — evasive pilots juke sideways, harder when the player's nose is on them
