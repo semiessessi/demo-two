@@ -23,6 +23,8 @@ import { createHud } from './hud.js';
 import { createTargetDisplay } from './targetDisplay.js';
 import { createGameState } from './gameState.js';
 import { createDebug } from './debug.js';
+import { createRcs } from './rcs.js';
+import { createEditor } from './editor.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin. It can also be opted into on the deployed
@@ -149,6 +151,7 @@ function updateAimHud(aim) {
 
 let ship = null;
 let thrusters = null;
+let rcs = null;
 let flight = null;
 let stars = null;
 let chigKit = null;
@@ -187,6 +190,7 @@ async function init() {
   scene.add(ship.pivot);
   thrusters = createThrusters(ship.pivot, ship.nozzles, ship.rearDir, ship.radius);
   lighting.attachThrusters(ship.pivot, ship.nozzles, ship.rearDir, ship.radius); // real engine light spill
+  rcs = createRcs(scene, ship);
   flight = createFlight(ship.pivot, camera, renderer.domElement, input);
 
   projectiles = createProjectiles(scene);
@@ -281,6 +285,7 @@ function startLoop() {
 
     for (const m of ship.engineMaterials) m.emissiveIntensity = 1.8 + r.thrust * 3.2;
     thrusters.update(r.thrust, dt);
+    if (rcs) rcs.update(dt, flying ? input : null); // RCS jets fire on pitch/yaw/roll while flying
 
     // keep the backdrop centred on the camera so it sits at infinity (no parallax)
     nebula.mesh.position.copy(camera.position);
@@ -501,6 +506,9 @@ function buildTweakGui() {
     vf.add(vfx._vol.tunable, 'smokeSigma', 0.5, 8, 0.1).name('smoke thickness');
   }
   vf.close();
+
+  // Visual placement editor: see/adjust damage zones + RCS ports, log values to bake back into code.
+  createEditor(gui, { ship, damage, rcs });
 }
 
 init().catch((e) => {
