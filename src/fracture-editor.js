@@ -54,7 +54,7 @@ export function createFractureEditor({ scene, chigKit, gui }) {
     }
     exploding = false;
     info.fragments = frags.length;
-    console.log('[fracture] fragments', frags.length, '/ seeds', res.seedCount);
+    console.log('[fracture] leaves', frags.length, '/ nodes', res.nodes.length, '/ roots', res.roots.length);
   }
 
   const _d = new THREE.Vector3();
@@ -100,6 +100,9 @@ export function createFractureEditor({ scene, chigKit, gui }) {
   ff.add(params, 'twist', 0, 0.6, 0.01).onChange(regenerate);
   ff.add(params, 'skew', 0, 0.6, 0.01).onChange(regenerate);
   ff.add(params, 'warp', 0, 0.6, 0.01).onChange(regenerate);
+  ff.add(params, 'maxDepth', 0, 3, 1).name('re-break depth').onChange(regenerate);
+  ff.add(params, 'childCount', 2, 8, 1).name('child cells').onChange(regenerate);
+  ff.add(params, 'splitProb', 0, 1, 0.05).name('split chance').onChange(regenerate);
   ff.add(params, 'explodeForce', 2, 30, 1).name('explode force');
   ff.add({ b: () => regenerate() }, 'b').name('▸ regenerate');
   ff.add({ b: () => explode() }, 'b').name('▸ explode');
