@@ -113,7 +113,7 @@ export function createDebris(scene, { chigTemplate, chigMaterial, vfx = null, co
     const mover = {
       mesh, vel,
       ang: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8),
-      life: 7 + Math.random() * 4, // backstop; mostly culled by distance
+      life: 11 + Math.random() * 6, // backstop; drifts off in vacuum, mostly culled by distance
       node: null, reBreakAt: 0,
       // big (depth-0) wreckage trails cheap sprite smoke as it tumbles away (-1 = no trail)
       smoke: (vfx && node.depth === 0 && quality !== 'low' && Math.random() < 0.6) ? 0 : -1,
@@ -179,8 +179,7 @@ export function createDebris(scene, { chigTemplate, chigMaterial, vfx = null, co
       if (m.life <= 0 || (player && m.mesh.position.distanceToSquared(player.pos) > CULL2)) {
         m.mesh.visible = false; m.mesh.scale.setScalar(1); movers.splice(i, 1); continue; // return to pool
       }
-      m.mesh.position.addScaledVector(m.vel, dt);
-      m.vel.multiplyScalar(1 - 0.35 * dt); // gentle drag
+      m.mesh.position.addScaledVector(m.vel, dt); // vacuum — no drag, keeps its velocity
       m.mesh.rotation.x += m.ang.x * dt;
       m.mesh.rotation.y += m.ang.y * dt;
       m.mesh.rotation.z += m.ang.z * dt;
