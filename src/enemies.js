@@ -58,6 +58,8 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   const formations = [];
   let kills = 0;
   let serial = 0; // monotonic — gives every Chig a unique trackable hash
+  let vfx = null; // set by main once VFX exists — death explosions / smoke
+  const DEATH_SCALE = 2.8; // enemy-death blast size (~3x the old)
 
   const FWD = new THREE.Vector3(0, 0, -1);
   const ZAX = new THREE.Vector3(0, 0, 1);
@@ -331,20 +333,88 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
       updateRoll(e, aiming, dt);
       tryFire(e, player, aiming);
     }
+
+    // advance death sequences for dying (alive=false) enemies still tumbling in the scene
+    for (const e of enemies) {
+      if (!e.alive && e.death && !e.death.done) advanceDeath(e, dt);
+    }
+  }
+
+  // A killing blow. Enemy leaves combat immediately (alive=false) but stays in the scene running a
+  // death SEQUENCE (advanced in update, removed by prune when done). Three flavours:
+  //   • instant  — one big blast, gone.
+  //   • spin-out — tumbles + trails smoke for a moment, then the final blast.
+  //   • chained  — small pop, then two big ones that obliterate it into tiny fragments.
+  function kill(e) {
+    if (!e.alive) return;
+    e.alive = false;
+    kills++;
+    const r = Math.random();
+    if (r < 0.45) {
+      e.death = { type: 'instant', t: 0, done: true };
+      if (vfx) vfx.explosion(e.pos, DEATH_SCALE);
+      e.obj.visible = false;
+    } else if (r < 0.75) {
+      e.death = {
+        type: 'spinout', t: 0, dur: 0.9 + Math.random() * 0.9, done: false, smokeAcc: 0,
+        spin: new THREE.Vector3((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 8),
+      };
+      if (vfx) vfx.explosion(e.pos, DEATH_SCALE * 0.3); // small initial pop
+    } else {
+      e.death = { type: 'chained', t: 0, dur: 0.75, done: false, stage: 0 };
+      if (vfx) vfx.explosion(e.pos, DEATH_SCALE * 0.4); // small first
+    }
+  }
+
+  function tinyFragments(pos) {
+    // lots of tiny sparks/embers — placeholder until the real mesh-fracture debris lands
+    if (!vfx) return;
+    for (let i = 0; i < 6; i++) vfx.spark(pos, Math.random() < 0.5 ? 0xffd27a : 0xff8a3a);
+    for (let i = 0; i < 12; i++) vfx.ember(pos, 0.15);
+  }
+
+  function advanceDeath(e, dt) {
+    const d = e.death;
+    d.t += dt;
+    if (d.type === 'spinout') {
+      e.pos.addScaledVector(e.vel, dt);
+      e.vel.multiplyScalar(Math.max(0, 1 - 1.0 * dt)); // bleed speed
+      e.obj.position.copy(e.pos);
+      e.obj.rotateX(d.spin.x * dt); e.obj.rotateY(d.spin.y * dt); e.obj.rotateZ(d.spin.z * dt);
+      d.smokeAcc += dt;
+      if (d.smokeAcc >= 0.05) {
+        d.smokeAcc = 0;
+        if (vfx && vfx.smoke) vfx.smoke(e.pos);
+        if (vfx && vfx.ember && Math.random() < 0.5) vfx.ember(e.pos, 0.2);
+      }
+      if (d.t >= d.dur) { if (vfx) vfx.explosion(e.pos, DEATH_SCALE); e.obj.visible = false; d.done = true; }
+    } else if (d.type === 'chained') {
+      e.pos.addScaledVector(e.vel, dt);
+      e.vel.multiplyScalar(Math.max(0, 1 - 0.8 * dt));
+      e.obj.position.copy(e.pos);
+      e.obj.rotateY(3 * dt);
+      if (d.stage === 0 && d.t > 0.22) { d.stage = 1; if (vfx) vfx.explosion(e.pos, DEATH_SCALE * 0.9); }
+      else if (d.stage === 1 && d.t > 0.5) { d.stage = 2; if (vfx) vfx.explosion(e.pos, DEATH_SCALE * 1.15); tinyFragments(e.pos); e.obj.visible = false; }
+      if (d.t >= d.dur) d.done = true;
+    } else {
+      d.done = true;
+    }
   }
 
   function prune() {
     for (let i = enemies.length - 1; i >= 0; i--) {
-      if (!enemies[i].alive) {
-        scene.remove(enemies[i].obj);
+      const e = enemies[i];
+      if (!e.alive && (!e.death || e.death.done)) {
+        scene.remove(e.obj);
         enemies.splice(i, 1);
-        kills++; // enemies only go !alive when destroyed
       }
     }
   }
 
   function count() {
-    return enemies.length;
+    let n = 0;
+    for (const e of enemies) if (e.alive) n++; // dying enemies don't hold up the next wave
+    return n;
   }
 
   function reset() {
@@ -360,6 +430,8 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     prune,
     count,
     reset,
+    kill,
+    setVfx(v) { vfx = v; },
     enemies,
     formations,
     params,

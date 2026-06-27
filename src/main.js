@@ -210,6 +210,7 @@ async function init() {
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
   waves = createWaveManager(enemyMgr);
   vfx = createVfx(scene, camera, { lightDir: sunDir }); // align smoke self-shadow with the real sun
+  enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
   quality = createQuality({ lighting, vfx, setRenderScale }); // FPS-driven tier ladder: render scale, CSM res, shadow-light budget, smoke, vfx
   combat = createCombat(projectiles, enemyMgr, vfx, {
     getPlayerPos: () => ship.pivot.position,
