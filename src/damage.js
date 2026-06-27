@@ -26,28 +26,32 @@ export function createDamageModel(ship, opts = {}) {
   const rEng = noz[noz.length - 1] ? noz[noz.length - 1].clone() : new THREE.Vector3(R * 0.3, 0, R * 0.6);
 
   const zones = [];
-  const add = (name, center, radius, hp, kind) =>
-    zones.push({ name, center, radius, hp, maxHp: hp, kind, alive: true, trail: null });
+  // `size` is per-axis half-extents (Vector3) for an axis-aligned ELLIPSOID — flat/long parts no longer
+  // need a coarse oversized sphere. A plain number still works as a uniform sphere. Tune live in the editor.
+  const add = (name, center, size, hp, kind) => {
+    const radii = typeof size === 'number' ? new THREE.Vector3(size, size, size) : size.clone();
+    zones.push({ name, center, radii, hp, maxHp: hp, kind, alive: true, trail: null });
+  };
 
-  add('Cockpit', meshCenterLocal(/canopy/i, new THREE.Vector3(0, 0.3, -R * 0.4)), R * 0.5, 55, 'cockpit');
-  add('L Engine', lEng, R * 0.5, 20, 'engine'); // fragile: ~2 enemy pulses (10 dmg) knock it out
-  add('R Engine', rEng, R * 0.5, 20, 'engine');
-  add('L Wing', meshCenterLocal(/l_aileron/i, new THREE.Vector3(-R * 0.8, 0, 0.3)), R * 0.7, 20, 'wing'); // ~2 hits
-  add('R Wing', meshCenterLocal(/r_aileron/i, new THREE.Vector3(R * 0.8, 0, 0.3)), R * 0.7, 20, 'wing');
-  add('Gun', new THREE.Vector3(0, -R * 0.12, -R * 0.7), R * 0.4, 20, 'gun'); // front; destroyed -> can't fire
-  add('L Fuel', new THREE.Vector3(-R * 0.3, -R * 0.05, R * 0.18), R * 0.4, 25, 'fuel'); // rupture -> catastrophic
-  add('R Fuel', new THREE.Vector3(R * 0.3, -R * 0.05, R * 0.18), R * 0.4, 25, 'fuel');
-  add('Fuselage', new THREE.Vector3(0, 0, 0), R * 0.7, 120, 'fuselage');
+  add('Cockpit', meshCenterLocal(/canopy/i, new THREE.Vector3(0, 0.3, -R * 0.4)), new THREE.Vector3(1.0, 0.8, 1.4), 55, 'cockpit');
+  add('L Engine', lEng, new THREE.Vector3(0.9, 0.9, 1.7), 20, 'engine'); // nacelle (long in z); ~2 enemy pulses
+  add('R Engine', rEng, new THREE.Vector3(0.9, 0.9, 1.7), 20, 'engine');
+  add('L Wing', meshCenterLocal(/l_aileron/i, new THREE.Vector3(-R * 0.8, 0, 0.3)), new THREE.Vector3(1.7, 0.45, 1.5), 20, 'wing'); // wide + flat
+  add('R Wing', meshCenterLocal(/r_aileron/i, new THREE.Vector3(R * 0.8, 0, 0.3)), new THREE.Vector3(1.7, 0.45, 1.5), 20, 'wing');
+  add('Gun', new THREE.Vector3(0, -R * 0.12, -R * 0.7), new THREE.Vector3(0.6, 0.6, 1.3), 20, 'gun'); // front; destroyed -> can't fire
+  add('L Fuel', new THREE.Vector3(-R * 0.3, -R * 0.05, R * 0.18), new THREE.Vector3(0.85, 0.7, 1.5), 25, 'fuel'); // rupture -> catastrophic
+  add('R Fuel', new THREE.Vector3(R * 0.3, -R * 0.05, R * 0.18), new THREE.Vector3(0.85, 0.7, 1.5), 25, 'fuel');
+  add('Fuselage', new THREE.Vector3(0, 0, 0), new THREE.Vector3(1.4, 1.0, 3.6), 120, 'fuselage'); // long body
 
   // Forward canards: small, hard-to-hit control surfaces. Only DIRECT hits (the bolt's travel segment
-  // passes inside the sphere — see applyHit) take them out, so they're rare and don't steal nearby hits.
+  // pierces the ellipsoid — see applyHit) take them out, so they're rare and don't steal nearby hits.
   const findNode = (re) => { let n = null; pivot.traverse((o) => { if (!n && re.test(o.name)) n = o; }); return n; };
   function addCanard(name, re, sx) {
     const node = findNode(re);
     const center = node
       ? pivot.worldToLocal(new THREE.Box3().setFromObject(node).getCenter(new THREE.Vector3()))
       : new THREE.Vector3(sx * 0.86, -0.12, -2.94);
-    add(name, center, 1.2, 10, 'canard'); // hp 10 = one enemy pulse; tune radius/hp live in the editor
+    add(name, center, new THREE.Vector3(0.9, 0.35, 0.7), 10, 'canard'); // small + flat; hp 10 = one enemy pulse; tune live
     const z = zones[zones.length - 1];
     z.node = node; // the L_Canard / R_Canard group — hidden + cloned to debris when destroyed
     z.sparkPoint = new THREE.Vector3(sx * 0.4, -0.1, -2.7); // inboard root near the cockpit (stub sparks)
@@ -72,6 +76,20 @@ export function createDamageModel(ship, opts = {}) {
     return _segCl.distanceToSquared(c);
   }
 
+  // Ellipsoid tests in the zone's own unit space (divide each axis by its half-extent): <=1 is inside.
+  const _eA = new THREE.Vector3(), _eB = new THREE.Vector3(), _ZERO = new THREE.Vector3();
+  function ellipDistSq(p, z) {
+    const r = z.radii;
+    const dx = (p.x - z.center.x) / r.x, dy = (p.y - z.center.y) / r.y, dz = (p.z - z.center.z) / r.z;
+    return dx * dx + dy * dy + dz * dz;
+  }
+  function segEllipDistSq(a, b, z) {
+    const r = z.radii;
+    _eA.set((a.x - z.center.x) / r.x, (a.y - z.center.y) / r.y, (a.z - z.center.z) / r.z);
+    _eB.set((b.x - z.center.x) / r.x, (b.y - z.center.y) / r.y, (b.z - z.center.z) / r.z);
+    return segPointDistSq(_eA, _eB, _ZERO); // closest approach of the segment to the ellipsoid centre, unit space
+  }
+
   // The front gun is offline once its zone is destroyed (the player cannon checks this each frame).
   function canFire() {
     for (const z of zones) if (z.kind === 'gun' && !z.alive) return false;
@@ -82,21 +100,23 @@ export function createDamageModel(ship, opts = {}) {
   // full travel SEGMENT for a true direct-hit test (the end point alone often lands past the canard).
   function applyHit(worldPoint, dmg, fromPoint) {
     pivot.worldToLocal(localPt.copy(worldPoint));
-    // Canards: excluded from normal routing; only a DIRECT hit (segment passes within the small sphere)
+    // Canards: excluded from normal routing; only a DIRECT hit (the segment pierces the ellipsoid)
     // counts — keeps them rare and stops them stealing nearby hits.
     if (fromPoint) pivot.worldToLocal(segB.copy(fromPoint)); else segB.copy(localPt);
     let canard = null, canardD = Infinity;
     for (const z of zones) {
       if (z.kind !== 'canard' || !z.alive) continue;
-      const d2 = segPointDistSq(segB, localPt, z.center);
-      if (d2 <= z.radius * z.radius && d2 < canardD) { canardD = d2; canard = z; }
+      const d2 = segEllipDistSq(segB, localPt, z);
+      if (d2 <= 1 && d2 < canardD) { canardD = d2; canard = z; }
     }
     let best = canard;
     if (!best) {
+      // route to the zone the hit is most INSIDE (ellipsoid-space distance), so snug shapes claim
+      // the right part instead of the biggest sphere winning by raw centre distance.
       let bestD = Infinity;
       for (const z of zones) {
         if (!z.alive || z.kind === 'canard') continue;
-        const d = localPt.distanceTo(z.center);
+        const d = ellipDistSq(localPt, z);
         if (d < bestD) {
           bestD = d;
           best = z;

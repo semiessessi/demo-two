@@ -38,7 +38,7 @@ export function createEditor(gui, { scene, ship, damage, rcs }) {
     return { z, m };
   });
   function syncZones() {
-    for (const { z, m } of zoneMeshes) { m.position.copy(z.center); m.scale.setScalar(z.radius); }
+    for (const { z, m } of zoneMeshes) { m.position.copy(z.center); m.scale.copy(z.radii); } // ellipsoid: per-axis
   }
   syncZones();
 
@@ -51,7 +51,7 @@ export function createEditor(gui, { scene, ship, damage, rcs }) {
   function onZoneChange(z) {
     if (ui.mirror) {
       const p = mirrorOf(z);
-      if (p) { p.center.set(-z.center.x, z.center.y, z.center.z); p.radius = z.radius; p.maxHp = z.maxHp; }
+      if (p) { p.center.set(-z.center.x, z.center.y, z.center.z); p.radii.copy(z.radii); p.maxHp = z.maxHp; }
     }
     syncZones();
   }
@@ -73,7 +73,9 @@ export function createEditor(gui, { scene, ship, damage, rcs }) {
     f.add(z.center, 'x', -8, 8, 0.05).onChange(() => onZoneChange(z)).listen();
     f.add(z.center, 'y', -8, 8, 0.05).onChange(() => onZoneChange(z)).listen();
     f.add(z.center, 'z', -8, 8, 0.05).onChange(() => onZoneChange(z)).listen();
-    f.add(z, 'radius', 0.3, 6, 0.05).onChange(() => onZoneChange(z)).listen();
+    f.add(z.radii, 'x', 0.15, 6, 0.05).name('size x').onChange(() => onZoneChange(z)).listen();
+    f.add(z.radii, 'y', 0.15, 6, 0.05).name('size y').onChange(() => onZoneChange(z)).listen();
+    f.add(z.radii, 'z', 0.15, 6, 0.05).name('size z').onChange(() => onZoneChange(z)).listen();
     f.add(z, 'maxHp', 5, 200, 5).name('max HP').onChange(() => onZoneChange(z)).listen();
     f.onOpenClose((folder) => { focusZone = folder._closed ? null : z; applyHighlight(); }); // highlight the open zone
     f.close();
@@ -81,7 +83,7 @@ export function createEditor(gui, { scene, ship, damage, rcs }) {
   zf.add({
     log: () => {
       const lines = damage.zones.map((z) =>
-        `  add('${z.name}', new THREE.Vector3(${z.center.x.toFixed(2)}, ${z.center.y.toFixed(2)}, ${z.center.z.toFixed(2)}), ${z.radius.toFixed(2)}, ${z.maxHp}, '${z.kind}');`);
+        `  add('${z.name}', new THREE.Vector3(${z.center.x.toFixed(2)}, ${z.center.y.toFixed(2)}, ${z.center.z.toFixed(2)}), new THREE.Vector3(${z.radii.x.toFixed(2)}, ${z.radii.y.toFixed(2)}, ${z.radii.z.toFixed(2)}), ${z.maxHp}, '${z.kind}');`);
       console.log('[damage zones]\n' + lines.join('\n'));
     },
   }, 'log').name('log zones → console');
