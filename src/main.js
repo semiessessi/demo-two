@@ -26,6 +26,8 @@ import { createDebug } from './debug.js';
 import { createRcs } from './rcs.js';
 import { createEditor } from './editor.js';
 import { createDebris } from './debris.js';
+import { createPregame } from './pregame.js';
+import { loadSettings, DIFFICULTY, ENVIRONMENT } from './settings.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin. It can also be opted into on the deployed
@@ -159,6 +161,8 @@ let rcs = null;
 let debris = null;
 let debrisPlayer = null;
 let playerDebris = null;
+let pregame = null;
+const settings = loadSettings(); // AI Skirmish setup (ship/loadout/difficulty/environment), persisted
 let flight = null;
 let stars = null;
 let chigKit = null;
@@ -182,6 +186,56 @@ function restartWorld() {
   flight.setRollScale(1);
   flight.setPitchScale(1);
   if (vfx.clearDebris) vfx.clearDebris();
+}
+
+// --- AI Skirmish: apply pre-game settings to the live systems --------------
+function applyDifficulty(s) {
+  const d = DIFFICULTY[s.difficulty] || DIFFICULTY.veteran;
+  if (waves && waves.params) Object.assign(waves.params, d.waves);
+  if (enemyMgr && enemyMgr.params) Object.assign(enemyMgr.params, d.enemy);
+}
+function applyEnvironment(s) {
+  const e = ENVIRONMENT[s.environment] || ENVIRONMENT.nebula;
+  const u = nebula.uniforms;
+  u.uColorA && u.uColorA.value.setHex(e.nebula.uColorA);
+  u.uColorB && u.uColorB.value.setHex(e.nebula.uColorB);
+  u.uColorC && u.uColorC.value.setHex(e.nebula.uColorC);
+  if (u.uBrightness) u.uBrightness.value = e.nebula.uBrightness;
+  if (u.uSaturation) u.uSaturation.value = e.nebula.uSaturation;
+  if (u.uMilkyWay) u.uMilkyWay.value = e.nebula.uMilkyWay;
+}
+function applySettings(s) {
+  applyDifficulty(s);
+  applyEnvironment(s);
+  // Phase 2/3 hooks: applyLivery(ship, s.livery, s.skin); applyLoadout(ship, s.loadout);
+}
+
+// Frame the ship at the origin for the pre-game preview (a slow turntable spins it in the loop).
+function frameMenuCamera() {
+  ship.pivot.position.set(0, 0, 0);
+  ship.pivot.quaternion.identity();
+  const r = ship.radius;
+  camera.position.set(r * 1.4, r * 0.7, r * 2.8);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(0, 0, 0);
+}
+// Enter the pre-game screen (boot, or after MISSION OVER): show the console, frame the ship, no flight.
+function enterMenu() {
+  applyEnvironment(settings);
+  if (ship.model) ship.model.visible = true;
+  flight.setEnabled(false);
+  frameMenuCamera();
+  if (hud) hud.setVisible(false);
+  if (pregame) pregame.show();
+}
+// Launch button: apply the chosen settings, reset the world, hide the console, begin the sortie.
+function launchSkirmish(s) {
+  applySettings(s);
+  restartWorld();
+  if (pregame) pregame.hide();
+  if (hud) hud.setVisible(true);
+  firstGesture(); // the launch click is a user gesture -> unlock + start audio (autoplay policy)
+  gameState.launch();
 }
 
 async function init() {
@@ -235,7 +289,8 @@ async function init() {
 
   hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
   targetDisplay = createTargetDisplay(chigKit.template);
-  gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld });
+  gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld, onMenu: enterMenu });
+  pregame = createPregame({ settings, onLaunch: launchSkirmish, onChange: (s) => applyEnvironment(s) });
   damage.setCallbacks({
     onEject: () => gameState.eject(),
     onDestroyed: () => gameState.destroyed(),
@@ -284,6 +339,7 @@ async function init() {
   // death-debris / muzzle flash doesn't pay a compile stall mid-fight.
   try { renderer.compile(scene, camera); } catch (e) { console.warn('[prewarm] compile skipped', e); }
 
+  enterMenu(); // open on the AI Skirmish setup screen (flight begins on Launch)
   startLoop();
   reveal();
 }
@@ -299,6 +355,7 @@ function startLoop() {
 
     input.poll(); // keyboard + gamepad -> shared signals (read by flight + cannon)
     const flying = gameState.mode === 'flying';
+    if (gameState.mode === 'menu') ship.pivot.rotateY(0.25 * dt); // slow turntable for the pre-game preview
     let res = { throttle: 0, speed: 0, boosting: false };
     if (flying) {
       flight.setSpeedScale(damage.speedScale()); // engine damage cuts top speed
@@ -314,7 +371,7 @@ function startLoop() {
     if (flying) updateAimHud(cannon.update(dt, input, player));
     else hud.setTarget(0, 0, false);
     enemyMgr.update(dt, player);
-    if (gameState.mode !== 'over') waves.update(dt, player);
+    if (gameState.mode === 'flying') waves.update(dt, player); // no spawns in the menu/cutscene
     projectiles.update(dt);
     combat.update(dt);
     if (flying) damage.update(dt, vfx);

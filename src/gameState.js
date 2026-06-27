@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 
-// Tiny state machine: flying -> ejecting -> over. Holding the eject control for EJECT_HOLD seconds
-// (or the cockpit/fuselage being destroyed) triggers a short cutscene where flight control is cut,
-// the wreck tumbles + drifts, and the camera pulls back to watch — then the MISSION OVER overlay.
-// Restart re-arms a fresh fight (main supplies onRestart to reset the world).
+// State machine: menu -> flying -> (tumbling) -> ejecting -> over -> menu. The game opens in `menu`
+// (the pre-game / AI Skirmish setup screen, flight disabled); Launch -> flying. Holding eject for
+// EJECT_HOLD (or cockpit/fuselage destruction) triggers a short cutscene, then MISSION OVER, then
+// back to the menu. main supplies onRestart (reset the world) + onMenu (show the pre-game screen).
 
 const EJECT_HOLD = 1.0;
 const CUTSCENE = 2.6;
 
-export function createGameState({ ship, camera, flight, hud, vfx, debris, playerVel, onRestart }) {
-  let mode = 'flying';
+export function createGameState({ ship, camera, flight, hud, vfx, debris, playerVel, onRestart, onMenu }) {
+  let mode = 'menu';
   let ejectHold = 0;
   let cutscene = 0;
   let reasonText = 'EJECTED — MISSION OVER';
@@ -103,19 +103,35 @@ export function createGameState({ ship, camera, flight, hud, vfx, debris, player
     }
   }
 
-  function restart() {
-    if (onRestart) onRestart();
+  // Launch a skirmish from the menu. main applies the chosen settings + resets the world first.
+  function launch() {
+    if (mode !== 'menu') return;
     mode = 'flying';
     ejectHold = 0;
     flight.setEnabled(true);
-    if (hud) hud.hideMissionOver();
   }
+
+  // Return to the pre-game screen (from MISSION OVER, or programmatically). Resets the world so the
+  // menu shows a clean, intact ship for the customisation preview.
+  function toMenu() {
+    if (onRestart) onRestart();
+    if (hud) hud.hideMissionOver();
+    mode = 'menu';
+    ejectHold = 0;
+    flight.setEnabled(false);
+    if (onMenu) onMenu();
+  }
+
+  // MISSION OVER "Restart" now returns to the menu (re-customise before the next sortie).
+  function restart() { toMenu(); }
 
   return {
     update,
     eject,
     destroyed,
     tumble,
+    launch,
+    toMenu,
     restart,
     get mode() {
       return mode;

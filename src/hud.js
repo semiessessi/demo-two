@@ -151,6 +151,15 @@ export function createHud(damage, opts = {}) {
   function hideMissionOver() {
     over.style.display = 'none';
   }
+  // Hide/show the in-flight HUD (used by the pre-game menu). Leaves the MISSION OVER overlay alone.
+  function setVisible(on) {
+    const d = on ? '' : 'none';
+    cross.style.display = d;
+    counters.style.display = d;
+    sub.style.display = d;
+    lwrap.style.display = d;
+    if (!on) reticle.style.display = 'none';
+  }
   function setAim(x, y) {
     cross.style.left = x == null ? '50%' : `${x}px`;
     cross.style.top = x == null ? '50%' : `${y}px`;
@@ -163,5 +172,5 @@ export function createHud(damage, opts = {}) {
     }
   }
 
-  return { update, showMissionOver, hideMissionOver, setAim, setTarget };
+  return { update, showMissionOver, hideMissionOver, setVisible, setAim, setTarget };
 }
