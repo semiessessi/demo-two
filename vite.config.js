@@ -8,9 +8,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Split three.js into its own chunk: it rarely changes (caches across app deploys)
-        // and keeps the app chunk well under the 500 kB warning.
+        // and keeps the app chunk well under the 500 kB warning. Trailing slash so three-mesh-bvh /
+        // three-bvh-csg (debug-only, dynamically imported) DON'T get pulled into the eager three chunk.
         manualChunks(id) {
-          if (id.includes('node_modules/three')) return 'three';
+          if (id.includes('node_modules/three/')) return 'three';
         },
       },
     },

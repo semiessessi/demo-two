@@ -39,6 +39,19 @@ export function createDebug(ctx) {
   let viewer = null; // lazily-built { plane, key, fill, controls }
   let chig = null; // lazily-cloned chig instance
   const saved = {}; // flight-scene state captured when leaving flight
+  let guiRef = null; // stored in attachGui so the Fracture editor can add its folder lazily
+  let fractureEditor = null; // lazily dynamic-imported (keeps three-bvh-csg out of the prod bundle)
+  let fractureLoading = false;
+
+  async function ensureFracture() {
+    if (fractureEditor || fractureLoading) return;
+    fractureLoading = true;
+    try {
+      const mod = await import('./fracture-editor.js');
+      fractureEditor = mod.createFractureEditor({ scene, chigKit, gui: guiRef });
+    } catch (e) { console.error('[fracture] editor load failed', e); }
+    fractureLoading = false;
+  }
 
   // --- lazy viewer rig: shadow-catching ground plane + neutral key/fill + orbit camera --------
   function buildViewer() {
@@ -150,6 +163,10 @@ export function createDebug(ctx) {
       if (chig) chig.visible = false;
       ship.pivot.visible = true;
       layoutModel(ship.pivot, ship.model, ship.radius);
+    } else if (which === 'fracture') {
+      if (chig) chig.visible = false;
+      ship.pivot.visible = false;
+      // the fracture editor owns its own fragment group; ensureFracture() shows + frames it
     } else {
       if (!chig) {
         chig = spawnChig(chigKit.template);
@@ -191,10 +208,20 @@ export function createDebug(ctx) {
     if (next === 'flight') enterFlight();
     else enterViewer(next);
     mode = next;
+    if (next === 'fracture') {
+      ensureFracture().then(() => {
+        if (mode !== 'fracture' || !fractureEditor) return;
+        fractureEditor.show();
+        layoutModel(fractureEditor.group, fractureEditor.group, chigKit.radius);
+      });
+    } else if (fractureEditor) {
+      fractureEditor.hide();
+    }
   }
 
   // Add the View folder + move the whole panel to the top-left so the FPS counter (top-right) shows.
   function attachGui(gui) {
+    guiRef = gui;
     gui.domElement.style.left = '0px';
     gui.domElement.style.right = 'auto';
 
@@ -203,10 +230,12 @@ export function createDebug(ctx) {
       Flight: () => setMode('flight'),
       Hammerhead: () => setMode('hammerhead'),
       Chig: () => setMode('chig'),
+      Fracture: () => setMode('fracture'),
     };
     view.add(buttons, 'Flight');
     view.add(buttons, 'Hammerhead');
     view.add(buttons, 'Chig');
+    view.add(buttons, 'Fracture');
     view.add(ui, 'spin').name('auto-spin');
     view.add(ui, 'thrusters').name('show thrusters').onChange((v) => {
       if (thrusters?.group && mode === 'hammerhead') thrusters.group.visible = v;
@@ -222,6 +251,10 @@ export function createDebug(ctx) {
     if (obj && ui.spin) obj.rotateY(SPIN_SPEED * dt);
     if (mode === 'hammerhead' && ui.thrusters && thrusters) thrusters.update(0.6, dt); // live plumes
     if (mode === 'chig' && chig) layoutChigGlows(chig, chigThruster); // reflect live Chig Thruster sliders
+    if (mode === 'fracture' && fractureEditor) {
+      if (ui.spin) fractureEditor.group.rotateY(SPIN_SPEED * dt);
+      fractureEditor.update(dt);
+    }
     if (viewer) viewer.controls.update();
     render();
     return true;
