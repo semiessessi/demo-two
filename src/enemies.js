@@ -30,8 +30,27 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     wingSpacing: 12, // how far a wingman trails its point
     avoidDist: 34, // start peeling away from the player inside this range
     avoidStrength: 1.4, // how hard they veer off to avoid ramming
+    maxSpread: 0.17, // rad — fire-cone spread for a totally inaccurate pilot (accuracy 0)
+    jinkStrength: 18, // how far an evasive pilot weaves sideways
+    persSpread: 0.6, // per-pilot random variation in personality traits (GUI-tunable)
   };
   Object.assign(params, opts.params || {});
+
+  const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+  // Roll a pilot personality from the wave difficulty (0..1) plus per-pilot jitter, so a formation is
+  // a mix of snipers / brawlers / erratic flyers and the average toughness climbs with the difficulty.
+  function makePersonality(diff) {
+    const j = () => (Math.random() - 0.5) * params.persSpread;
+    const aggression = clamp01(0.32 + diff * 0.5 + j());
+    const accuracy = clamp01(0.3 + diff * 0.55 + j());
+    const fireMult = THREE.MathUtils.clamp(0.6 + diff * 0.7 + j(), 0.4, 2.0);
+    const evasion = clamp01(0.25 + diff * 0.5 + j());
+    // aggressive pilots break off close; timid ones hang back and snipe from range
+    const standoff = THREE.MathUtils.lerp(params.passDist * 1.8, params.passDist * 0.7, aggression);
+    const scatterTime = 1.4 + Math.random() * 1.0 + evasion * 0.8 + (1 - aggression) * 0.6;
+    return { aggression, accuracy, fireMult, evasion, standoff, scatterTime };
+  }
 
   const enemies = [];
   const formations = [];
@@ -52,15 +71,19 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   const toP = new THREE.Vector3();
   const efwd = new THREE.Vector3();
   const eright = new THREE.Vector3();
+  const eup = new THREE.Vector3();
+  const fireDir = new THREE.Vector3();
   const muzzle = new THREE.Vector3();
   const evel = new THREE.Vector3();
   const flank = new THREE.Vector3();
   const awayDir = new THREE.Vector3();
+  const jinkAxis = new THREE.Vector3();
+  const pfwd = new THREE.Vector3();
 
-  function spawnFormation({ pattern = 'vee', count = 4, pos, heading }) {
+  function spawnFormation({ pattern = 'vee', count = 4, pos, heading, difficulty = 0 }) {
     const slots = formationSlots(pattern, count, params.formationSpacing);
     const anchor = { pos: pos.clone(), vel: heading.clone().setLength(params.speed), phase: 'ingress', egress: 0, passes: 0 };
-    const f = { anchor, members: [], slots, initialCount: count, dogfight: false };
+    const f = { anchor, members: [], slots, initialCount: count, dogfight: false, scatter: false, scatterTimer: 0, lastCount: count };
     for (let i = 0; i < count; i++) {
       const obj = spawnChig(chigKit.template);
       const e = {
@@ -82,6 +105,8 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         wingSide: i % 2 === 0 ? 1 : -1,
         phase: 'ingress', // per-enemy attack-run state in the dogfight
         egress: 0,
+        p: makePersonality(difficulty), // pilot personality
+        jinkPhase: Math.random() * Math.PI * 2, // evasive-weave phase
       };
       obj.position.copy(e.pos);
       scene.add(obj);
@@ -92,8 +117,20 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     return f;
   }
 
+  // First loss: the survivors break and scatter outward for a moment so they aren't picked off in a
+  // line, then settle into the dogfight.
+  function startScatter(f) {
+    f.scatter = true;
+    f.scatterTimer = 0;
+    for (const e of f.members) {
+      e.mode = 'scatter';
+      f.scatterTimer = Math.max(f.scatterTimer, e.p.scatterTime);
+    }
+  }
+
   function intoDogfight(f) {
     f.dogfight = true;
+    f.scatter = false;
     // break into 2-ship elements: point + wingman, each element scattered to a different flank angle
     const m = f.members;
     const elements = Math.ceil(m.length / 2);
@@ -137,8 +174,9 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     } else {
       e.rollTimer -= dt;
       if (e.rollTimer <= 0) {
-        e.rollVel = (Math.random() * 2 - 1) * params.rollRate;
-        e.rollTimer = 0.35 + Math.random() * 1.1;
+        // evasive pilots barrel-roll harder + change up more often
+        e.rollVel = (Math.random() * 2 - 1) * params.rollRate * (0.6 + e.p.evasion);
+        e.rollTimer = 0.3 + Math.random() * (1.2 - e.p.evasion * 0.7);
       }
       e.roll += e.rollVel * dt;
     }
@@ -146,13 +184,25 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
 
   function tryFire(e, player, aiming) {
     if (!aiming || e.fireCd > 0) return;
-    e.fireCd = 1 / params.fireRate;
-    muzzle.copy(efwd).multiplyScalar(e.radius * 1.2).add(e.pos);
-    evel.copy(efwd).multiplyScalar(params.pulseSpeed); // fire straight ahead (where the nose points)
+    e.fireCd = 1 / (params.fireRate * e.p.fireMult); // some pilots fire far more/less often
+    // accuracy: precise pilots fire dead on the nose; sloppy ones spray within a cone
+    fireDir.copy(efwd);
+    const spread = params.maxSpread * (1 - e.p.accuracy);
+    if (spread > 0.001) {
+      eright.crossVectors(efwd, UP).normalize();
+      eup.crossVectors(eright, efwd).normalize();
+      fireDir
+        .addScaledVector(eright, (Math.random() * 2 - 1) * spread)
+        .addScaledVector(eup, (Math.random() * 2 - 1) * spread)
+        .normalize();
+    }
+    muzzle.copy(fireDir).multiplyScalar(e.radius * 1.2).add(e.pos);
+    evel.copy(fireDir).multiplyScalar(params.pulseSpeed);
     projectiles.spawn({ pos: muzzle, vel: evel, color: params.color, team: 'enemy', damage: params.pulseDamage, life: 2.6, radius: 0.7 });
   }
 
   function update(dt, player) {
+    if (player.quat) pfwd.set(0, 0, -1).applyQuaternion(player.quat);
     for (let fi = formations.length - 1; fi >= 0; fi--) {
       const f = formations[fi];
       f.members = f.members.filter((m) => m.alive);
@@ -160,10 +210,19 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         formations.splice(fi, 1);
         continue;
       }
-      if (!f.dogfight && (f.anchor.passes >= params.passesBeforeDogfight || f.members.length < f.initialCount)) {
-        intoDogfight(f);
-      }
+      const lostOne = f.members.length < f.lastCount;
+      f.lastCount = f.members.length;
       if (!f.dogfight) {
+        if (f.scatter) {
+          f.scatterTimer -= dt; // scattering — count down, then drop into the dogfight
+          if (f.scatterTimer <= 0) intoDogfight(f);
+        } else if (lostOne) {
+          startScatter(f); // first loss → break and scatter
+        } else if (f.anchor.passes >= params.passesBeforeDogfight) {
+          intoDogfight(f); // survived the passes → dogfight directly
+        }
+      }
+      if (!f.dogfight && !f.scatter) {
         const a = f.anchor;
         if (a.phase === 'ingress') {
           desired.copy(player.pos).sub(a.pos).setLength(params.speed);
@@ -190,7 +249,14 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
       const distP = e.pos.distanceTo(player.pos);
 
       // choose a steering target
-      if (e.mode === 'formation') {
+      if (e.mode === 'scatter') {
+        // break outward, away from the player, each peeling to its own side
+        awayDir.copy(e.pos).sub(player.pos);
+        if (awayDir.lengthSq() < 1e-4) awayDir.copy(e.vel);
+        awayDir.normalize();
+        jinkAxis.crossVectors(awayDir, UP).normalize();
+        st.copy(e.pos).addScaledVector(awayDir, 130).addScaledVector(jinkAxis, e.wingSide * 70);
+      } else if (e.mode === 'formation') {
         const a = e.formation.anchor;
         bf.copy(a.vel).normalize();
         br.crossVectors(bf, UP).normalize();
@@ -207,7 +273,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         st.copy(p.pos).addScaledVector(bf, -params.wingSpacing).addScaledVector(br, e.wingSide * params.wingSpacing * 0.7);
       } else {
         // point (or orphaned wingman): solo attack RUNS — bore in at the player (so they pass in
-        // front and can be shot head-on), break off when close, coast, then come round for another.
+        // front and can be shot head-on), break off at the pilot's standoff, coast, then come round.
         if (!e.wingOf) e.role = 'point';
         if (e.phase === 'egress') {
           st.copy(e.pos).addScaledVector(e.vel, 1); // hold heading -> fly past / break off
@@ -215,11 +281,20 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
           if (e.egress <= 0) e.phase = 'ingress';
         } else {
           st.copy(player.pos); // bore in
-          if (distP < params.passDist) {
+          if (distP < e.p.standoff) {
             e.phase = 'egress';
             e.egress = params.egressTime;
           }
         }
+      }
+
+      // evasive weave — evasive pilots juke sideways, harder when the player's nose is on them
+      if (e.mode !== 'formation' && e.p.evasion > 0.02) {
+        awayDir.copy(e.pos).sub(player.pos).normalize();
+        const threat = player.quat ? Math.max(0, pfwd.dot(awayDir)) : 0; // 1 = player aiming at it
+        e.jinkPhase += dt * (3 + e.p.evasion * 5);
+        jinkAxis.crossVectors(e.vel, UP).normalize();
+        st.addScaledVector(jinkAxis, Math.sin(e.jinkPhase) * params.jinkStrength * e.p.evasion * (0.5 + threat));
       }
 
       // collision avoidance — peel away when too close so they don't ram the player

@@ -10,6 +10,7 @@ export function createWaveManager(enemies, opts = {}) {
     spawnDist: 380,
     minSize: 3,
     maxSize: 5,
+    rampRate: 0.08, // difficulty gained per wave (0..1 over ~12 waves)
   };
   Object.assign(params, opts.params || {});
 
@@ -36,7 +37,8 @@ export function createWaveManager(enemies, opts = {}) {
       .addScaledVector(right, ox)
       .addScaledVector(up, oy);
     heading.copy(player.pos).sub(pos).normalize();
-    enemies.spawnFormation({ pattern, count: size, pos, heading });
+    const difficulty = Math.min(1, (wave - 1) * params.rampRate); // ramps up as waves climb
+    enemies.spawnFormation({ pattern, count: size, pos, heading, difficulty });
   }
 
   function update(dt, player) {
