@@ -17,6 +17,8 @@ import { createWaveManager } from './waves.js';
 import { createVfx } from './vfx.js';
 import { createCombat } from './combat.js';
 import { createDamageModel } from './damage.js';
+import { createHud } from './hud.js';
+import { createGameState } from './gameState.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin, never on the deployed site.
@@ -105,6 +107,8 @@ let cannon = null;
 let vfx = null;
 let combat = null;
 let damage = null;
+let hud = null;
+let gameState = null;
 const playerVel = new THREE.Vector3();
 const playerFwd = new THREE.Vector3();
 
@@ -115,6 +119,17 @@ let stars = null;
 let chigKit = null;
 let enemyMgr = null;
 let waves = null;
+
+// Re-arm a fresh fight after a mission ends (called by gameState.restart()).
+function restartWorld() {
+  ship.pivot.position.set(0, 0, 0);
+  ship.pivot.quaternion.identity();
+  damage.reset();
+  enemyMgr.reset();
+  projectiles.reset();
+  waves.reset();
+  flight.setSpeedScale(1);
+}
 
 async function init() {
   stars = await buildStarfield(starUniforms);
@@ -150,9 +165,13 @@ async function init() {
   damage = createDamageModel(ship);
   combat.setOnPlayerHit((pt, dmg) => damage.applyHit(pt, dmg));
 
+  hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
+  gameState = createGameState({ ship, camera, flight, hud, vfx, onRestart: restartWorld });
+  damage.setCallbacks({ onEject: () => gameState.eject(), onDestroyed: () => gameState.destroyed() });
+
   if (DEBUG) {
     // debug handle + live-tuning GUI — local dev only, never on the deployed site
-    window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves, damage, cannon };
+    window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves, damage, cannon, gameState };
     buildTweakGui();
   }
 
@@ -169,21 +188,27 @@ function startLoop() {
     const dt = Math.min(clock.getDelta(), 0.1);
 
     input.poll(); // keyboard + gamepad -> shared signals (read by flight + cannon)
-    flight.setSpeedScale(damage.speedScale()); // engine damage cuts top speed
-    const res = flight.update(dt);
+    const flying = gameState.mode === 'flying';
+    let res = { throttle: 0, speed: 0, boosting: false };
+    if (flying) {
+      flight.setSpeedScale(damage.speedScale()); // engine damage cuts top speed
+      res = flight.update(dt);
+    }
 
     // player transform for the combat systems
     playerFwd.set(0, 0, -1).applyQuaternion(ship.pivot.quaternion);
     playerVel.copy(playerFwd).multiplyScalar(res.speed);
     const player = { pos: ship.pivot.position, quat: ship.pivot.quaternion, vel: playerVel };
-    cannon.update(dt, input, player);
+    if (flying) cannon.update(dt, input, player);
     enemyMgr.update(dt, player);
-    waves.update(dt, player);
+    if (gameState.mode !== 'over') waves.update(dt, player);
     projectiles.update(dt);
     combat.update();
-    damage.update(dt, vfx);
+    if (flying) damage.update(dt, vfx);
     vfx.update(dt);
     enemyMgr.prune();
+    gameState.update(dt, input);
+    hud.update({ waves, enemies: enemyMgr.enemies, player, ejectProgress: gameState.ejectProgress });
 
     const amp = audio.getAmplitude();
     const bands = audio.getBands();

@@ -94,12 +94,20 @@ export function createDamageModel(ship, opts = {}) {
     return h / m;
   }
 
+  function reset() {
+    for (const z of zones) {
+      z.hp = z.maxHp;
+      z.alive = true;
+    }
+  }
+
   return {
     zones,
     applyHit,
     speedScale,
     update,
     totalHp,
+    reset,
     setCallbacks(c) {
       if (c.onEject) onEject = c.onEject;
       if (c.onDestroyed) onDestroyed = c.onDestroyed;

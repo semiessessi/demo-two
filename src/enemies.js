@@ -36,6 +36,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
 
   const enemies = [];
   const formations = [];
+  let kills = 0;
 
   const FWD = new THREE.Vector3(0, 0, -1);
   const ZAX = new THREE.Vector3(0, 0, 1);
@@ -244,6 +245,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
       if (!enemies[i].alive) {
         scene.remove(enemies[i].obj);
         enemies.splice(i, 1);
+        kills++; // enemies only go !alive when destroyed
       }
     }
   }
@@ -252,5 +254,24 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     return enemies.length;
   }
 
-  return { spawnFormation, update, prune, count, enemies, formations, params };
+  function reset() {
+    for (const e of enemies) scene.remove(e.obj);
+    enemies.length = 0;
+    formations.length = 0;
+    kills = 0;
+  }
+
+  return {
+    spawnFormation,
+    update,
+    prune,
+    count,
+    reset,
+    enemies,
+    formations,
+    params,
+    get kills() {
+      return kills;
+    },
+  };
 }

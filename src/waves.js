@@ -49,9 +49,15 @@ export function createWaveManager(enemies, opts = {}) {
     }
   }
 
+  function reset() {
+    timer = 2.0;
+    wave = 0;
+  }
+
   return {
     update,
     params,
+    reset,
     get wave() {
       return wave;
     },

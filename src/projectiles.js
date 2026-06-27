@@ -71,5 +71,9 @@ export function createProjectiles(scene) {
     }
   }
 
-  return { spawn, update, kill, live };
+  function reset() {
+    for (let i = live.length - 1; i >= 0; i--) kill(live[i]);
+  }
+
+  return { spawn, update, kill, reset, live };
 }
