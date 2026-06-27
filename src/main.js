@@ -506,6 +506,7 @@ function buildTweakGui() {
   const ef = gui.addFolder('Enemies');
   ef.add(enemyMgr.params, 'speed', 10, 90, 1);
   ef.add(enemyMgr.params, 'turnRate', 0.5, 4, 0.1).name('turn rate');
+  ef.add(enemyMgr.params, 'aimTurnRate', 0.5, 8, 0.1).name('aim turn rate');
   ef.add(enemyMgr.params, 'fireRate', 0.2, 5, 0.1).name('base fire rate');
   ef.add(enemyMgr.params, 'fireRange', 80, 500, 10).name('fire range');
   ef.add(enemyMgr.params, 'passesBeforeDogfight', 0, 5, 1).name('passes->dogfight');

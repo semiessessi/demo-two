@@ -15,6 +15,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   const params = {
     speed: 40,
     turnRate: 1.4, // lower = can't perfectly stick to the player's tail (overshoots, makes passes)
+    aimTurnRate: 3.2, // sharper turn while locked on a target in gun range -> nails a straight-flying player
     passDist: 70,
     egressTime: 2.0, // longer break-off after a run -> looser, easier to catch
     passesBeforeDogfight: 3, // spend more time in formation strafing runs before breaking up
@@ -169,10 +170,10 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     e.obj.quaternion.multiply(rollQ);
   }
 
-  function steer(e, target, dt, speed) {
+  function steer(e, target, dt, speed, turn) {
     desired.copy(target).sub(e.pos);
     if (desired.lengthSq() > 1e-6) desired.setLength(speed);
-    e.vel.lerp(desired, 1 - Math.exp(-params.turnRate * dt));
+    e.vel.lerp(desired, 1 - Math.exp(-(turn || params.turnRate) * dt));
     if (e.vel.lengthSq() > 1e-6) e.vel.setLength(speed);
     e.pos.addScaledVector(e.vel, dt);
     e.obj.position.copy(e.pos);
@@ -288,12 +289,15 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
           .addScaledVector(UP, Math.sin(e.attackAngle || 0) * params.pursueFlank * 0.5);
       }
 
-      // In gun range, point the nose at the player's LEAD so the boresight shot connects AND the ship
-      // visibly flies toward where it shoots (precise aiming now = turning onto the lead, not angling the
-      // bolt). Out of range, the mode station above (six approach / wing slot) sets up the run.
-      if (e.mode !== 'formation' && e.mode !== 'scatter' && distP < params.fireRange) {
+      // In gun range, point the nose at the player's intercept LEAD so the boresight shot connects AND the
+      // ship visibly flies toward where it shoots. The lead is an exact constant-velocity solve (iterated),
+      // so a STRAIGHT-flying player gets nailed; manoeuvring breaks the prediction. Out of range the mode
+      // station above (six approach / wing slot) sets up the run.
+      const inGunRange = e.mode !== 'formation' && e.mode !== 'scatter' && distP < params.fireRange;
+      if (inGunRange) {
+        let tHit = distP / params.pulseSpeed;
         st.copy(player.pos);
-        if (player.vel) st.addScaledVector(player.vel, distP / params.pulseSpeed); // lead by the bolt's travel time
+        if (player.vel) for (let k = 0; k < 3; k++) { st.copy(player.pos).addScaledVector(player.vel, tHit); tHit = st.distanceTo(e.pos) / params.pulseSpeed; }
       }
 
       // evasive weave — evasive pilots juke sideways, harder when the player's nose is on them
@@ -302,7 +306,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         const threat = player.quat ? Math.max(0, pfwd.dot(awayDir)) : 0; // 1 = player aiming at it
         e.jinkPhase += dt * (3 + e.p.evasion * 5);
         jinkAxis.crossVectors(e.vel, UP).normalize();
-        st.addScaledVector(jinkAxis, Math.sin(e.jinkPhase) * params.jinkStrength * e.p.evasion * (0.5 + threat));
+        st.addScaledVector(jinkAxis, Math.sin(e.jinkPhase) * params.jinkStrength * e.p.evasion * (0.1 + threat * 1.4)); // steady up vs a non-threatening (straight) player; weave hard only when they aim at you
       }
 
       // collision avoidance — peel away when too close so they don't ram the player
@@ -315,7 +319,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
       // Move + orient FIRST, then decide aiming with the CURRENT nose, so the firing test and the
       // bolt direction use the same forward (otherwise bolts appear to fire off the line of travel).
       e.fireCd -= dt;
-      steer(e, st, dt, e.mode === 'formation' ? params.speed : params.speed * 1.05);
+      steer(e, st, dt, e.mode === 'formation' ? params.speed : params.speed * 1.05, inGunRange ? params.aimTurnRate : params.turnRate);
       orient(e);
       efwd.copy(FWD).applyQuaternion(e.obj.quaternion);
       toP.copy(player.pos).sub(e.pos);
