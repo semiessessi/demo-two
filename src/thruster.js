@@ -37,6 +37,45 @@ function makeConeGeometry(coreColor, tipColor) {
   return geo;
 }
 
+// Cone plume material: additive, vertex-coloured, with a fresnel factor on the alpha so the grazing
+// silhouette edges fade out — the plume gets a soft edge instead of a hard cone outline. uOpacity is
+// driven per-frame from the thruster intensity + flicker (a uniform, since this is a raw shader).
+const coneVert = /* glsl */ `
+  attribute vec3 color;
+  varying vec3 vColor;
+  varying vec3 vNormal;
+  varying vec3 vView;
+  void main() {
+    vColor = color;
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vView = -mv.xyz;
+    vNormal = normalMatrix * normal;
+    gl_Position = projectionMatrix * mv;
+  }`;
+const coneFrag = /* glsl */ `
+  precision highp float;
+  uniform float uOpacity;
+  uniform float uFresnelPower;
+  varying vec3 vColor;
+  varying vec3 vNormal;
+  varying vec3 vView;
+  void main() {
+    // facing surfaces stay bright; grazing edges (dot -> 0) fade -> soft plume silhouette
+    float f = pow(abs(dot(normalize(vNormal), normalize(vView))), uFresnelPower);
+    gl_FragColor = vec4(vColor, uOpacity * f); // additive (srcAlpha,one): contributes vColor * uOpacity * f
+  }`;
+function makeConeMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: { uOpacity: { value: 1 }, uFresnelPower: { value: 1.6 } },
+    vertexShader: coneVert,
+    fragmentShader: coneFrag,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+}
+
 export function createThrusters(pivot, nozzles, rearDir, shipRadius) {
   const rear = rearDir.clone().normalize();
   // Centerline base (x forced to 0) so the two plumes mirror symmetrically across X — a clean,
@@ -55,22 +94,13 @@ export function createThrusters(pivot, nozzles, rearDir, shipRadius) {
     [0.7, 'rgba(60,120,255,0.3)'],
     [1.0, 'rgba(0,0,40,0)'],
   ]);
-  const coneGeo = makeConeGeometry(0xff9a5a, 0x000010); // warm core fading to nothing
+  const coneGeo = makeConeGeometry(0x66c0ff, 0x001028); // blue core fading to nothing
   const coneQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), rear);
 
   const group = new THREE.Group();
   const units = [];
   for (const side of [-1, 1]) {
-    const cone = new THREE.Mesh(
-      coneGeo,
-      new THREE.MeshBasicMaterial({
-        vertexColors: true,
-        blending: THREE.AdditiveBlending,
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      }),
-    );
+    const cone = new THREE.Mesh(coneGeo, makeConeMaterial());
     cone.quaternion.copy(coneQuat);
     cone.frustumCulled = false;
     group.add(cone);
@@ -112,7 +142,7 @@ export function createThrusters(pivot, nozzles, rearDir, shipRadius) {
       const wid = shipRadius * 0.09 * params.width * (0.7 + 0.3 * i);
       u.cone.scale.set(wid, len, wid);
       u.cone.position.copy(u.pos).addScaledVector(rear, len * 0.5);
-      u.cone.material.opacity = Math.min(1, 0.4 + 0.7 * i) * flick;
+      u.cone.material.uniforms.uOpacity.value = Math.min(1, 0.4 + 0.7 * i) * flick;
 
       const cs = shipRadius * 0.12 * params.width * (0.55 + 0.7 * i) * flick;
       u.core.scale.setScalar(cs);

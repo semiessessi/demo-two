@@ -25,7 +25,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     pulseSpeed: 230,
     pulseDamage: 10,
     hp: 30,
-    color: 0x5fb0ff,
+    color: 0xffffff, // pure white-hot bolts that bloom hard
     rollRate: 4.0, // rad/s of barrel-rolling when not aiming
     wingSpacing: 12, // how far a wingman trails its point
     avoidDist: 34, // start peeling away from the player inside this range
@@ -201,7 +201,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     }
     muzzle.copy(fireDir).multiplyScalar(e.radius * 1.2).add(e.pos);
     evel.copy(fireDir).multiplyScalar(params.pulseSpeed);
-    projectiles.spawn({ pos: muzzle, vel: evel, color: params.color, team: 'enemy', damage: params.pulseDamage, life: 2.6, radius: 0.7 });
+    projectiles.spawn({ pos: muzzle, vel: evel, color: params.color, team: 'enemy', damage: params.pulseDamage, life: 2.6, radius: 0.7, scale: 1.35 });
   }
 
   function update(dt, player) {

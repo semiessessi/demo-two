@@ -5,7 +5,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 // Loads the Chig fighter (converted from a geometry-only 3MF) once and returns a template Object3D to
 // clone per enemy, plus the shared material and a bounding radius. The 3MF carries no materials, so
 // the look is applied here: a **very dark green, near-black** flat-shaded hull whose low-poly facets
-// read as armour **panels** (each facet given a slight independent tone), and a **light-blue thruster
+// read as armour **panels** (each facet given a slight independent tone), and a **purple thruster
 // glow** at the rear (an additive sprite — a glow, no exhaust plume).
 
 const TARGET_RADIUS = 2.2; // a small, nimble fighter (Hammerhead is radius 5)
@@ -49,16 +49,16 @@ function glowSprite() {
   cv.width = cv.height = s;
   const ctx = cv.getContext('2d');
   const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-  g.addColorStop(0.0, 'rgba(200,235,255,1)');
-  g.addColorStop(0.35, 'rgba(110,180,255,0.7)');
-  g.addColorStop(0.7, 'rgba(60,120,255,0.18)');
-  g.addColorStop(1.0, 'rgba(40,90,255,0)');
+  g.addColorStop(0.0, 'rgba(225,225,255,1)');
+  g.addColorStop(0.35, 'rgba(160,140,255,0.7)');
+  g.addColorStop(0.7, 'rgba(120,80,255,0.18)');
+  g.addColorStop(1.0, 'rgba(90,50,230,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, s, s);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   const spr = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: tex, color: 0x9fd0ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
+    new THREE.SpriteMaterial({ map: tex, color: 0xb49bff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
   );
   return spr;
 }
@@ -139,7 +139,7 @@ export async function loadChig() {
   const template = new THREE.Group();
   template.add(inner);
 
-  // Three light-blue thruster glows at the rear (template +Z, since forward is -Z) — glow only, no
+  // Three purple thruster glows at the rear (template +Z, since forward is -Z) — glow only, no
   // exhaust plume. Positioned from the live-tunable chigThruster params.
   for (let i = 0; i < 3; i++) {
     const glow = glowSprite();
