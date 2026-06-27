@@ -387,6 +387,12 @@ window.addEventListener('pagehide', () => flight?.dispose?.(), { once: true });
 function buildTweakGui() {
   const gui = new GUI({ title: 'Tuning' });
   debug?.attachGui(gui); // move panel top-left + add the View (mode-switch) folder
+
+  // Sun brightness — live multiplier (1x..10x the base 2.6) so a better value can be dialled in on d2.
+  const sunParams = { brightness: lighting.sunMult };
+  const sunf = gui.addFolder('Sun');
+  sunf.add(sunParams, 'brightness', 1, 10, 0.1).name('brightness ×').onChange((v) => lighting.setSunIntensity(v));
+
   const tp = thrusters.params;
   const relayout = () => thrusters.setParams({});
   const tf = gui.addFolder('Thrusters');

@@ -44,6 +44,7 @@ export function createLighting(scene, camera, renderer, opts = {}) {
   let suspended = false; // debug viewer owns the frame
   let cascades = 3;
   let shadowMapSize = 2048;
+  let sunMult = 1; // live brightness multiplier (debug slider), persists across CSM rebuilds
 
   function normalBiasFor(size) {
     return size >= 4096 ? 0.05 : size >= 2048 ? 0.08 : 0.12;
@@ -72,7 +73,7 @@ export function createLighting(scene, camera, renderer, opts = {}) {
       mode: 'practical',
       shadowMapSize,
       lightDirection: travelDir.clone(),
-      lightIntensity: sunIntensity,
+      lightIntensity: sunIntensity * sunMult,
       shadowBias: -0.0001,
       lightNear: 1,
       lightFar: 2000,
@@ -158,6 +159,15 @@ export function createLighting(scene, camera, renderer, opts = {}) {
     if (csm) csm.updateFrustums();
   }
 
+  // Live sun-brightness control (debug slider). `mult` is a multiplier on the base intensity (1..10);
+  // applied to the active cascade lights + the plain fallback sun, and remembered so CSM rebuilds keep it.
+  function setSunIntensity(mult) {
+    sunMult = mult;
+    const v = sunIntensity * mult;
+    plainSun.intensity = v;
+    if (csm) for (const l of csm.lights) l.intensity = v;
+  }
+
   // --- debug viewer interplay ----------------------------------------------------------------------
   // The localhost model-viewer builds its own neutral key + shadow rig and needs the flight sun gone.
   // CSM globally patches lights_fragment_begin (guarded by USE_CSM), and registered model materials
@@ -186,9 +196,13 @@ export function createLighting(scene, camera, renderer, opts = {}) {
     update,
     onResize,
     setSunShadow,
+    setSunIntensity,
     setActive,
     get csm() {
       return csm;
+    },
+    get sunMult() {
+      return sunMult;
     },
     get sunDir() {
       return sunDir;
