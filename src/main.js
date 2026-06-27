@@ -26,6 +26,7 @@ import { createDebug } from './debug.js';
 import { createRcs } from './rcs.js';
 import { createEditor } from './editor.js';
 import { createDebris } from './debris.js';
+import { createAttract } from './attract.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin. It can also be opted into on the deployed
@@ -37,6 +38,10 @@ const DEBUG =
 
 // Maneuvering-thruster (RCS) exhaust is WIP — only fire the jets when ?thrusters is in the URL.
 const THRUSTERS = /[?&]thrusters\b/.test(window.location.search);
+
+// Attract mode: a self-running cinematic AI-vs-AI dogfight (no player). On ?attract we build the attract
+// orchestrator instead of the player flight/cannon/HUD/gameState and run a separate, leaner render frame.
+const ATTRACT = /[?&]attract\b/.test(window.location.search);
 
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
@@ -166,6 +171,7 @@ let enemyMgr = null;
 let waves = null;
 let debug = null;
 let quality = null;
+let attract = null;
 
 // Re-arm a fresh fight after a mission ends (called by gameState.restart()).
 function restartWorld() {
@@ -203,33 +209,44 @@ async function init() {
   scene.add(ship.pivot);
   thrusters = createThrusters(ship.pivot, ship.nozzles, ship.rearDir, ship.radius);
   lighting.attachThrusters(ship.pivot, ship.nozzles, ship.rearDir, ship.radius); // real engine light spill
-  rcs = createRcs(scene, ship);
-  flight = createFlight(ship.pivot, camera, renderer.domElement, input);
+  if (!ATTRACT) {
+    rcs = createRcs(scene, ship);
+    flight = createFlight(ship.pivot, camera, renderer.domElement, input);
+  }
 
   projectiles = createProjectiles(scene);
-  cannon = createPlayerCannon(scene, ship, projectiles, {
-    getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
-    canFire: () => !damage || damage.canFire(), // gun subsystem destroyed -> cannon offline
-    onFire: (pos) => lighting.muzzleFlash(pos), // real muzzle-flash light pulse
-  });
+  if (!ATTRACT) {
+    cannon = createPlayerCannon(scene, ship, projectiles, {
+      getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
+      canFire: () => !damage || damage.canFire(), // gun subsystem destroyed -> cannon offline
+      onFire: (pos) => lighting.muzzleFlash(pos), // real muzzle-flash light pulse
+    });
+  }
 
   chigKit = await loadChig();
   // register the lit hull materials so the cascaded sun shadows fall on them (self + ship-to-ship)
   lighting.registerTree(ship.pivot);
   lighting.registerTree(chigKit.template);
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
-  waves = createWaveManager(enemyMgr);
+  if (!ATTRACT) waves = createWaveManager(enemyMgr); // attract owns its own wave loop
   vfx = createVfx(scene, camera, { lightDir: sunDir }); // align smoke self-shadow with the real sun
   enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
   debris = createDebris(scene, { template: chigKit.template, material: chigKit.material, vfx });
   enemyMgr.setDebris(debris); // ship-fracture chunks on death
-  debrisPlayer = { pos: ship.pivot.position, radius: ship.radius, vel: playerVel };
-  playerDebris = createDebris(scene, { template: ship.pivot, convex: true, vfx, count: 12, cap: 160 }); // player Hammerhead (171k verts/45 meshes) -> convex-hull proxy, shatters when destroyed
+  if (!ATTRACT) {
+    debrisPlayer = { pos: ship.pivot.position, radius: ship.radius, vel: playerVel };
+    playerDebris = createDebris(scene, { template: ship.pivot, convex: true, vfx, count: 12, cap: 160 }); // player Hammerhead (171k verts/45 meshes) -> convex-hull proxy, shatters when destroyed
+  }
   quality = createQuality({ lighting, vfx, debris, setRenderScale }); // FPS-driven tier ladder: render scale, CSM res, shadow-light budget, smoke, vfx, debris
   combat = createCombat(projectiles, enemyMgr, vfx, {
     getPlayerPos: () => ship.pivot.position,
     playerHitRadius: ship.radius * 0.85,
   });
+  if (ATTRACT) {
+    // attract mode: build the cinematic AI-vs-AI dogfight instead of the player combat stack.
+    attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting });
+    combat.setFriendlies(attract.friendlies); // enemy bolts route to whichever ally ship they hit
+  } else {
   damage = createDamageModel(ship);
   combat.setOnPlayerHit((pt, dmg, from) => damage.applyHit(pt, dmg, from)); // pass the bolt segment for direct-hit routing
 
@@ -266,8 +283,9 @@ async function init() {
       gameState.tumble('WING TORN OFF — EJECTED');
     },
   });
+  }
 
-  if (DEBUG) {
+  if (DEBUG && !ATTRACT) {
     // debug handle + live-tuning GUI — local dev only, never on the deployed site
     window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves, damage, cannon, gameState, targetDisplay, vfx };
     debug = createDebug({
@@ -292,10 +310,35 @@ async function init() {
 const clock = new THREE.Clock();
 let fps = 60;
 
+// Attract mode frame: drive the AI dogfight + cinematic camera, reusing the shared combat/vfx/debris/
+// lighting pipeline but none of the player systems (flight/cannon/HUD/gameState are never created here).
+function attractFrame(dt) {
+  attract.update(dt); // AI Hammerheads + cinematic camera + Chig target split + wave loop
+  enemyMgr.update(dt, attract.focus, attract.targetFor); // Chigs each chase their nearest ally
+  projectiles.update(dt);
+  combat.update(dt); // ally (player-team) bolts kill Chigs; enemy bolts -> ally friendlies
+  vfx.update(dt);
+  if (debris) debris.update(dt, null, enemyMgr.enemies);
+  enemyMgr.prune();
+  // keep the backdrop centred on the camera so it sits at infinity (copied from the player loop)
+  nebula.mesh.position.copy(camera.position);
+  stars.position.copy(camera.position);
+  sun.position.copy(camera.position).addScaledVector(sunDir, 3600);
+  sunGlow.position.copy(camera.position).addScaledVector(sunDir, 3650);
+  sunHalo.position.copy(camera.position).addScaledVector(sunDir, 3700);
+  nebula.uniforms.uTime.value += dt;
+  starUniforms.uTime.value += dt;
+  lighting.update(dt, { player: attract.focus, thrust: 0.8, projectiles, enemies: enemyMgr.enemies }); // cascades fit to the camera; dynamic lights around the action
+  render();
+  fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
+  quality.update(dt, fps); // auto-scale shadow/VFX tier (3 Hammerheads + 12 Chigs is heavy)
+}
+
 function startLoop() {
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
     if (DEBUG && debug && debug.frame(dt)) return; // debug viewer modes own the frame
+    if (ATTRACT) { attractFrame(dt); return; } // attract mode: a leaner, player-less frame
 
     input.poll(); // keyboard + gamepad -> shared signals (read by flight + cannon)
     const flying = gameState.mode === 'flying';
