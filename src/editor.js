@@ -86,6 +86,10 @@ export function createEditor(gui, { ship, damage, rcs }) {
 
     const pf = gui.addFolder('RCS Ports (edit)');
     pf.add(portGroup, 'visible').name('show ports');
+    if (rcs.jet) {
+      pf.add(rcs.jet, 'radius', 0.02, 1, 0.01).name('jet radius ×');
+      pf.add(rcs.jet, 'length', 0.1, 2, 0.05).name('jet length ×');
+    }
     rcs.ports.forEach((p) => {
       const f = pf.addFolder(p.name);
       const proxy = { x: p.pos[0], y: p.pos[1], z: p.pos[2], dx: p.dir[0], dy: p.dir[1], dz: p.dir[2] };

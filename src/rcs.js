@@ -23,6 +23,9 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
   const group = new THREE.Group();
   ship.pivot.add(group); // local frame -> tracks the ship
 
+  // Live-tunable jet size multipliers (user wanted thin/short jets). Editable in the debug editor.
+  const jet = { radius: 0.1, length: 0.5 };
+
   const coneGeo = new THREE.ConeGeometry(0.5, 1, 12, 1, true); // apex +Y, open base
   const units = ports.map((p) => {
     const mat = new THREE.MeshBasicMaterial({
@@ -53,8 +56,8 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
       if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0); else dir.normalize();
       q.setFromUnitVectors(UP, dir); // cone apex points along the exhaust direction
       cone.quaternion.copy(q);
-      const len = (0.5 + u.level * 2.4) * flick;
-      const wid = 0.3 + u.level * 0.5;
+      const len = (0.5 + u.level * 2.4) * flick * jet.length;
+      const wid = (0.3 + u.level * 0.5) * jet.radius;
       cone.scale.set(wid, len, wid);
       cone.position.set(u.p.pos[0], u.p.pos[1], u.p.pos[2]).addScaledVector(dir, len * 0.5); // base at the port
       cone.material.opacity = Math.min(1, u.level * 1.4) * 0.9 * flick;
@@ -62,5 +65,5 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
     }
   }
 
-  return { ports, units, update, group };
+  return { ports, units, update, group, jet };
 }
