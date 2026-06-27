@@ -72,6 +72,12 @@ export function createVfx(scene) {
   function spark(pos, color = 0xaad4ff) {
     emit(sparkTex, color, pos, { life: 0.22, from: 3, to: 0.4 });
   }
+  const emberVel = new THREE.Vector3();
+  function ember(pos, severity = 0.5) {
+    emberVel.set((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 4 + 2.5, (Math.random() - 0.5) * 5);
+    const color = severity < 0.3 ? 0xff5526 : 0xffa850; // hotter when badly hurt
+    emit(fireTex, color, pos, { life: 0.6, from: 0.5, to: 2.0 + (0.6 - severity) * 3, vel: emberVel });
+  }
 
   function update(dt) {
     for (let i = live.length - 1; i >= 0; i--) {
@@ -91,5 +97,5 @@ export function createVfx(scene) {
     }
   }
 
-  return { explosion, spark, update };
+  return { explosion, spark, ember, update };
 }

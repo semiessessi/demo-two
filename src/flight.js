@@ -32,6 +32,7 @@ const TUNE = {
 
 export function createFlight(ship, camera, domElement, input) {
   let enabled = true;
+  let speedScale = 1; // reduced by engine damage
   let camDist = TUNE.camDist;
   let heightRatio = TUNE.heightRatio;
 
@@ -115,7 +116,7 @@ export function createFlight(ship, camera, domElement, input) {
 
     const boosting = input.boost;
     const braking = input.brake;
-    const target = braking ? TUNE.brakeSpeed : boosting ? TUNE.boostSpeed : TUNE.baseSpeed;
+    const target = (braking ? TUNE.brakeSpeed : boosting ? TUNE.boostSpeed : TUNE.baseSpeed) * speedScale;
     speed += (target - speed) * (1 - Math.exp(-TUNE.accel * dt));
     throttle = THREE.MathUtils.clamp((speed - TUNE.brakeSpeed) / (TUNE.boostSpeed - TUNE.brakeSpeed), 0, 1);
     if (boosting) throttle = Math.min(1.2, throttle + 0.25);
@@ -199,6 +200,9 @@ export function createFlight(ship, camera, domElement, input) {
     },
     setEnabled(v) {
       enabled = v;
+    },
+    setSpeedScale(v) {
+      speedScale = v;
     },
   };
 }

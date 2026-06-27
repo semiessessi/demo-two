@@ -26,18 +26,20 @@ const FLASH_TIME = 0.06;
 
 export function createPlayerCannon(scene, ship, projectiles) {
   const params = {
-    fireRate: 9, // rounds/sec
-    boltSpeed: 340,
-    damage: 24,
+    fireRate: 27, // rounds/sec (tripled)
+    boltSpeed: 380,
+    damage: 9,
     gimbalMax: 0.32, // rad
     gimbalSpring: 9, // spring-back rate
-    color: 0xffd27a, // gold
+    color: 0xffffff, // bright white
+    boltScale: 0.5, // small tracers
+    muzzle: { x: 0, y: 0, z: -ship.radius * 0.95 }, // gun exit point (tunable in the GUI)
   };
   let cooldown = 0;
   let gimbal = 0;
   let flashLife = 0;
 
-  const muzzleLocal = new THREE.Vector3(0, 0, -ship.radius * 0.95); // nose
+  const muzzleLocal = new THREE.Vector3();
   const muzzleWorld = new THREE.Vector3();
   const fwd = new THREE.Vector3();
   const up = new THREE.Vector3();
@@ -47,19 +49,20 @@ export function createPlayerCannon(scene, ship, projectiles) {
   const aimDir = new THREE.Vector3(0, 0, -1);
 
   const flash = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: flashTexture(), color: params.color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
+    new THREE.SpriteMaterial({ map: flashTexture(), color: 0xffe6a0, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
   );
   flash.visible = false;
   flash.frustumCulled = false;
   scene.add(flash);
 
   function muzzle() {
+    muzzleLocal.set(params.muzzle.x, params.muzzle.y, params.muzzle.z);
     return muzzleWorld.copy(muzzleLocal).applyQuaternion(ship.pivot.quaternion).add(ship.pivot.position);
   }
 
   function update(dt, input, player) {
-    // gimbal aim: right stick, easing back to centre when released
-    const target = (input?.gunAimX || 0) * params.gimbalMax;
+    // gimbal aim: right stick, easing back to centre when released (negated so stick-left aims left)
+    const target = -(input?.gunAimX || 0) * params.gimbalMax;
     gimbal += (target - gimbal) * (1 - Math.exp(-params.gimbalSpring * dt));
 
     up.set(0, 1, 0).applyQuaternion(ship.pivot.quaternion);
@@ -73,7 +76,7 @@ export function createPlayerCannon(scene, ship, projectiles) {
       muzzle();
       vel.copy(aimDir).multiplyScalar(params.boltSpeed);
       if (player?.vel) vel.add(player.vel);
-      projectiles.spawn({ pos: muzzleWorld, vel, color: params.color, team: 'player', damage: params.damage, life: 2.0, radius: 0.6 });
+      projectiles.spawn({ pos: muzzleWorld, vel, color: params.color, team: 'player', damage: params.damage, life: 2.0, radius: 0.4, scale: params.boltScale });
       flash.visible = true;
       flashLife = FLASH_TIME;
     }
@@ -82,7 +85,7 @@ export function createPlayerCannon(scene, ship, projectiles) {
       flashLife -= dt;
       flash.position.copy(muzzle());
       const k = Math.max(0, flashLife / FLASH_TIME);
-      flash.scale.setScalar(2.2 + 3.2 * k);
+      flash.scale.setScalar(1.6 + 2.4 * k); // muzzle flare at the gun exit
       flash.material.opacity = k;
       if (flashLife <= 0) flash.visible = false;
     }

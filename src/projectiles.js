@@ -29,7 +29,7 @@ export function createProjectiles(scene) {
   const dir = new THREE.Vector3();
   const q = new THREE.Quaternion();
 
-  function spawn({ pos, vel, color, team, damage = 20, life = 2.0, radius = 0.6 }) {
+  function spawn({ pos, vel, color, team, damage = 20, life = 2.0, radius = 0.6, scale = 1 }) {
     let b = null;
     for (const p of pool) if (!p.alive) { b = p; break; }
     if (!b) return null;
@@ -41,6 +41,7 @@ export function createProjectiles(scene) {
     b.pos.copy(pos);
     b.vel.copy(vel);
     b.mesh.material.color.set(color);
+    b.mesh.scale.setScalar(scale);
     b.mesh.position.copy(pos);
     b.mesh.visible = true;
     live.push(b);

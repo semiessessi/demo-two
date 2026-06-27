@@ -10,9 +10,10 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 
 const TARGET_RADIUS = 2.2; // a small, nimble fighter (Hammerhead is radius 5)
 
-// Live-tunable layout for the Chig's three rear thruster glows (centre + two sides). Tune in the
-// "Chig Thrusters" GUI folder, then bake the values here.
-export const chigThruster = { x: 0.55, y: -0.05, zCenter: 1.5, zSide: 1.35, size: 1.0 };
+// Live-tunable layout for the Chig's three rear thruster glows, arranged as an upward equilateral
+// triangle (apex/middle on top, two below). `x` is the half-base width; the triangle height is
+// derived. Tune in the "Chig Thrusters" GUI folder, then bake the values here.
+export const chigThruster = { x: 0.5, y: -0.4, z: 1.4, size: 0.25 };
 
 // Position + size the three engine-glow sprites on a chig instance (or the template) from `p`.
 export function layoutChigGlows(obj, p = chigThruster) {
@@ -20,10 +21,11 @@ export function layoutChigGlows(obj, p = chigThruster) {
   obj.traverse((o) => {
     if (o.userData && o.userData.isEngineGlow) glows.push(o);
   });
+  const h = Math.sqrt(3) * p.x; // equilateral height
   const slots = [
-    [0, p.y, p.zCenter], // centre
-    [-p.x, p.y, p.zSide], // left
-    [p.x, p.y, p.zSide], // right
+    [0, p.y + h, p.z], // top / middle (apex)
+    [-p.x, p.y, p.z], // bottom-left
+    [p.x, p.y, p.z], // bottom-right
   ];
   glows.forEach((g, i) => {
     const s = slots[Math.min(i, slots.length - 1)];

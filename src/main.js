@@ -16,6 +16,7 @@ import { createEnemyManager } from './enemies.js';
 import { createWaveManager } from './waves.js';
 import { createVfx } from './vfx.js';
 import { createCombat } from './combat.js';
+import { createDamageModel } from './damage.js';
 
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
@@ -97,6 +98,7 @@ let projectiles = null;
 let cannon = null;
 let vfx = null;
 let combat = null;
+let damage = null;
 const playerVel = new THREE.Vector3();
 const playerFwd = new THREE.Vector3();
 
@@ -139,9 +141,11 @@ async function init() {
     getPlayerPos: () => ship.pivot.position,
     playerHitRadius: ship.radius * 0.85,
   });
+  damage = createDamageModel(ship);
+  combat.setOnPlayerHit((pt, dmg) => damage.applyHit(pt, dmg));
 
   // TEMP debug handle for live tuning
-  window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves };
+  window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves, damage, cannon };
   buildTweakGui();
 
   startLoop();
@@ -157,6 +161,7 @@ function startLoop() {
     const dt = Math.min(clock.getDelta(), 0.1);
 
     input.poll(); // keyboard + gamepad -> shared signals (read by flight + cannon)
+    flight.setSpeedScale(damage.speedScale()); // engine damage cuts top speed
     const res = flight.update(dt);
 
     // player transform for the combat systems
@@ -168,6 +173,7 @@ function startLoop() {
     waves.update(dt, player);
     projectiles.update(dt);
     combat.update();
+    damage.update(dt, vfx);
     vfx.update(dt);
     enemyMgr.prune();
 
@@ -291,12 +297,12 @@ function buildTweakGui() {
   const tp = thrusters.params;
   const relayout = () => thrusters.setParams({});
   const tf = gui.addFolder('Thrusters');
-  tf.add(tp, 'offsetX', 0, 6, 0.05).name('offset ±X').onChange(relayout);
-  tf.add(tp, 'offsetY', -3, 3, 0.05).name('offset Y').onChange(relayout);
-  tf.add(tp, 'offsetZ', -5, 5, 0.05).name('offset Z').onChange(relayout);
-  tf.add(tp, 'length', 0.2, 3, 0.05);
-  tf.add(tp, 'width', 0.2, 3, 0.05);
-  tf.add(tp, 'intensity', 0, 2, 0.05);
+  tf.add(tp, 'offsetX', 0, 6, 0.01).name('offset ±X').onChange(relayout);
+  tf.add(tp, 'offsetY', -3, 3, 0.01).name('offset Y').onChange(relayout);
+  tf.add(tp, 'offsetZ', -5, 5, 0.01).name('offset Z').onChange(relayout);
+  tf.add(tp, 'length', 0.2, 3, 0.01);
+  tf.add(tp, 'width', 0.2, 3, 0.01);
+  tf.add(tp, 'intensity', 0, 2, 0.01);
   const cf = gui.addFolder('Camera');
   cf.add(flight, 'camDist', 6, 50, 0.5).name('distance (wheel)').listen();
   cf.add(flight, 'heightRatio', 0, 1, 0.02).name('height ratio');
@@ -307,12 +313,23 @@ function buildTweakGui() {
     if (enemyMgr) for (const e of enemyMgr.enemies) layoutChigGlows(e.obj, chigThruster);
   };
   const ct = gui.addFolder('Chig Thrusters');
-  ct.add(chigThruster, 'x', 0, 2, 0.02).name('side spread ±X').onChange(relayoutChig);
-  ct.add(chigThruster, 'y', -1, 1, 0.02).name('offset Y').onChange(relayoutChig);
-  ct.add(chigThruster, 'zCenter', 0, 3, 0.02).name('centre Z').onChange(relayoutChig);
-  ct.add(chigThruster, 'zSide', 0, 3, 0.02).name('sides Z').onChange(relayoutChig);
-  ct.add(chigThruster, 'size', 0.2, 2.5, 0.02).name('glow size').onChange(relayoutChig);
+  ct.add(chigThruster, 'x', 0, 2, 0.02).name('base half-width').onChange(relayoutChig);
+  ct.add(chigThruster, 'y', -1.5, 1, 0.02).name('offset Y').onChange(relayoutChig);
+  ct.add(chigThruster, 'z', 0, 3, 0.02).name('offset Z').onChange(relayoutChig);
+  ct.add(chigThruster, 'size', 0.05, 1.5, 0.01).name('glow size').onChange(relayoutChig);
   ct.close();
+
+  // Player cannon — fire rate, gimbal, and the gun exit point (muzzle).
+  if (cannon) {
+    const gf = gui.addFolder('Cannon');
+    gf.add(cannon.params, 'fireRate', 3, 40, 1).name('rounds/sec');
+    gf.add(cannon.params, 'gimbalMax', 0, 1, 0.02).name('gimbal max');
+    gf.add(cannon.params, 'boltScale', 0.2, 2, 0.05).name('bolt size');
+    gf.add(cannon.params.muzzle, 'x', -3, 3, 0.05).name('muzzle X');
+    gf.add(cannon.params.muzzle, 'y', -3, 3, 0.05).name('muzzle Y');
+    gf.add(cannon.params.muzzle, 'z', -8, 0, 0.05).name('muzzle Z');
+    gf.close();
+  }
 
   // Enemies + waves
   const ef = gui.addFolder('Enemies');
