@@ -148,11 +148,77 @@ export function createLighting(scene, camera, renderer, opts = {}) {
     plainSun.visible = false;
   }
 
+  // --- player thruster lights ----------------------------------------------------------------------
+  // Real PointLights at the engine nozzles so the exhaust actually spills colored light onto the rear
+  // hull and any ship close behind (not just the emissive glow + bloom). Illumination only — dynamic
+  // SHADOWS from the engines are produced by the proximity transient pool (so they only cost a shadow
+  // map when there's actually a ship near a thruster to shadow). Intensity tracks thrust each frame.
+  const thrusterLights = [];
+  const thrusterParams = { color: 0x66c0ff, peak: 55, idle: 2, distance: 70 };
+
+  function attachThrusters(pivot, nozzles, rearDir, shipRadius) {
+    thrusterParams.distance = shipRadius * 14;
+    for (const noz of nozzles) {
+      const pl = new THREE.PointLight(thrusterParams.color, 0, thrusterParams.distance, 2);
+      pl.position.copy(noz);
+      pl.castShadow = false;
+      pivot.add(pl);
+      thrusterLights.push(pl);
+    }
+  }
+
+  let thrust01 = 0;
+  function setThrusterParams(p) {
+    Object.assign(thrusterParams, p);
+    for (const pl of thrusterLights) {
+      pl.color.set(thrusterParams.color);
+      pl.distance = thrusterParams.distance;
+    }
+  }
+
+  // --- muzzle flash pool ----------------------------------------------------------------------------
+  // A tiny pool of warm PointLights pulsed at the gun on each shot (world-space; the gun gimbals). At
+  // 27 rounds/s with a ~60ms decay the two lights cross-fade into a steady muzzle glow that lights the
+  // nose + any enemy in front. Pooled + parked at intensity 0 when idle (no shader recompiles).
+  const MUZZLE_LIFE = 0.06;
+  const muzzleParams = { color: 0xffe6a0, peak: 90, distance: 55 };
+  const muzzlePool = [];
+  for (let i = 0; i < 2; i++) {
+    const pl = new THREE.PointLight(muzzleParams.color, 0, muzzleParams.distance, 2);
+    pl.castShadow = false;
+    scene.add(pl);
+    muzzlePool.push({ light: pl, life: 0 });
+  }
+  let muzzleRR = 0;
+  function muzzleFlash(pos) {
+    muzzleRR = (muzzleRR + 1) % muzzlePool.length;
+    const m = muzzlePool[muzzleRR];
+    m.light.position.copy(pos);
+    m.light.color.set(muzzleParams.color);
+    m.light.distance = muzzleParams.distance;
+    m.life = MUZZLE_LIFE;
+  }
+
   // --- per-frame -----------------------------------------------------------------------------------
 
-  function update(/* dt, ctx */) {
+  function update(dt, ctx) {
     if (suspended) return;
     if (csm) csm.update(); // reposition cascades onto the current camera frustum (before render)
+
+    // engine light spill tracks throttle (a soft idle glow even at zero thrust)
+    thrust01 = THREE.MathUtils.clamp((ctx && ctx.thrust) || 0, 0, 1.5);
+    const ti = thrusterParams.idle + (thrusterParams.peak - thrusterParams.idle) * thrust01;
+    for (const pl of thrusterLights) pl.intensity = ti;
+
+    // muzzle flashes decay to nothing
+    for (const m of muzzlePool) {
+      if (m.life > 0) {
+        m.life -= dt;
+        m.light.intensity = muzzleParams.peak * Math.max(0, m.life / MUZZLE_LIFE);
+      } else if (m.light.intensity !== 0) {
+        m.light.intensity = 0;
+      }
+    }
   }
 
   function onResize() {
@@ -174,6 +240,8 @@ export function createLighting(scene, camera, renderer, opts = {}) {
   // carry USE_CSM, so we fully TEAR DOWN CSM while the viewer owns the frame, then rebuild on return.
   let wasCSM = false;
   function setActive(on) {
+    for (const pl of thrusterLights) pl.visible = on; // engine lights belong to the flight scene only
+    for (const m of muzzlePool) { m.light.visible = on; if (!on) { m.life = 0; m.light.intensity = 0; } }
     if (!on) {
       if (suspended) return;
       suspended = true;
@@ -197,6 +265,11 @@ export function createLighting(scene, camera, renderer, opts = {}) {
     onResize,
     setSunShadow,
     setSunIntensity,
+    attachThrusters,
+    setThrusterParams,
+    thrusterParams,
+    muzzleFlash,
+    muzzleParams,
     setActive,
     get csm() {
       return csm;

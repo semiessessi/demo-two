@@ -32,6 +32,7 @@ const MANUAL_DEADZONE = 0.1;
 export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
   const getEnemies = opts.getEnemies || (() => []);
   const canFire = opts.canFire || (() => true); // false once the Gun subsystem is destroyed
+  const onFire = opts.onFire || null; // (muzzleWorld) -> pulse a real muzzle-flash light
   const params = {
     fireRate: 27,
     boltSpeed: 380,
@@ -221,6 +222,7 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
       projectiles.spawn({ pos: muzzleWorld, vel, color: params.color, team: 'player', damage: params.damage, life: 2.0, radius: 0.4, scale: params.boltScale });
       flash.visible = true;
       flashLife = FLASH_TIME;
+      if (onFire) onFire(muzzleWorld); // real muzzle-flash light pulse
     }
 
     if (flashLife > 0) {

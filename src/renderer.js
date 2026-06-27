@@ -22,7 +22,7 @@ export function createRenderer(container) {
   // sun shadows (and the dynamic light shadows) are driven by lighting.js; the quality controller can
   // still drop individual casters or disable shadows entirely on weak hardware.
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap; // r185 deprecated PCFSoft (forced->PCF); PCF supports dir+spot+point
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();

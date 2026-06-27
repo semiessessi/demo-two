@@ -184,12 +184,14 @@ async function init() {
   ship = await loadShip();
   scene.add(ship.pivot);
   thrusters = createThrusters(ship.pivot, ship.nozzles, ship.rearDir, ship.radius);
+  lighting.attachThrusters(ship.pivot, ship.nozzles, ship.rearDir, ship.radius); // real engine light spill
   flight = createFlight(ship.pivot, camera, renderer.domElement, input);
 
   projectiles = createProjectiles(scene);
   cannon = createPlayerCannon(scene, ship, projectiles, {
     getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
     canFire: () => !damage || damage.canFire(), // gun subsystem destroyed -> cannon offline
+    onFire: (pos) => lighting.muzzleFlash(pos), // real muzzle-flash light pulse
   });
 
   chigKit = await loadChig();
@@ -392,6 +394,13 @@ function buildTweakGui() {
   const sunParams = { brightness: lighting.sunMult };
   const sunf = gui.addFolder('Sun');
   sunf.add(sunParams, 'brightness', 1, 10, 0.1).name('brightness ×').onChange((v) => lighting.setSunIntensity(v));
+  // Engine light spill — real PointLights at the nozzles (peak = full throttle, idle = at rest).
+  const el = lighting.thrusterParams;
+  const elf = gui.addFolder('Engine Lights');
+  elf.add(el, 'peak', 0, 200, 1).name('peak intensity');
+  elf.add(el, 'idle', 0, 40, 0.5).name('idle intensity');
+  elf.addColor(el, 'color').name('color').onChange(() => lighting.setThrusterParams({}));
+  elf.close();
 
   const tp = thrusters.params;
   const relayout = () => thrusters.setParams({});
