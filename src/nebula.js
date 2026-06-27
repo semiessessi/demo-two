@@ -19,8 +19,9 @@ uniform float uTime;
 uniform float uPulse;
 uniform float uBrightness;
 uniform float uSaturation;
-uniform float uMilkyWay; // brightness of the tilted Milky Way band
-uniform float uMwTilt;   // tilt of the band plane (rad)
+uniform float uMilkyWay; // brightness of the Milky Way band
+uniform float uMwTilt;   // (legacy) tilt of the band plane (rad)
+uniform vec3 uMwNormal;  // galactic pole (band plane normal), derived from the star catalog
 uniform vec3 uColorA; // deep base
 uniform vec3 uColorB; // mid clouds
 uniform vec3 uColorC; // hot cores
@@ -66,8 +67,11 @@ void main() {
   vec3 col = mix(uColorA, uColorB, smoothstep(0.15, 0.6, density));
   col = mix(col, uColorC, smoothstep(0.62, 0.95, density) * 0.85);
 
-  // a brighter band across the galaxy plane for some structure
-  float band = exp(-pow(dir.y * 2.3, 2.0));
+  // distance from the galactic plane (uMwNormal = pole derived from the real star catalog, so the
+  // band sits where the dense stars are)
+  float gy = dot(dir, uMwNormal);
+  // a broad, dim band across the galactic plane for some structure
+  float band = exp(-pow(gy * 2.3, 2.0));
   col += uColorB * band * 0.18;
 
   col *= 0.55 + 0.9 * density;
@@ -80,12 +84,13 @@ void main() {
   // Milky Way: a narrower, brighter band on a tilted plane, broken up by the fbm into dust lanes,
   // tinted warm-grey. Added AFTER the nebula dimming so it sits above the 10% backdrop and reads as
   // the brightest diffuse feature. uMilkyWay scales it; uMwTilt rotates the band plane.
-  float ct = cos(uMwTilt), st = sin(uMwTilt);
-  float my = dir.y * ct - dir.z * st;            // distance from the tilted plane
-  float mw = exp(-pow(my * 4.2, 2.0));            // tight bright core of the band
-  float lanes = mix(0.4, 1.0, clamp(detail * 1.3, 0.0, 1.0)); // dark dust lanes from the noise
+  float mw = exp(-pow(gy * 4.2, 2.0));            // tight bright core of the band (on the galactic plane)
+  float lanes = mix(0.4, 1.0, clamp(detail * 1.3, 0.0, 1.0)); // overall dust mottling from the noise
+  // a dark wispy dust lane down the MIDDLE of the band (the Great Rift): a narrow dip at gy~0, ragged
+  // because the fbm breaks it up. Darkens only the Milky Way nebulosity — the stars are a separate pass.
+  float rift = exp(-pow(gy * 12.0, 2.0)) * clamp(detail * 1.7, 0.0, 1.0);
   vec3 mwTint = mix(vec3(0.62, 0.66, 0.78), uColorC, 0.18);    // warm-grey, a hint of the core colour
-  col += mwTint * mw * lanes * uMilkyWay;
+  col += mwTint * mw * lanes * mix(1.0, 0.12, rift) * uMilkyWay;
 
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -96,8 +101,10 @@ export function createNebula() {
     uPulse: { value: 0 },
     uBrightness: { value: 0.1 }, // ~10% overall — keep the backdrop subtle
     uSaturation: { value: 0.32 }, // greyer still — the blue was too rich
-    uMilkyWay: { value: 0.12 }, // tilted galactic band brightness (sits above the dimmed nebula)
-    uMwTilt: { value: 0.6 }, // ~34° tilt so the band crosses the sky diagonally
+    uMilkyWay: { value: 0.12 }, // galactic band brightness (sits above the dimmed nebula)
+    uMwTilt: { value: 0.6 }, // (legacy, unused now the band uses uMwNormal)
+    uMwNormal: { value: new THREE.Vector3(0.9101, 0.4020, -0.1002).normalize() }, // galactic pole from the star-catalog covariance
+
     uColorA: { value: new THREE.Color(0x04050f) }, // deep blue-black base
     uColorB: { value: new THREE.Color(0x223080) }, // blue clouds (dominant)
     uColorC: { value: new THREE.Color(0xd8401f) }, // red hot cores (accent touches)

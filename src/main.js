@@ -29,6 +29,7 @@ import { createDebris } from './debris.js';
 import { createPregame } from './pregame.js';
 import { loadSettings, DIFFICULTY, ENVIRONMENT } from './settings.js';
 import { createAttract } from './attract.js';
+import { createJupiter, createBlackHole } from './celestial.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin. It can also be opted into on the deployed
@@ -120,6 +121,16 @@ function makeSprite(paint, scale, order) {
 // --- backdrop --------------------------------------------------------------
 const nebula = createNebula();
 scene.add(nebula.mesh);
+// per-environment background bodies (shown/hidden by applyEnvironment), kept at infinity in the loop
+const jupiter = createJupiter(renderer);
+const blackhole = createBlackHole();
+scene.add(jupiter.group, blackhole.group);
+const JUP_DIR = new THREE.Vector3(0.35, 0.12, -0.93).normalize();
+const BH_DIR = new THREE.Vector3(0.40, 0.18, -0.90).normalize();
+function updateBackdropBodies() {
+  if (jupiter.group.visible) jupiter.group.position.copy(camera.position).addScaledVector(JUP_DIR, 3400);
+  if (blackhole.group.visible) blackhole.group.position.copy(camera.position).addScaledVector(BH_DIR, 3600);
+}
 const starUniforms = {
   uTime: { value: 0 },
   uStarSize: { value: 1.2 }, // halved max sprite size (user request)
@@ -201,7 +212,7 @@ function applyDifficulty(s) {
   if (enemyMgr && enemyMgr.params) Object.assign(enemyMgr.params, d.enemy);
 }
 function applyEnvironment(s) {
-  const e = ENVIRONMENT[s.environment] || ENVIRONMENT.nebula;
+  const e = ENVIRONMENT[s.environment] || ENVIRONMENT.groombridge34;
   const u = nebula.uniforms;
   u.uColorA && u.uColorA.value.setHex(e.nebula.uColorA);
   u.uColorB && u.uColorB.value.setHex(e.nebula.uColorB);
@@ -209,6 +220,22 @@ function applyEnvironment(s) {
   if (u.uBrightness) u.uBrightness.value = e.nebula.uBrightness;
   if (u.uSaturation) u.uSaturation.value = e.nebula.uSaturation;
   if (u.uMilkyWay) u.uMilkyWay.value = e.nebula.uMilkyWay;
+  applySun(e.sun);
+  applyBody(e.body);
+}
+// Retune the existing sun sprites per environment (size/tint/glow) — not the light direction.
+function applySun(c) {
+  if (!c) return;
+  sun.scale.setScalar(c.disc); sun.material.color.setHex(c.color != null ? c.color : 0xffffff);
+  sunGlow.scale.setScalar(c.glow || 1); sunGlow.material.opacity = c.glowAlpha != null ? c.glowAlpha : 1;
+  sunGlow.visible = (c.glow || 0) > 0 && sunGlow.material.opacity > 0.001;
+  sunHalo.scale.setScalar(c.halo || 1); sunHalo.material.opacity = c.haloAlpha != null ? c.haloAlpha : 1;
+  sunHalo.visible = (c.halo || 0) > 0 && sunHalo.material.opacity > 0.001;
+}
+// Show the environment's background body (Jupiter / black hole / none).
+function applyBody(kind) {
+  jupiter.group.visible = kind === 'jupiter';
+  blackhole.group.visible = kind === 'blackhole';
 }
 function applySettings(s) {
   applyDifficulty(s);
@@ -386,6 +413,7 @@ function attractFrame(dt) {
   sun.position.copy(camera.position).addScaledVector(sunDir, 3600);
   sunGlow.position.copy(camera.position).addScaledVector(sunDir, 3650);
   sunHalo.position.copy(camera.position).addScaledVector(sunDir, 3700);
+  updateBackdropBodies(); // keep the environment's Jupiter / black hole at infinity
   nebula.uniforms.uTime.value += dt;
   starUniforms.uTime.value += dt;
   lighting.update(dt, { player: attract.focus, thrust: 0.8, projectiles, enemies: enemyMgr.enemies }); // cascades fit to the camera; dynamic lights around the action
@@ -448,6 +476,7 @@ function startLoop() {
     sun.position.copy(camera.position).addScaledVector(sunDir, 3600);
     sunGlow.position.copy(camera.position).addScaledVector(sunDir, 3650);
     sunHalo.position.copy(camera.position).addScaledVector(sunDir, 3700);
+  updateBackdropBodies(); // keep the environment's Jupiter / black hole at infinity
     nebula.uniforms.uTime.value += dt;
     starUniforms.uTime.value += dt;
 

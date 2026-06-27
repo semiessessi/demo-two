@@ -5,7 +5,7 @@ const KEY = 'd2.skirmish.v1';
 
 export const DEFAULTS = {
   difficulty: 'veteran', // recruit | veteran | ace
-  environment: 'nebula', // key into ENVIRONMENT
+  environment: 'groombridge34', // key into ENVIRONMENT
   skin: 'default', // key into a skins registry (livery.js)
   livery: { color: '#7a8694', callsign: 'VANSEN', squadron: 'WILDCARDS' },
   // weapon mounts (visual loadout): inner -> fuel, outer -> missile pair, tip -> long-range missile
@@ -19,11 +19,27 @@ export const DIFFICULTY = {
   ace: { label: 'Ace', waves: { rampRate: 0.12, minSize: 4, maxSize: 6, gap: 2.2 }, enemy: { hp: 40, fireRate: 2.4, maxSpread: 0.03, speed: 46 } },
 };
 
-// Environment presets -> nebula uniforms + sun direction/colour.
+// Environment presets -> nebula backdrop uniforms + sun sprite appearance + a background body.
+// `body`: 'none' | 'jupiter' | 'blackhole' (built in celestial.js, shown/hidden per environment).
+// `sun`: tweaks the existing sun sprites (disc/glow/halo scale + tint + glow alpha) — NOT the light
+// direction (kept fixed so lighting stays simple). We iterate on the exact look later.
 export const ENVIRONMENT = {
-  nebula: { label: 'Tycho Nebula', nebula: { uColorA: 0x04050f, uColorB: 0x223080, uColorC: 0xd8401f, uBrightness: 0.10, uSaturation: 0.32, uMilkyWay: 0.12 }, sun: { dir: [-55, 30, -30], color: 0xffb070 } },
-  deepspace: { label: 'Deep Space', nebula: { uColorA: 0x02030a, uColorB: 0x10183a, uColorC: 0x3a4a80, uBrightness: 0.06, uSaturation: 0.50, uMilkyWay: 0.20 }, sun: { dir: [-40, 20, -60], color: 0xbfd0ff } },
-  ember: { label: 'Ember Field', nebula: { uColorA: 0x0a0402, uColorB: 0x5a2410, uColorC: 0xff6a20, uBrightness: 0.14, uSaturation: 0.40, uMilkyWay: 0.08 }, sun: { dir: [-30, 40, -20], color: 0xff9050 } },
+  groombridge34: {
+    label: 'Groombridge 34', body: 'none',
+    nebula: { uColorA: 0x04050f, uColorB: 0x223080, uColorC: 0xd8401f, uBrightness: 0.10, uSaturation: 0.32, uMilkyWay: 0.12 },
+    sun: { disc: 560, glow: 2900, halo: 7600, color: 0xffffff, glowAlpha: 1.0, haloAlpha: 1.0 }, // white tint = original baked look
+  },
+  jupiterTrojans: {
+    label: 'Jupiter Trojans', body: 'jupiter',
+    nebula: { uColorA: 0x03040c, uColorB: 0x14224a, uColorC: 0x6a4a30, uBrightness: 0.05, uSaturation: 0.42, uMilkyWay: 0.18 },
+    // Sol seen from ~5 AU: small, yellow-white, and producing far less corona/halo glow.
+    sun: { disc: 300, glow: 720, halo: 0, color: 0xfff4e0, glowAlpha: 0.45, haloAlpha: 0.0 },
+  },
+  cerberus: {
+    label: 'Cerberus', body: 'blackhole',
+    nebula: { uColorA: 0x05030a, uColorB: 0x1a1030, uColorC: 0x4a1830, uBrightness: 0.04, uSaturation: 0.45, uMilkyWay: 0.06 },
+    sun: { disc: 220, glow: 520, halo: 0, color: 0xcdd0ff, glowAlpha: 0.4, haloAlpha: 0.0 },
+  },
 };
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
