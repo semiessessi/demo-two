@@ -34,7 +34,7 @@ function detectQuality() {
   return mobile || small ? 'low' : 'high';
 }
 
-export function createVfx(scene, camera) {
+export function createVfx(scene, camera, opts = {}) {
   const fireTex = radialTexture([
     [0.0, 'rgba(255,255,240,1)'],
     [0.3, 'rgba(255,200,110,0.9)'],
@@ -47,7 +47,7 @@ export function createVfx(scene, camera) {
     [1.0, 'rgba(90,96,108,0)'],
   ]);
 
-  const vol = createVolumetrics(scene, camera);
+  const vol = createVolumetrics(scene, camera, opts); // opts.lightDir aligns smoke self-shadow with the sun
   let quality = detectQuality();
   vol.setQuality(quality);
 
@@ -239,5 +239,5 @@ export function createVfx(scene, camera) {
     vol.setQuality(q);
   }
 
-  return { explosion, spark, ember, smoke, update, setQuality, createTrail: vol.createTrail, get quality() { return quality; }, _vol: vol };
+  return { explosion, spark, ember, smoke, update, setQuality, setSmokeShadows: vol.setSmokeShadows, createTrail: vol.createTrail, get quality() { return quality; }, _vol: vol };
 }

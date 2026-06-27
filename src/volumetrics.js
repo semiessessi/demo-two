@@ -161,8 +161,27 @@ const COL = {
 };
 const LIGHT_DIR = new THREE.Vector3(0.4, 0.85, 0.3).normalize();
 
-export function createVolumetrics(scene, camera) {
+export function createVolumetrics(scene, camera, opts = {}) {
   const geo = new THREE.IcosahedronGeometry(1, 1);
+  // self-shadow light direction: align with the scene's real sun when provided (otherwise a default)
+  const lightDir = (opts.lightDir ? opts.lightDir.clone() : LIGHT_DIR.clone()).normalize();
+  let smokeShadows = false; // tier-gated: smoke casts a soft (dithered) shadow onto the ships
+
+  // Soft volumetric shadow caster: a packed-depth material that stochastically discards fragments by
+  // the puff's coverage, so the icosa proxy throws a noisy, soft blob shadow (PCF smooths the stipple)
+  // into the CSM / spot shadow maps. Each pooled mesh gets its own so coverage can be per-puff.
+  function makeDepthMat() {
+    const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.FrontSide });
+    const cov = { value: 0 };
+    m.userData.cov = cov;
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uCov = cov;
+      sh.fragmentShader =
+        'uniform float uCov;\nfloat _dh(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }\n' +
+        sh.fragmentShader.replace('void main() {', 'void main() {\n\tif (_dh(gl_FragCoord.xy) >= uCov) discard;');
+    };
+    return m;
+  }
 
   function makeMaterial() {
     return new THREE.ShaderMaterial({
@@ -180,7 +199,7 @@ export function createVolumetrics(scene, camera) {
         uDrift: { value: 0.3 },
         uSteps: { value: 32 },
         uColSmoke: { value: new THREE.Color() },
-        uLightDir: { value: LIGHT_DIR.clone() },
+        uLightDir: { value: lightDir.clone() },
         uLightColor: { value: COL.light.clone() },
         uAmbient: { value: COL.ambient.clone() },
         uBlobs: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
@@ -208,8 +227,11 @@ export function createVolumetrics(scene, camera) {
       mesh.visible = false;
       mesh.frustumCulled = true;
       mesh.renderOrder = 10;
+      const depthMat = makeDepthMat();
+      mesh.customDepthMaterial = depthMat; // used when the puff casts a shadow (castShadow toggled per frame)
+      mesh.castShadow = false;
       scene.add(mesh);
-      arr.push({ mesh, mat, alive: false, kind: 'expl', age: 0, maxLife: 1, baseScale: 1, seed: 0, densMul: 1, sigma: 2.5, drift: new THREE.Vector3() });
+      arr.push({ mesh, mat, depthMat, alive: false, kind: 'expl', age: 0, maxLife: 1, baseScale: 1, seed: 0, densMul: 1, sigma: 2.5, drift: new THREE.Vector3() });
     }
     return arr;
   }
@@ -322,6 +344,10 @@ export function createVolumetrics(scene, camera) {
     u.uEmissive.value = 0; // pure smoke
     u.uSigma.value = tunable.smokeSigma;
     u.uTime.value = elapsed;
+    // soft shadow cast onto the ships (tier-gated): coverage tracks the puff's density
+    const cov = Math.min(0.8, u.uDensity.value * 0.9);
+    s.depthMat.userData.cov.value = cov;
+    s.mesh.castShadow = smokeShadows && cov > 0.05;
     const distSq = s.mesh.position.distanceToSquared(camera.position);
     let st = quality === 'low' ? 12 : tunable.puffSteps;
     if (distSq > 140 * 140) st = quality === 'low' ? 9 : 14;
@@ -333,6 +359,7 @@ export function createVolumetrics(scene, camera) {
   function retire(s) {
     s.alive = false;
     s.mesh.visible = false;
+    s.mesh.castShadow = false;
   }
 
   function createTrail(opts = {}) {
@@ -389,6 +416,11 @@ export function createVolumetrics(scene, camera) {
 
   function setQuality(q) { quality = q; }
   function setDepth(/* tex, w, h */) { /* Phase 3 */ }
+  // Tier-gated: enable/disable smoke casting soft shadows onto the ships.
+  function setSmokeShadows(on) {
+    smokeShadows = !!on;
+    if (!smokeShadows) for (const s of puffPool) s.mesh.castShadow = false;
+  }
 
-  return { explosion, puff, createTrail, update, setQuality, setDepth, tunable };
+  return { explosion, puff, createTrail, update, setQuality, setDepth, setSmokeShadows, tunable };
 }

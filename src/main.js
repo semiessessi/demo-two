@@ -202,7 +202,7 @@ async function init() {
   lighting.registerTree(chigKit.template);
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
   waves = createWaveManager(enemyMgr);
-  vfx = createVfx(scene, camera);
+  vfx = createVfx(scene, camera, { lightDir: sunDir }); // align smoke self-shadow with the real sun
   quality = createQuality({ lighting, vfx }); // FPS-driven tier ladder: CSM res, shadow-light budget, smoke, vfx
   combat = createCombat(projectiles, enemyMgr, vfx, {
     getPlayerPos: () => ship.pivot.position,
