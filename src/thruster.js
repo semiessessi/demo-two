@@ -47,7 +47,7 @@ export function createThrusters(pivot, nozzles, rearDir, shipRadius) {
   base.x = 0;
 
   // live-tunable; symmetric X-mirror about the centerline (defaults hand-tuned in-browser)
-  const params = { offsetX: 0.4, offsetY: -0.1, offsetZ: 1.45, length: 1, width: 0.4, intensity: 1 };
+  const params = { offsetX: 0.4, offsetY: -0.15, offsetZ: 1.2, length: 1, width: 0.3, intensity: 1 };
 
   const coreTex = radialSprite([
     [0.0, 'rgba(255,255,255,1)'],

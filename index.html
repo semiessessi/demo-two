@@ -32,60 +32,6 @@
         display: block;
       }
 
-      /* Bottom control bar — audio transport */
-      #controls {
-        position: fixed;
-        left: 50%;
-        bottom: 24px;
-        transform: translateX(-50%);
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        padding: 14px 18px 12px;
-        width: min(560px, calc(100vw - 40px));
-        background: rgba(12, 14, 22, 0.55);
-        border: 1px solid rgba(150, 180, 255, 0.1);
-        border-radius: 22px;
-        backdrop-filter: blur(8px);
-        user-select: none;
-      }
-      #row {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-      }
-      #playToggle,
-      #muteToggle {
-        flex: none;
-        width: 38px;
-        height: 38px;
-        border-radius: 50%;
-        border: 1px solid rgba(150, 180, 255, 0.16);
-        background: rgba(150, 180, 255, 0.05);
-        color: #cdd6ea;
-        font-size: 15px;
-        line-height: 1;
-        cursor: pointer;
-        transition: background 0.15s ease;
-      }
-      #playToggle:hover,
-      #muteToggle:hover {
-        background: rgba(150, 180, 255, 0.13);
-      }
-      #volume {
-        flex: 1 1 auto;
-        accent-color: #6f9bff;
-        cursor: pointer;
-      }
-      #label {
-        text-align: center;
-        font-size: 12px;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: #7f8aa3;
-        height: 1em;
-        line-height: 1;
-      }
       #stats {
         position: fixed;
         top: 10px;
@@ -205,40 +151,6 @@
         padding: 1px 5px;
       }
 
-      /* "Click for sound" prompt — appears when the browser blocks audio until a user gesture. */
-      #start {
-        position: fixed;
-        left: 50%;
-        top: 20px;
-        transform: translateX(-50%);
-        z-index: 100;
-        padding: 11px 20px;
-        background: rgba(12, 14, 22, 0.75);
-        border: 1px solid rgba(150, 180, 255, 0.16);
-        border-radius: 999px;
-        backdrop-filter: blur(8px);
-        color: #eaeefc;
-        font-size: 14px;
-        letter-spacing: 0.05em;
-        cursor: pointer;
-        transition: opacity 0.5s ease;
-        animation: startPulse 2.2s ease-in-out infinite;
-      }
-      @keyframes startPulse {
-        0%,
-        100% {
-          box-shadow: 0 0 0 0 rgba(158, 199, 255, 0);
-        }
-        50% {
-          box-shadow: 0 0 20px 2px rgba(158, 199, 255, 0.28);
-        }
-      }
-      #start.hidden {
-        opacity: 0;
-        pointer-events: none;
-        animation: none;
-      }
-
       /* Fade-up from black on load — covers the bundle load + model load + first frame. */
       #fade {
         position: fixed;
@@ -257,14 +169,6 @@
   <body>
     <div id="app"></div>
     <pre id="stats"></pre>
-    <div id="controls">
-      <div id="row">
-        <button id="playToggle" title="Play / pause music (P)" aria-label="Play or pause">▶</button>
-        <input id="volume" type="range" min="0" max="100" value="70" step="1" aria-label="Volume" />
-        <button id="muteToggle" title="Mute / unmute" aria-label="Mute or unmute">🔊</button>
-      </div>
-      <span id="label">SA-43 Hammerhead</span>
-    </div>
     <aside id="info" aria-label="Controls and credits">
       <h2>Flight Controls</h2>
       <dl>
@@ -280,8 +184,6 @@
         <dd>brake</dd>
         <dt>Wheel</dt>
         <dd>zoom in / out</dd>
-        <dt>P</dt>
-        <dd>play / pause music</dd>
         <dt>Tab</dt>
         <dd>show / hide this panel</dd>
         <dt>F</dt>
@@ -289,12 +191,10 @@
       </dl>
       <div class="credit">
         &#9670; <strong>SA-43 &ldquo;Hammerhead&rdquo;</strong><br />
-        Endo/exo-atmospheric attack craft.<br />
-        &#9834; Music: drop an MP3 at <code>public/music/track.mp3</code>
+        Endo/exo-atmospheric attack craft.
       </div>
     </aside>
     <div id="toast"><span>Press <kbd>Tab</kbd> for controls</span></div>
-    <div id="start" class="hidden">&#128266;&nbsp; Click anywhere to play with sound</div>
     <div id="fade"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

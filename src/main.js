@@ -14,6 +14,8 @@ import { createProjectiles } from './projectiles.js';
 import { createPlayerCannon } from './weapons.js';
 import { createEnemyManager } from './enemies.js';
 import { createWaveManager } from './waves.js';
+import { createVfx } from './vfx.js';
+import { createCombat } from './combat.js';
 
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
@@ -93,6 +95,8 @@ const input = createInput();
 // combat systems (created once the ship is loaded)
 let projectiles = null;
 let cannon = null;
+let vfx = null;
+let combat = null;
 const playerVel = new THREE.Vector3();
 const playerFwd = new THREE.Vector3();
 
@@ -130,6 +134,11 @@ async function init() {
   chigKit = await loadChig();
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
   waves = createWaveManager(enemyMgr);
+  vfx = createVfx(scene);
+  combat = createCombat(projectiles, enemyMgr, vfx, {
+    getPlayerPos: () => ship.pivot.position,
+    playerHitRadius: ship.radius * 0.85,
+  });
 
   // TEMP debug handle for live tuning
   window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves };
@@ -158,6 +167,8 @@ function startLoop() {
     enemyMgr.update(dt, player);
     waves.update(dt, player);
     projectiles.update(dt);
+    combat.update();
+    vfx.update(dt);
     enemyMgr.prune();
 
     const amp = audio.getAmplitude();
