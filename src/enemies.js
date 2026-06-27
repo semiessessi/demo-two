@@ -206,7 +206,8 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     // pointed and flying. Leading is done by turning the nose onto the player's lead (in the steering),
     // never by angling the bolt off the line of travel.
     evel.copy(efwd).multiplyScalar(params.pulseSpeed);
-    projectiles.spawn({ pos: muzzle, vel: evel, color: params.color, team: 'enemy', damage: params.pulseDamage, life: 2.6, radius: 0.7, scale: 1.35 });
+    // Chig bolts: twice as wide, white-hot, glowing (HDR -> bloom) and crackling with noise.
+    projectiles.spawn({ pos: muzzle, vel: evel, color: 0xffffff, team: 'enemy', damage: params.pulseDamage, life: 2.6, radius: 0.7, scale: 1.35, width: 2, glow: 2.8, noise: 0.6 });
   }
 
   function update(dt, player) {
