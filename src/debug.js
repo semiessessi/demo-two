@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { spawnChig } from './enemyShip.js';
+import { spawnChig, layoutChigGlows, chigThruster } from './enemyShip.js';
 
 // Localhost-only debug interface. main.js builds this only under its DEBUG flag, so none of it
 // ships to the deployed site. It adds a "View" folder to the top-left lil-gui panel that switches
@@ -16,7 +16,7 @@ export function createDebug(ctx) {
     ctx;
 
   let mode = 'flight'; // 'flight' | 'hammerhead' | 'chig'
-  const ui = { spin: false };
+  const ui = { spin: false, thrusters: true };
   const SPIN_SPEED = 0.4; // rad/s turntable
 
   let viewer = null; // lazily-built { plane, key, fill, controls }
@@ -114,7 +114,7 @@ export function createDebug(ctx) {
     }
 
     flight.setEnabled(false);
-    if (thrusters?.group) thrusters.group.visible = false; // hide the frozen engine plumes
+    if (thrusters?.group) thrusters.group.visible = ui.thrusters; // engine plumes (toggle in View)
     nebula.mesh.visible = false;
     stars.visible = false;
     sun.visible = false;
@@ -191,6 +191,9 @@ export function createDebug(ctx) {
     view.add(buttons, 'Hammerhead');
     view.add(buttons, 'Chig');
     view.add(ui, 'spin').name('auto-spin');
+    view.add(ui, 'thrusters').name('show thrusters').onChange((v) => {
+      if (thrusters?.group && mode === 'hammerhead') thrusters.group.visible = v;
+    });
     view.open();
   }
 
@@ -200,6 +203,8 @@ export function createDebug(ctx) {
     if (mode === 'flight') return false;
     const obj = activeModel();
     if (obj && ui.spin) obj.rotateY(SPIN_SPEED * dt);
+    if (mode === 'hammerhead' && ui.thrusters && thrusters) thrusters.update(0.6, dt); // live plumes
+    if (mode === 'chig' && chig) layoutChigGlows(chig, chigThruster); // reflect live Chig Thruster sliders
     if (viewer) viewer.controls.update();
     render();
     return true;

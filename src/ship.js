@@ -41,7 +41,9 @@ export async function loadShip() {
       o.visible = false;
       return;
     }
-    if (/^gear$/i.test(o.name) || /^landing gear$/i.test(mat)) {
+    // deployed landing gear (material "Landing Gear" / "Landing_Gear"). Keep the *closed* gear
+    // doors visible — they cover the bay with the gear up, which is what we want in space.
+    if (/^gear$/i.test(o.name) || /landing[\s_]?gear/i.test(mat)) {
       o.visible = false;
       return;
     }
