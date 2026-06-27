@@ -126,6 +126,12 @@ export function createEditor(gui, { scene, ship, damage, rcs }) {
 
     const pf = gui.addFolder('RCS Ports (edit)');
     pf.add(portGroup, 'visible').name('show ports (jets)');
+    // L/R mirror: editing one side of a mirrored pair (names ending ' L'/' R') updates the other, X-flipped
+    // (pos.x and dir.x negated), and refreshes that partner's sliders.
+    const rcsUi = { mirror: true };
+    pf.add(rcsUi, 'mirror').name('mirror L/R edits');
+    const rcsMirror = (n) => (n.endsWith(' L') ? n.slice(0, -2) + ' R' : n.endsWith(' R') ? n.slice(0, -2) + ' L' : null);
+    const portUI = new Map();
     if (rcs.jet) {
       pf.add(rcs.jet, 'radius', 0.02, 1, 0.01).name('jet radius ×').onChange(syncPorts);
       pf.add(rcs.jet, 'length', 0.1, 2, 0.05).name('jet length ×').onChange(syncPorts);
@@ -134,15 +140,30 @@ export function createEditor(gui, { scene, ship, damage, rcs }) {
     rcs.ports.forEach((p) => {
       const f = pf.addFolder(p.name);
       const proxy = { x: p.pos[0], y: p.pos[1], z: p.pos[2], dx: p.dir[0], dy: p.dir[1], dz: p.dir[2] };
-      const writePos = () => { p.pos[0] = proxy.x; p.pos[1] = proxy.y; p.pos[2] = proxy.z; syncPorts(); };
-      const writeDir = () => { p.dir[0] = proxy.dx; p.dir[1] = proxy.dy; p.dir[2] = proxy.dz; syncPorts(); };
-      f.add(proxy, 'x', -8, 8, 0.05).onChange(writePos);
-      f.add(proxy, 'y', -8, 8, 0.05).onChange(writePos);
-      f.add(proxy, 'z', -8, 8, 0.05).onChange(writePos);
-      f.add(proxy, 'dx', -1, 1, 0.05).name('dir x').onChange(writeDir);
-      f.add(proxy, 'dy', -1, 1, 0.05).name('dir y').onChange(writeDir);
-      f.add(proxy, 'dz', -1, 1, 0.05).name('dir z').onChange(writeDir);
+      const ctrls = [];
+      const sync = () => {
+        if (rcsUi.mirror) {
+          const m = portUI.get(rcsMirror(p.name) || '');
+          if (m) {
+            m.p.pos[0] = -p.pos[0]; m.p.pos[1] = p.pos[1]; m.p.pos[2] = p.pos[2];
+            m.p.dir[0] = -p.dir[0]; m.p.dir[1] = p.dir[1]; m.p.dir[2] = p.dir[2];
+            m.proxy.x = m.p.pos[0]; m.proxy.y = m.p.pos[1]; m.proxy.z = m.p.pos[2];
+            m.proxy.dx = m.p.dir[0]; m.proxy.dy = m.p.dir[1]; m.proxy.dz = m.p.dir[2];
+            for (const c of m.ctrls) c.updateDisplay(); // refresh the partner's sliders
+          }
+        }
+        syncPorts();
+      };
+      const writePos = () => { p.pos[0] = proxy.x; p.pos[1] = proxy.y; p.pos[2] = proxy.z; sync(); };
+      const writeDir = () => { p.dir[0] = proxy.dx; p.dir[1] = proxy.dy; p.dir[2] = proxy.dz; sync(); };
+      ctrls.push(f.add(proxy, 'x', -8, 8, 0.05).onChange(writePos));
+      ctrls.push(f.add(proxy, 'y', -8, 8, 0.05).onChange(writePos));
+      ctrls.push(f.add(proxy, 'z', -8, 8, 0.05).onChange(writePos));
+      ctrls.push(f.add(proxy, 'dx', -1, 1, 0.05).name('dir x').onChange(writeDir));
+      ctrls.push(f.add(proxy, 'dy', -1, 1, 0.05).name('dir y').onChange(writeDir));
+      ctrls.push(f.add(proxy, 'dz', -1, 1, 0.05).name('dir z').onChange(writeDir));
       f.close();
+      portUI.set(p.name, { p, proxy, ctrls });
     });
     pf.add({
       log: () => {
