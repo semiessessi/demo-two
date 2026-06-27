@@ -29,7 +29,7 @@ export function createFractureEditor({ scene, chigKit, gui }) {
   group.visible = false;
   scene.add(group);
 
-  const params = { ...DEFAULTS, explodeForce: 10 };
+  const params = { ...DEFAULTS, explodeForce: 12 }; // launch speed 3..(3+force) -> 3..15
   let frags = [];
   let exploding = false;
   let info = { fragments: 0 };
@@ -44,10 +44,13 @@ export function createFractureEditor({ scene, chigKit, gui }) {
     let res;
     try { res = generateFracture(hullGeo, params); } catch (e) { console.error('[fracture] generate failed', e); return; }
     for (const n of res.nodes) {
+      const c = n.centroid;
+      n.geometry.translate(-c.x, -c.y, -c.z); // recenter on COM so it tumbles about its own centre
       const mesh = new THREE.Mesh(n.geometry, [hullMat, interiorMat]);
       mesh.castShadow = mesh.receiveShadow = true;
+      mesh.position.copy(c); // sits in its original spot when assembled
       group.add(mesh);
-      frags.push({ mesh, home: n.centroid.clone(), vel: new THREE.Vector3(), angVel: new THREE.Vector3() });
+      frags.push({ mesh, home: c.clone(), vel: new THREE.Vector3(), angVel: new THREE.Vector3() });
     }
     exploding = false;
     info.fragments = frags.length;
@@ -69,7 +72,7 @@ export function createFractureEditor({ scene, chigKit, gui }) {
 
   function reset() {
     exploding = false;
-    for (const f of frags) { f.mesh.position.set(0, 0, 0); f.mesh.rotation.set(0, 0, 0); }
+    for (const f of frags) { f.mesh.position.copy(f.home); f.mesh.rotation.set(0, 0, 0); f.mesh.scale.setScalar(1); }
   }
 
   function update(dt) {

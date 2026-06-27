@@ -59,7 +59,9 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   let kills = 0;
   let serial = 0; // monotonic — gives every Chig a unique trackable hash
   let vfx = null; // set by main once VFX exists — death explosions / smoke
+  let debris = null; // set by main — ship-fracture chunks on death
   const DEATH_SCALE = 2.8; // enemy-death blast size (~3x the old)
+  function spawnDebris(e) { return debris ? debris.burst(e, 1.0) : false; }
 
   const FWD = new THREE.Vector3(0, 0, -1);
   const ZAX = new THREE.Vector3(0, 0, 1);
@@ -356,6 +358,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
       e.death = { type: 'instant', t: 0, done: true };
       if (vfx) vfx.explosion(e.pos, DEATH_SCALE);
       e.obj.visible = false;
+      spawnDebris(e);
     } else if (type === 'spinout') {
       e.death = {
         type: 'spinout', t: 0, dur: 0.9 + Math.random() * 0.9, done: false, smokeAcc: 0,
@@ -389,14 +392,14 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         if (vfx && vfx.smoke) vfx.smoke(e.pos);
         if (vfx && vfx.ember && Math.random() < 0.5) vfx.ember(e.pos, 0.2);
       }
-      if (d.t >= d.dur) { if (vfx) vfx.explosion(e.pos, DEATH_SCALE); e.obj.visible = false; d.done = true; }
+      if (d.t >= d.dur) { if (vfx) vfx.explosion(e.pos, DEATH_SCALE); e.obj.visible = false; spawnDebris(e); d.done = true; }
     } else if (d.type === 'chained') {
       e.pos.addScaledVector(e.vel, dt);
       e.vel.multiplyScalar(Math.max(0, 1 - 0.8 * dt));
       e.obj.position.copy(e.pos);
       e.obj.rotateY(3 * dt);
       if (d.stage === 0 && d.t > 0.22) { d.stage = 1; if (vfx) vfx.explosion(e.pos, DEATH_SCALE * 0.9); }
-      else if (d.stage === 1 && d.t > 0.5) { d.stage = 2; if (vfx) vfx.explosion(e.pos, DEATH_SCALE * 1.15); tinyFragments(e.pos); e.obj.visible = false; }
+      else if (d.stage === 1 && d.t > 0.5) { d.stage = 2; if (vfx) vfx.explosion(e.pos, DEATH_SCALE * 1.15); if (!spawnDebris(e)) tinyFragments(e.pos); e.obj.visible = false; }
       if (d.t >= d.dur) d.done = true;
     } else {
       d.done = true;
@@ -434,6 +437,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     reset,
     kill,
     setVfx(v) { vfx = v; },
+    setDebris(d) { debris = d; },
     enemies,
     formations,
     params,

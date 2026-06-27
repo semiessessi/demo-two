@@ -156,6 +156,53 @@ function distort(g, c, opts, rng) {
   pos.needsUpdate = true;
 }
 
+// Flatten a fragment's geometry into transferable non-indexed pos/nrm ordered [hull(group0) ...
+// interior(group1)] with the new group ranges — for the worker boundary or a bake. Positions are
+// recentred on the fragment centroid (so a mover can spin/shrink about its own centre); the centroid
+// is returned separately for placement.
+const _fa = new THREE.Vector3(), _fb = new THREE.Vector3(), _fc = new THREE.Vector3(), _fab = new THREE.Vector3(), _fac = new THREE.Vector3();
+export function fragmentArrays(g, centroid) {
+  const pos = g.attributes.position;
+  const nrm = g.attributes.normal;
+  const index = g.index;
+  const cx = centroid ? centroid.x : 0, cy = centroid ? centroid.y : 0, cz = centroid ? centroid.z : 0;
+  const get = (i) => (index ? index.getX(i) : i);
+  const bins = [[], []];
+  const nb = [[], []];
+  const groups = (g.groups && g.groups.length) ? g.groups : [{ start: 0, count: index ? index.count : pos.count, materialIndex: 0 }];
+  for (const gr of groups) {
+    const mi = gr.materialIndex ? 1 : 0;
+    const end = gr.start + gr.count;
+    for (let t = gr.start; t + 2 < end; t += 3) {
+      const i0 = get(t), i1 = get(t + 1), i2 = get(t + 2);
+      _fa.fromBufferAttribute(pos, i0); _fb.fromBufferAttribute(pos, i1); _fc.fromBufferAttribute(pos, i2);
+      _fab.subVectors(_fb, _fa); _fac.subVectors(_fc, _fa);
+      if (_fab.cross(_fac).lengthSq() < 1e-10) continue; // drop degenerate / sliver triangle
+      for (const vi of [i0, i1, i2]) {
+        bins[mi].push(pos.getX(vi) - cx, pos.getY(vi) - cy, pos.getZ(vi) - cz);
+        if (nrm) nb[mi].push(nrm.getX(vi), nrm.getY(vi), nrm.getZ(vi));
+      }
+    }
+  }
+  const p = Float32Array.from(bins[0].concat(bins[1]));
+  const n = Float32Array.from(nb[0].concat(nb[1]));
+  const ranges = [];
+  if (bins[0].length) ranges.push([0, bins[0].length / 3, 0]);
+  if (bins[1].length) ranges.push([bins[0].length / 3, bins[1].length / 3, 1]);
+  return { pos: p, nrm: n, groups: ranges };
+}
+
+// Build a cleaned, non-indexed, group-tagged geometry (degenerate triangles dropped) from a raw CSG
+// cell geometry — used so both the editor and the worker emit optimized fragments.
+function cleanGeometry(g) {
+  const fa = fragmentArrays(g);
+  const cg = new THREE.BufferGeometry();
+  cg.setAttribute('position', new THREE.BufferAttribute(fa.pos, 3));
+  if (fa.nrm.length) cg.setAttribute('normal', new THREE.BufferAttribute(fa.nrm, 3));
+  for (const [s, c, mi] of fa.groups) cg.addGroup(s, c, mi);
+  return cg;
+}
+
 // Main entry. `geometry` is the hull in final (template) space. Returns { nodes, leaves, materials }.
 export function generateFracture(geometry, options = {}) {
   const opts = { ...DEFAULTS, ...options };
@@ -210,7 +257,7 @@ export function generateFracture(geometry, options = {}) {
     distort(g, centroid, opts, rng);
     g.computeVertexNormals();
     nodes.push({
-      id: nodes.length, geometry: g, centroid, parent: null, depth: 0, children: [],
+      id: nodes.length, geometry: cleanGeometry(g), centroid, parent: null, depth: 0, children: [],
       rule: { detachProb: 0.7, destroyProb: 0.25, reBreakProb: 0 },
     });
   }

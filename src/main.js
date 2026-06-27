@@ -25,6 +25,7 @@ import { createGameState } from './gameState.js';
 import { createDebug } from './debug.js';
 import { createRcs } from './rcs.js';
 import { createEditor } from './editor.js';
+import { createDebris } from './debris.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin. It can also be opted into on the deployed
@@ -155,6 +156,8 @@ function updateAimHud(aim) {
 let ship = null;
 let thrusters = null;
 let rcs = null;
+let debris = null;
+let debrisPlayer = null;
 let flight = null;
 let stars = null;
 let chigKit = null;
@@ -171,6 +174,7 @@ function restartWorld() {
   enemyMgr.reset();
   projectiles.reset();
   waves.reset();
+  if (debris) debris.reset();
   flight.setSpeedScale(1);
   flight.setRollScale(1);
   flight.setPitchScale(1);
@@ -214,6 +218,9 @@ async function init() {
   waves = createWaveManager(enemyMgr);
   vfx = createVfx(scene, camera, { lightDir: sunDir }); // align smoke self-shadow with the real sun
   enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
+  debris = createDebris(scene, { chigTemplate: chigKit.template, chigMaterial: chigKit.material });
+  enemyMgr.setDebris(debris); // ship-fracture chunks on death
+  debrisPlayer = { pos: ship.pivot.position, radius: ship.radius, vel: playerVel };
   quality = createQuality({ lighting, vfx, setRenderScale }); // FPS-driven tier ladder: render scale, CSM res, shadow-light budget, smoke, vfx
   combat = createCombat(projectiles, enemyMgr, vfx, {
     getPlayerPos: () => ship.pivot.position,
@@ -291,6 +298,7 @@ function startLoop() {
     combat.update(dt);
     if (flying) damage.update(dt, vfx);
     vfx.update(dt);
+    if (debris) debris.update(dt, debrisPlayer, enemyMgr.enemies); // ship-chunk debris: drift, bounce, cull
     enemyMgr.prune();
     gameState.update(dt, input);
     hud.update({ waves, enemies: enemyMgr.enemies, player, ejectProgress: gameState.ejectProgress });
