@@ -218,7 +218,7 @@ async function init() {
   waves = createWaveManager(enemyMgr);
   vfx = createVfx(scene, camera, { lightDir: sunDir }); // align smoke self-shadow with the real sun
   enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
-  debris = createDebris(scene, { chigTemplate: chigKit.template, chigMaterial: chigKit.material });
+  debris = createDebris(scene, { chigTemplate: chigKit.template, chigMaterial: chigKit.material, vfx });
   enemyMgr.setDebris(debris); // ship-fracture chunks on death
   debrisPlayer = { pos: ship.pivot.position, radius: ship.radius, vel: playerVel };
   quality = createQuality({ lighting, vfx, debris, setRenderScale }); // FPS-driven tier ladder: render scale, CSM res, shadow-light budget, smoke, vfx, debris

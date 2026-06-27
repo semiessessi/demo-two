@@ -24,7 +24,7 @@ function extractHull(template) {
   };
 }
 
-export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, cap = 240 } = {}) {
+export function createDebris(scene, { chigTemplate, chigMaterial, vfx = null, count = 64, cap = 240 } = {}) {
   // fragment materials: reuse the chig look (no vertex colors on fragments) + a dark torn interior
   const hullMat = chigMaterial ? chigMaterial.clone() : new THREE.MeshStandardMaterial({ color: 0x3a423c, metalness: 0.45, roughness: 0.45, flatShading: true, side: THREE.DoubleSide });
   hullMat.vertexColors = false;
@@ -45,7 +45,7 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
         g.setAttribute('position', new THREE.BufferAttribute(nd.pos, 3));
         if (nd.nrm && nd.nrm.length) g.setAttribute('normal', new THREE.BufferAttribute(nd.nrm, 3));
         for (const [s, c, mi] of nd.groups) g.addGroup(s, c, mi);
-        byId[nd.id] = { rule: nd.rule || { reBreak: 0, destroy: 0.2 }, centroid: new THREE.Vector3(nd.centroid[0], nd.centroid[1], nd.centroid[2]), geometry: g, parent: nd.parent, children: [] };
+        byId[nd.id] = { rule: nd.rule || { reBreak: 0, destroy: 0.2 }, depth: nd.depth || 0, centroid: new THREE.Vector3(nd.centroid[0], nd.centroid[1], nd.centroid[2]), geometry: g, parent: nd.parent, children: [] };
       }
       for (const id in byId) { const n = byId[id]; if (n.parent != null && byId[n.parent]) byId[n.parent].children.push(n); }
       const roots = (m.roots || []).map((id) => byId[id]).filter(Boolean);
@@ -64,6 +64,7 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
   const _pos = new THREE.Vector3();
   const _n = new THREE.Vector3();
   const _v2 = new THREE.Vector3();
+  const _smk = new THREE.Vector3();
   let quality = 'high';
   let heat = 0; // fresh cut faces glow hot then cool (shared across recent debris; cheap)
   let elapsed = 0;
@@ -114,6 +115,8 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
       ang: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8),
       life: 7 + Math.random() * 4, // backstop; mostly culled by distance
       node: null, reBreakAt: 0,
+      // big (depth-0) wreckage trails cheap sprite smoke as it tumbles away (-1 = no trail)
+      smoke: (vfx && node.depth === 0 && quality !== 'low' && Math.random() < 0.6) ? 0 : -1,
     };
     if (allowReBreak && node.children && node.children.length && Math.random() < 0.4) {
       mover.node = node;
@@ -181,6 +184,10 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
       m.mesh.rotation.x += m.ang.x * dt;
       m.mesh.rotation.y += m.ang.y * dt;
       m.mesh.rotation.z += m.ang.z * dt;
+      if (m.smoke >= 0 && m.life > 1.2) { // trail smoke off big tumbling wreckage
+        m.smoke += dt;
+        if (m.smoke >= 0.09) { m.smoke = 0; _smk.copy(m.vel).multiplyScalar(0.2); _smk.y += 0.5; vfx.smoke(m.mesh.position, _smk); }
+      }
       if (player) collide(m, player.pos, player.radius, player.vel);
       if (enemies) for (const e of enemies) { if (e.alive) collide(m, e.pos, e.radius, e.vel); }
       if (m.life < 0.5) m.mesh.scale.setScalar(Math.max(0.001, m.life / 0.5)); // graceful shrink at end-of-life
