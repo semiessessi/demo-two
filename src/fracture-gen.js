@@ -25,6 +25,9 @@ export const DEFAULTS = {
   warpFreq: 1.5,
   kNeighbors: 12,
   minCellVolume: 1e-4,
+  maxDepth: 1, // hierarchical re-break depth (0 = flat list of cells)
+  childCount: 4, // sub-cells a chunk splits into
+  splitProb: 0.45, // chance a top cell gets a child layer (for runtime re-break)
 };
 
 // ---- deterministic RNG + cheap value-noise (for warp) -----------------------------------------
@@ -203,7 +206,44 @@ function cleanGeometry(g) {
   return cg;
 }
 
-// Main entry. `geometry` is the hull in final (template) space. Returns { nodes, leaves, materials }.
+// Fracture one brush into cells (each: { brush, geometry: cleaned, centroid }). `seedGeo` provides the
+// bounds for seeding; `brush` is what actually gets clipped (the hull, or a parent cell for re-break).
+function fractureBrush(ev, matHull, matInterior, brush, seedGeo, opts, rng) {
+  seedGeo.computeBoundingBox();
+  const sphere = seedGeo.boundingBox.getBoundingSphere(new THREE.Sphere());
+  const boxSize = Math.max(sphere.radius * 6, 1);
+  const seeds = buildSeeds(seedGeo, opts, rng);
+  const k = Math.min(opts.kNeighbors, Math.max(1, seeds.length - 1));
+  const cells = [];
+  for (let i = 0; i < seeds.length; i++) {
+    let cell = brush;
+    let ok = true;
+    for (const j of nearest(seeds, i, k)) {
+      const bb = new Brush(bisectorBoxGeo(seeds[i], seeds[j], boxSize), matInterior);
+      bb.updateMatrixWorld();
+      try { cell = ev.evaluate(cell, bb, INTERSECTION); cell.updateMatrixWorld(); } catch (e) { ok = false; break; }
+    }
+    if (!ok) continue;
+    const g = cell.geometry;
+    if (!g || !g.attributes.position || g.attributes.position.count < 12) continue;
+    g.computeBoundingBox();
+    const cs = g.boundingBox.getSize(new THREE.Vector3());
+    if (cs.x * cs.y * cs.z < opts.minCellVolume) continue;
+    const centroid = g.boundingBox.getCenter(new THREE.Vector3());
+    distort(g, centroid, opts, rng);
+    g.computeVertexNormals();
+    cells.push({ brush: cell, geometry: cleanGeometry(g), centroid });
+  }
+  return cells;
+}
+
+// Per-node runtime behaviour weights: chunks with children may re-break to reveal finer pieces; the
+// rest detach; a few vaporize. (Applied with randomness at burst time.)
+function ruleFor(depth, hasChildren) {
+  return { reBreak: hasChildren ? 0.55 : 0, destroy: depth === 0 ? 0.15 : 0.3 };
+}
+
+// Main entry. `geometry` is the hull in final (template) space. Returns { nodes, roots, materials }.
 export function generateFracture(geometry, options = {}) {
   const opts = { ...DEFAULTS, ...options };
   const rng = mulberry32(opts.seed);
@@ -231,36 +271,29 @@ export function generateFracture(geometry, options = {}) {
     } catch (e) { /* skip a bad void */ }
   }
 
-  const seeds = buildSeeds(hullGeo, opts, rng);
-  const k = Math.min(opts.kNeighbors, Math.max(1, seeds.length - 1));
+  // Build the fracture TREE: top cells, then re-fracture some of them into children (one+ levels) so
+  // the runtime can choose to detach a whole chunk or re-break it into finer pieces.
   const nodes = [];
-  for (let i = 0; i < seeds.length; i++) {
-    let cell = hullBrush;
-    let ok = true;
-    for (const j of nearest(seeds, i, k)) {
-      const bb = new Brush(bisectorBoxGeo(seeds[i], seeds[j], boxSize), matInterior);
-      bb.updateMatrixWorld();
-      try {
-        cell = ev.evaluate(cell, bb, INTERSECTION);
-        cell.updateMatrixWorld();
-      } catch (e) { ok = false; break; }
-    }
-    if (!ok) { if (opts.debug) console.log('cell', i, 'csg threw'); continue; }
-    const g = cell.geometry;
-    const vc = g && g.attributes.position ? g.attributes.position.count : 0;
-    if (opts.debug) console.log('cell', i, 'verts', vc);
-    if (vc < 12) continue; // degenerate
-    g.computeBoundingBox();
-    const cs = g.boundingBox.getSize(new THREE.Vector3());
-    if (cs.x * cs.y * cs.z < opts.minCellVolume) { if (opts.debug) console.log('cell', i, 'tiny vol', cs.x * cs.y * cs.z); continue; }
-    const centroid = g.boundingBox.getCenter(new THREE.Vector3());
-    distort(g, centroid, opts, rng);
-    g.computeVertexNormals();
-    nodes.push({
-      id: nodes.length, geometry: cleanGeometry(g), centroid, parent: null, depth: 0, children: [],
-      rule: { detachProb: 0.7, destroyProb: 0.25, reBreakProb: 0 },
-    });
-  }
+  const roots = [];
+  const NODE_CAP = 48; // bound total fragments per variation
 
-  return { nodes, leaves: nodes, materials: [matHull, matInterior], seedCount: seeds.length };
+  function recurse(brush, seedGeo, parentId, depth) {
+    const sub = depth > 0;
+    const childOpts = sub
+      ? { ...opts, cellCount: opts.childCount, voidCount: 0, surfaceBias: 0.3, kNeighbors: Math.min(opts.kNeighbors, opts.childCount + 2) }
+      : opts;
+    const cells = fractureBrush(ev, matHull, matInterior, brush, seedGeo, childOpts, rng);
+    for (const cell of cells) {
+      const node = { id: nodes.length, geometry: cell.geometry, centroid: cell.centroid, parent: parentId, depth, children: [], rule: null };
+      nodes.push(node);
+      if (parentId == null) roots.push(node.id); else nodes[parentId].children.push(node.id);
+      if (depth < opts.maxDepth && nodes.length < NODE_CAP && rng() < opts.splitProb) {
+        recurse(cell.brush, cell.brush.geometry, node.id, depth + 1);
+      }
+      node.rule = ruleFor(depth, node.children.length > 0);
+    }
+  }
+  recurse(hullBrush, hullGeo, null, 0);
+
+  return { nodes, roots, materials: [matHull, matInterior] };
 }

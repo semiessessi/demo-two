@@ -22,15 +22,19 @@ self.onmessage = (e) => {
       self.postMessage({ type: 'error', seed: v + 1, msg: String(err && err.message || err) });
       continue;
     }
-    const frags = [];
+    const nodesOut = [];
     const transfer = [];
     for (const node of res.nodes) {
-      const fa = fragmentArrays(node.geometry, node.centroid);
-      frags.push({ pos: fa.pos, nrm: fa.nrm, groups: fa.groups, centroid: [node.centroid.x, node.centroid.y, node.centroid.z], rule: node.rule });
+      const fa = fragmentArrays(node.geometry, node.centroid); // recentred on the node's COM
+      nodesOut.push({
+        id: node.id, parent: node.parent, depth: node.depth, rule: node.rule,
+        centroid: [node.centroid.x, node.centroid.y, node.centroid.z],
+        pos: fa.pos, nrm: fa.nrm, groups: fa.groups,
+      });
       transfer.push(fa.pos.buffer);
       if (fa.nrm.length) transfer.push(fa.nrm.buffer);
     }
-    self.postMessage({ type: 'variation', seed: v + 1, frags }, transfer);
+    self.postMessage({ type: 'variation', seed: v + 1, nodes: nodesOut, roots: res.roots }, transfer);
   }
   self.postMessage({ type: 'done', count });
 };

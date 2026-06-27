@@ -38,15 +38,18 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
     const hull = extractHull(chigTemplate);
     worker.onmessage = (e) => {
       const m = e.data;
-      if (m.type !== 'variation') return;
-      const frs = m.frags.map((f) => {
+      if (m.type !== 'variation' || !m.nodes || !m.nodes.length) return;
+      const byId = {};
+      for (const nd of m.nodes) {
         const g = new THREE.BufferGeometry();
-        g.setAttribute('position', new THREE.BufferAttribute(f.pos, 3));
-        if (f.nrm && f.nrm.length) g.setAttribute('normal', new THREE.BufferAttribute(f.nrm, 3));
-        for (const [s, c, mi] of f.groups) g.addGroup(s, c, mi);
-        return { geometry: g, centroid: new THREE.Vector3(f.centroid[0], f.centroid[1], f.centroid[2]) };
-      });
-      if (frs.length) variations.push(frs);
+        g.setAttribute('position', new THREE.BufferAttribute(nd.pos, 3));
+        if (nd.nrm && nd.nrm.length) g.setAttribute('normal', new THREE.BufferAttribute(nd.nrm, 3));
+        for (const [s, c, mi] of nd.groups) g.addGroup(s, c, mi);
+        byId[nd.id] = { rule: nd.rule || { reBreak: 0, destroy: 0.2 }, centroid: new THREE.Vector3(nd.centroid[0], nd.centroid[1], nd.centroid[2]), geometry: g, parent: nd.parent, children: [] };
+      }
+      for (const id in byId) { const n = byId[id]; if (n.parent != null && byId[n.parent]) byId[n.parent].children.push(n); }
+      const roots = (m.roots || []).map((id) => byId[id]).filter(Boolean);
+      if (roots.length) variations.push(roots); // each variation = array of root tree-nodes
     };
     worker.postMessage(
       { type: 'gen', pos: hull.pos, index: hull.index, count, opts: { kNeighbors: 8 } },
@@ -65,31 +68,42 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
   const RESTITUTION = 0.6; // bounce energy kept (non-damaging collisions)
   const FRAG_R = 1.1; // approximate chunk collision radius
 
-  // Spawn debris at a dying enemy. `e` carries pos, obj.quaternion, vel. Returns true if it fired.
+  function spawnChunk(node, e, q, scale) {
+    if (movers.length >= cap) return;
+    const mesh = new THREE.Mesh(node.geometry, mats);
+    mesh.castShadow = true;
+    mesh.frustumCulled = false;
+    _pos.copy(node.centroid).applyQuaternion(q); // chunk's COM offset in world
+    mesh.position.copy(e.pos).add(_pos);
+    mesh.quaternion.copy(q);
+    _dir.copy(_pos);
+    if (_dir.lengthSq() < 1e-4) _dir.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
+    _dir.normalize();
+    const vel = _dir.multiplyScalar((3 + Math.random() * 12) * scale); // 3..15
+    if (e.vel) vel.addScaledVector(e.vel, 0.4);
+    vel.x += (Math.random() - 0.5) * 5; vel.y += (Math.random() - 0.5) * 5; vel.z += (Math.random() - 0.5) * 5;
+    scene.add(mesh);
+    movers.push({
+      mesh, vel: vel.clone(),
+      ang: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8),
+      life: 7 + Math.random() * 4, // backstop; mostly culled by distance
+    });
+  }
+
+  // Spawn debris at a dying enemy. Walks the fracture tree: each chunk re-breaks into finer pieces,
+  // detaches whole, or vaporizes (per its baked-in rule + randomness). `e` carries pos, obj.quaternion, vel.
   function burst(e, scale = 1) {
     if (!variations.length || quality === 'low') return false;
-    const v = variations[(Math.random() * variations.length) | 0];
+    const roots = variations[(Math.random() * variations.length) | 0];
     const q = e.obj.quaternion;
-    for (const fr of v) {
+    const stack = roots.slice();
+    while (stack.length) {
       if (movers.length >= cap) break;
-      const mesh = new THREE.Mesh(fr.geometry, mats);
-      mesh.castShadow = true;
-      mesh.frustumCulled = false;
-      _pos.copy(fr.centroid).applyQuaternion(q); // fragment offset in world
-      mesh.position.copy(e.pos).add(_pos);
-      mesh.quaternion.copy(q);
-      _dir.copy(_pos);
-      if (_dir.lengthSq() < 1e-4) _dir.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
-      _dir.normalize();
-      const vel = _dir.multiplyScalar((3 + Math.random() * 12) * scale); // 3..15
-      if (e.vel) vel.addScaledVector(e.vel, 0.4);
-      vel.x += (Math.random() - 0.5) * 5; vel.y += (Math.random() - 0.5) * 5; vel.z += (Math.random() - 0.5) * 5;
-      scene.add(mesh);
-      movers.push({
-        mesh, vel: vel.clone(),
-        ang: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8),
-        life: 7 + Math.random() * 4, // backstop; mostly culled by distance
-      });
+      const node = stack.pop();
+      const r = Math.random();
+      if (node.children.length && r < node.rule.reBreak) { for (const c of node.children) stack.push(c); continue; } // re-break
+      if (r < node.rule.reBreak + node.rule.destroy) continue; // vaporized — no chunk
+      spawnChunk(node, e, q, scale); // detach whole chunk
     }
     return true;
   }

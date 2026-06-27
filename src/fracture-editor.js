@@ -43,7 +43,7 @@ export function createFractureEditor({ scene, chigKit, gui }) {
     clearFrags();
     let res;
     try { res = generateFracture(hullGeo, params); } catch (e) { console.error('[fracture] generate failed', e); return; }
-    for (const n of res.nodes) {
+    for (const n of res.nodes.filter((x) => !x.children.length)) { // leaves = the finest complete shatter (no parent/child overlap)
       const c = n.centroid;
       n.geometry.translate(-c.x, -c.y, -c.z); // recenter on COM so it tumbles about its own centre
       const mesh = new THREE.Mesh(n.geometry, [hullMat, interiorMat]);
