@@ -23,10 +23,10 @@ export const RCS_PORTS = [
   // out the side (-X left / +X right). A fore + aft pair on the same side give opposite yaw torque, so the
   // geometry-driven firing picks whichever one matches the turn. Starting positions are rough — drag them
   // into place in ?debug -> RCS Ports (edit), then "log ports -> console" and paste back here.
-  { name: 'Canard yaw L', pos: [-0.86, -0.1, -2.9], dir: [-1, 0, 0] },
-  { name: 'Canard yaw R', pos: [0.86, -0.1, -2.9], dir: [1, 0, 0] },
-  { name: 'Wingtip yaw L', pos: [-2.9, 0.1, 1.25], dir: [-1, 0, 0] },
-  { name: 'Wingtip yaw R', pos: [2.9, 0.1, 1.25], dir: [1, 0, 0] },
+  { name: 'Canard yaw L', pos: [-1.15, -0.05, -3.2], dir: [-1, 0, 0] },
+  { name: 'Canard yaw R', pos: [1.15, -0.05, -3.2], dir: [1, 0, 0] },
+  { name: 'Wingtip yaw L', pos: [-3.45, 0.05, 0.2], dir: [-1, 0, 0] },
+  { name: 'Wingtip yaw R', pos: [3.45, 0.05, 0.2], dir: [1, 0, 0] },
 ];
 
 export function createRcs(scene, ship, ports = RCS_PORTS) {
