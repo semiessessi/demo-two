@@ -134,14 +134,19 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
     _dir.copy(comWorld).sub(fromPos);
     if (_dir.lengthSq() < 1e-4) _dir.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
     _dir.normalize();
-    const vel = _dir.multiplyScalar((28 + Math.random() * 48) * scale); // strong outward burst (28..76) so it scatters even at flight speed
-    if (baseVel) vel.addScaledVector(baseVel, 0.15); // only a little of the wreck's momentum -> the burst dominates the look
-    vel.x += (Math.random() - 0.5) * 18; vel.y += (Math.random() - 0.5) * 18; vel.z += (Math.random() - 0.5) * 18;
+    // INDEPENDENT velocity per chunk — CLONE, because `_dir` is a shared module temp; aliasing it made
+    // every chunk's mover.vel point at the same vector, so they all moved with one shared velocity ("they
+    // all move together"). Now: a modest outward burst + jitter (so they actually scatter) + half the
+    // wreck's momentum carried over.
+    const vel = _dir.clone().multiplyScalar((6 + Math.random() * 14) * scale); // 6..20 outward
+    if (baseVel) vel.addScaledVector(baseVel, 0.5); // inherit HALF the wreck's velocity
+    vel.x += (Math.random() - 0.5) * 8; vel.y += (Math.random() - 0.5) * 8; vel.z += (Math.random() - 0.5) * 8;
     const mover = {
       mesh, vel,
       ang: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8),
       life: 11 + Math.random() * 6, // backstop; drifts off in vacuum, mostly culled by distance
       node: null, reBreakAt: 0,
+      noCollideT: 0.4, // ignore collisions for a beat so chunks clear the wreck/ships before they can bounce
       // big (depth-0) wreckage trails cheap sprite smoke as it tumbles away (-1 = no trail)
       smoke: (vfx && node.depth === 0 && quality !== 'low' && Math.random() < 0.6) ? 0 : -1,
     };
@@ -214,8 +219,11 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
         m.smoke += dt;
         if (m.smoke >= 0.09) { m.smoke = 0; _smk.copy(m.vel).multiplyScalar(0.2); _smk.y += 0.5; vfx.smoke(m.mesh.position, _smk); }
       }
-      if (player) collide(m, player.pos, player.radius, player.vel);
-      if (enemies) for (const e of enemies) { if (e.alive) collide(m, e.pos, e.radius, e.vel); }
+      if (m.noCollideT > 0) m.noCollideT -= dt; // let the chunk clear the wreck first (no sticking on spawn)
+      else {
+        if (player) collide(m, player.pos, player.radius, player.vel);
+        if (enemies) for (const e of enemies) { if (e.alive) collide(m, e.pos, e.radius, e.vel); }
+      }
       if (m.life < 0.5) m.mesh.scale.setScalar(Math.max(0.001, m.life / 0.5)); // graceful shrink at end-of-life
     }
   }
