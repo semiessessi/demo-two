@@ -246,7 +246,7 @@ function startLoop() {
     enemyMgr.update(dt, player);
     if (gameState.mode !== 'over') waves.update(dt, player);
     projectiles.update(dt);
-    combat.update();
+    combat.update(dt);
     if (flying) damage.update(dt, vfx);
     vfx.update(dt);
     enemyMgr.prune();

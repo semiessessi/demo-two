@@ -22,7 +22,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     fireRate: 1.2,
     fireRange: 260,
     fireConeCos: Math.cos(0.32),
-    pulseSpeed: 230,
+    pulseSpeed: 290, // faster bolts -> less lead error, harder to outrun
     pulseDamage: 10,
     hp: 30,
     color: 0xffffff, // pure white-hot bolts that bloom hard
@@ -30,7 +30,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     wingSpacing: 12, // how far a wingman trails its point
     avoidDist: 34, // start peeling away from the player inside this range
     avoidStrength: 1.4, // how hard they veer off to avoid ramming
-    maxSpread: 0.17, // rad — fire-cone spread for a totally inaccurate pilot (accuracy 0)
+    maxSpread: 0.09, // rad — fire-cone spread for a totally inaccurate pilot (accuracy 0)
     jinkStrength: 18, // how far an evasive pilot weaves sideways
     persSpread: 0.6, // per-pilot random variation in personality traits (GUI-tunable)
   };
@@ -76,6 +76,8 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   const fireDir = new THREE.Vector3();
   const muzzle = new THREE.Vector3();
   const evel = new THREE.Vector3();
+  const toLead = new THREE.Vector3();
+  const leadPt = new THREE.Vector3();
   const flank = new THREE.Vector3();
   const awayDir = new THREE.Vector3();
   const jinkAxis = new THREE.Vector3();
@@ -188,19 +190,31 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   function tryFire(e, player, aiming) {
     if (!aiming || e.fireCd > 0) return;
     e.fireCd = 1 / (params.fireRate * e.p.fireMult); // some pilots fire far more/less often
-    // accuracy: precise pilots fire dead on the nose; sloppy ones spray within a cone
-    fireDir.copy(efwd);
+    muzzle.copy(efwd).multiplyScalar(e.radius * 1.2).add(e.pos);
+    // Lead the player so the bolt arrives where they'll be (the bolt does NOT inherit enemy velocity):
+    // t ~ range/speed, then aim at player.pos + player.vel * t (one refinement). This is what makes
+    // them actually connect against a moving target instead of always shooting behind.
+    const S = params.pulseSpeed;
+    let t = toLead.copy(player.pos).sub(muzzle).length() / S;
+    if (player.vel) {
+      leadPt.copy(player.pos).addScaledVector(player.vel, t);
+      t = leadPt.distanceTo(muzzle) / S;
+      leadPt.copy(player.pos).addScaledVector(player.vel, t);
+    } else {
+      leadPt.copy(player.pos);
+    }
+    fireDir.copy(leadPt).sub(muzzle).normalize();
+    // accuracy: precise pilots fire dead on the lead; sloppy ones spray within a cone around it
     const spread = params.maxSpread * (1 - e.p.accuracy);
     if (spread > 0.001) {
-      eright.crossVectors(efwd, UP).normalize();
-      eup.crossVectors(eright, efwd).normalize();
+      eright.crossVectors(fireDir, UP).normalize();
+      eup.crossVectors(eright, fireDir).normalize();
       fireDir
         .addScaledVector(eright, (Math.random() * 2 - 1) * spread)
         .addScaledVector(eup, (Math.random() * 2 - 1) * spread)
         .normalize();
     }
-    muzzle.copy(fireDir).multiplyScalar(e.radius * 1.2).add(e.pos);
-    evel.copy(fireDir).multiplyScalar(params.pulseSpeed);
+    evel.copy(fireDir).multiplyScalar(S);
     projectiles.spawn({ pos: muzzle, vel: evel, color: params.color, team: 'enemy', damage: params.pulseDamage, life: 2.6, radius: 0.7, scale: 1.35 });
   }
 

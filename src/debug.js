@@ -11,6 +11,23 @@ import { spawnChig, layoutChigGlows, chigThruster } from './enemyShip.js';
 //   { renderer, scene, camera, render, bloom, ship, chigKit, flight,
 //     lights: { key, rim }, sun, sunGlow, nebula, stars }
 
+// World-space bounds of only the VISIBLE meshes under `root`. The Hammerhead model still carries
+// hidden meshes (deployed landing gear, hangar floor) that hang below/around the hull; including them
+// skews the fit so the hull ends up clipping through the ground plane. Measure what you can see.
+function visibleBox(root) {
+  root.updateWorldMatrix(true, true);
+  const box = new THREE.Box3();
+  let any = false;
+  root.traverse((o) => {
+    if (o.isMesh && o.visible) {
+      box.expandByObject(o);
+      any = true;
+    }
+  });
+  if (!any) box.setFromObject(root);
+  return box;
+}
+
 export function createDebug(ctx) {
   const { renderer, scene, camera, render, bloom, ship, chigKit, flight, thrusters, lights, sun, sunGlow, nebula, stars } =
     ctx;
@@ -72,15 +89,15 @@ export function createDebug(ctx) {
     placed.quaternion.identity();
     placed.updateMatrixWorld(true);
 
-    let box = new THREE.Box3().setFromObject(boxSource);
-    placed.position.y -= box.min.y; // bottom sits on the plane
+    let box = visibleBox(boxSource);
+    placed.position.y -= box.min.y; // visible hull bottom sits on the plane
     placed.updateMatrixWorld(true);
 
     boxSource.traverse((o) => {
       if (o.isMesh) o.castShadow = true;
     });
 
-    box = new THREE.Box3().setFromObject(boxSource);
+    box = visibleBox(boxSource);
     const center = box.getCenter(new THREE.Vector3());
     const span = box.getSize(new THREE.Vector3()).length();
 
