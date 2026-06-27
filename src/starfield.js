@@ -40,7 +40,9 @@ void main() {
   float r = length(gl_PointCoord - 0.5) * 2.0;
   if (r > 1.0) discard;
   float a = pow(1.0 - r, 2.0); // soft round falloff
-  fragColor = vec4(vColor * a * min(vBright, 3.0), 1.0); // additive
+  // Cap output well under the bloom threshold (~0.72) so stars never bloom — the bloom halo on
+  // sub-pixel points was shimmering badly as the camera moved. Crisp points, no halo.
+  fragColor = vec4(vColor * a * min(vBright, 0.6), 1.0); // additive, sub-threshold
 }`;
 
 // Async: dynamically imports the ~400 KB catalogue so it's code-split out of the main bundle.

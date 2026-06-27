@@ -46,6 +46,8 @@ scene.add(new THREE.HemisphereLight(0x6e6e74, 0x141414, 0.95)); // neutral grey 
 const sunDir = new THREE.Vector3().copy(key.position).normalize();
 const sun = makeSprite(sunGradient, 560, -5); // the bright disc
 const sunGlow = makeSprite(glowGradient, 2900, -6); // soft warm corona, ~5x the disc diameter
+const sunHalo = makeSprite(haloGradient, 7600, -7); // huge faint wash over ~1/3 of the sky
+scene.add(sunHalo);
 scene.add(sunGlow);
 scene.add(sun);
 
@@ -76,6 +78,13 @@ function glowGradient(g) {
   g.addColorStop(0.45, 'rgba(240,90,38,0.12)');
   g.addColorStop(0.75, 'rgba(210,70,30,0.04)');
   g.addColorStop(1.0, 'rgba(180,60,26,0)');
+}
+function haloGradient(g) {
+  // huge, very faint warm wash filling ~1/3 of the sky around the sun (additive, sub-bloom)
+  g.addColorStop(0.0, 'rgba(255,150,80,0.13)');
+  g.addColorStop(0.25, 'rgba(245,120,60,0.07)');
+  g.addColorStop(0.55, 'rgba(225,95,45,0.025)');
+  g.addColorStop(1.0, 'rgba(200,80,40,0)');
 }
 function makeSprite(paint, scale, order) {
   const spr = new THREE.Sprite(
@@ -255,6 +264,7 @@ function startLoop() {
     stars.position.copy(camera.position);
     sun.position.copy(camera.position).addScaledVector(sunDir, 3600);
     sunGlow.position.copy(camera.position).addScaledVector(sunDir, 3650);
+    sunHalo.position.copy(camera.position).addScaledVector(sunDir, 3700);
     nebula.uniforms.uTime.value += dt;
     starUniforms.uTime.value += dt;
 

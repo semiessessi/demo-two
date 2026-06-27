@@ -19,6 +19,8 @@ uniform float uTime;
 uniform float uPulse;
 uniform float uBrightness;
 uniform float uSaturation;
+uniform float uMilkyWay; // brightness of the tilted Milky Way band
+uniform float uMwTilt;   // tilt of the band plane (rad)
 uniform vec3 uColorA; // deep base
 uniform vec3 uColorB; // mid clouds
 uniform vec3 uColorC; // hot cores
@@ -66,6 +68,17 @@ void main() {
   col = mix(vec3(l), col, uSaturation);
   col *= 1.0 + uPulse * 0.5; // music breath
   col *= uBrightness;        // overall dimmer (user: ~10%)
+
+  // Milky Way: a narrower, brighter band on a tilted plane, broken up by the fbm into dust lanes,
+  // tinted warm-grey. Added AFTER the nebula dimming so it sits above the 10% backdrop and reads as
+  // the brightest diffuse feature. uMilkyWay scales it; uMwTilt rotates the band plane.
+  float ct = cos(uMwTilt), st = sin(uMwTilt);
+  float my = dir.y * ct - dir.z * st;            // distance from the tilted plane
+  float mw = exp(-pow(my * 4.2, 2.0));            // tight bright core of the band
+  float lanes = mix(0.4, 1.0, clamp(detail * 1.3, 0.0, 1.0)); // dark dust lanes from the noise
+  vec3 mwTint = mix(vec3(0.62, 0.66, 0.78), uColorC, 0.18);    // warm-grey, a hint of the core colour
+  col += mwTint * mw * lanes * uMilkyWay;
+
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -75,6 +88,8 @@ export function createNebula() {
     uPulse: { value: 0 },
     uBrightness: { value: 0.1 }, // ~10% overall — keep the backdrop subtle
     uSaturation: { value: 0.32 }, // greyer still — the blue was too rich
+    uMilkyWay: { value: 0.12 }, // tilted galactic band brightness (sits above the dimmed nebula)
+    uMwTilt: { value: 0.6 }, // ~34° tilt so the band crosses the sky diagonally
     uColorA: { value: new THREE.Color(0x04050f) }, // deep blue-black base
     uColorB: { value: new THREE.Color(0x223080) }, // blue clouds (dominant)
     uColorC: { value: new THREE.Color(0xd8401f) }, // red hot cores (accent touches)

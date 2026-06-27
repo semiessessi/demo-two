@@ -79,10 +79,10 @@ export function createHud(damage, opts = {}) {
     lx.clearRect(0, 0, SIZE, SIZE);
     const c = SIZE / 2;
     // grid
-    lx.strokeStyle = 'rgba(120,160,255,0.18)';
+    lx.strokeStyle = 'rgba(120,160,255,0.14)';
     lx.lineWidth = 1;
-    for (let i = 1; i < 4; i++) {
-      const o = (SIZE / 4) * i;
+    for (let i = 1; i < 8; i++) {
+      const o = (SIZE / 8) * i;
       lx.beginPath(); lx.moveTo(o, 0); lx.lineTo(o, SIZE); lx.moveTo(0, o); lx.lineTo(SIZE, o); lx.stroke();
     }
     lx.strokeStyle = 'rgba(120,160,255,0.35)';
