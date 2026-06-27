@@ -188,7 +188,7 @@ async function init() {
   chigKit = await loadChig();
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
   waves = createWaveManager(enemyMgr);
-  vfx = createVfx(scene);
+  vfx = createVfx(scene, camera);
   combat = createCombat(projectiles, enemyMgr, vfx, {
     getPlayerPos: () => ship.pivot.position,
     playerHitRadius: ship.radius * 0.85,
@@ -203,7 +203,7 @@ async function init() {
 
   if (DEBUG) {
     // debug handle + live-tuning GUI — local dev only, never on the deployed site
-    window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves, damage, cannon, gameState, targetDisplay };
+    window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves, damage, cannon, gameState, targetDisplay, vfx };
     debug = createDebug({
       renderer, scene, camera, render, bloom,
       ship, chigKit, flight, thrusters,
@@ -441,6 +441,21 @@ function buildTweakGui() {
   sf.add(nebula.uniforms.uMilkyWay, 'value', 0, 0.4, 0.01).name('milky way');
   sf.add(nebula.uniforms.uMwTilt, 'value', -1.6, 1.6, 0.02).name('mw tilt');
   sf.close();
+
+  // VFX — trigger + tune the volumetric explosions/smoke
+  const vf = gui.addFolder('VFX');
+  const vfxTest = {
+    explode: () => vfx.explosion(ship.pivot.position, 1.4),
+    smoke: () => vfx.smoke(ship.pivot.position),
+  };
+  vf.add(vfxTest, 'explode').name('explosion at ship');
+  vf.add(vfxTest, 'smoke').name('smoke puff at ship');
+  if (vfx._vol) {
+    vf.add(vfx._vol.tunable, 'explSteps', 8, 64, 1).name('expl steps');
+    vf.add(vfx._vol.tunable, 'puffSteps', 8, 48, 1).name('puff steps');
+    vf.add(vfx._vol.tunable, 'densityMul', 0.2, 3, 0.05).name('density');
+  }
+  vf.close();
 }
 
 init().catch((e) => {
