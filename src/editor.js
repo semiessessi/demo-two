@@ -11,9 +11,18 @@ const KIND_COLOR = {
   cockpit: 0x66ccff, engine: 0xff8a3a, wing: 0x9f7dff, gun: 0xffe04a, fuel: 0xff4a4a, fuselage: 0x66ff8c,
 };
 
-export function createEditor(gui, { ship, damage, rcs }) {
+export function createEditor(gui, { scene, ship, damage, rcs }) {
   const pivot = ship.pivot;
   const sphereGeo = new THREE.SphereGeometry(1, 16, 12);
+
+  // Flat fill light so the hull is evenly lit for placing things (the shadowed sun makes it hard to
+  // judge surface positions). Off by default; toggle while editing.
+  if (scene) {
+    const amb = new THREE.AmbientLight(0xffffff, 2.2);
+    amb.visible = false;
+    scene.add(amb);
+    gui.add({ bright: false }, 'bright').name('bright (for placing)').onChange((v) => { amb.visible = v; });
+  }
 
   // ---- damage zone gizmos -----------------------------------------------------------------------
   const zoneGroup = new THREE.Group();
@@ -89,6 +98,7 @@ export function createEditor(gui, { ship, damage, rcs }) {
     if (rcs.jet) {
       pf.add(rcs.jet, 'radius', 0.02, 1, 0.01).name('jet radius ×');
       pf.add(rcs.jet, 'length', 0.1, 2, 0.05).name('jet length ×');
+      pf.add(rcs.jet, 'gain', 0.2, 8, 0.1).name('jet gain');
     }
     rcs.ports.forEach((p) => {
       const f = pf.addFolder(p.name);
@@ -101,13 +111,12 @@ export function createEditor(gui, { ship, damage, rcs }) {
       f.add(proxy, 'dx', -1, 1, 0.05).name('dir x').onChange(writeDir);
       f.add(proxy, 'dy', -1, 1, 0.05).name('dir y').onChange(writeDir);
       f.add(proxy, 'dz', -1, 1, 0.05).name('dir z').onChange(writeDir);
-      f.add(p, 'axis', ['pitch', 'yaw', 'roll']);
       f.close();
     });
     pf.add({
       log: () => {
         const lines = rcs.ports.map((p) =>
-          `  { name: '${p.name}', pos: [${p.pos.map((v) => +v.toFixed(2)).join(', ')}], dir: [${p.dir.map((v) => +v.toFixed(2)).join(', ')}], axis: '${p.axis}' },`);
+          `  { name: '${p.name}', pos: [${p.pos.map((v) => +v.toFixed(2)).join(', ')}], dir: [${p.dir.map((v) => +v.toFixed(2)).join(', ')}] },`);
         console.log('[rcs ports]\nexport const RCS_PORTS = [\n' + lines.join('\n') + '\n];');
       },
     }, 'log').name('log ports → console');

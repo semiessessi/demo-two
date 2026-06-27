@@ -34,6 +34,9 @@ const DEBUG =
   ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) ||
   /[?&]debug\b/.test(window.location.search);
 
+// Maneuvering-thruster (RCS) exhaust is WIP — only fire the jets when ?thrusters is in the URL.
+const THRUSTERS = /[?&]thrusters\b/.test(window.location.search);
+
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
 const { renderer, scene, camera, composer, bloom, render } = createRenderer(app);
@@ -285,7 +288,7 @@ function startLoop() {
 
     for (const m of ship.engineMaterials) m.emissiveIntensity = 1.8 + r.thrust * 3.2;
     thrusters.update(r.thrust, dt);
-    if (rcs) rcs.update(dt, flying ? input : null); // RCS jets fire on pitch/yaw/roll while flying
+    if (rcs && THRUSTERS) rcs.update(dt, flying); // WIP: jets only with ?thrusters; fire from actual rotation
 
     // keep the backdrop centred on the camera so it sits at infinity (no parallax)
     nebula.mesh.position.copy(camera.position);
@@ -442,6 +445,7 @@ function buildTweakGui() {
   ct.add(chigThruster, 'x', 0, 2, 0.02).name('base half-width').onChange(relayoutChig);
   ct.add(chigThruster, 'y', -1.5, 1, 0.02).name('offset Y').onChange(relayoutChig);
   ct.add(chigThruster, 'z', 0, 3, 0.02).name('offset Z').onChange(relayoutChig);
+  ct.add(chigThruster, 'topZ', -2, 2, 0.02).name('top extra Z').onChange(relayoutChig);
   ct.add(chigThruster, 'size', 0.05, 1.5, 0.01).name('glow size').onChange(relayoutChig);
   const rimU = chigKit && chigKit.material && chigKit.material.userData.rimUniforms;
   if (rimU) {
@@ -509,7 +513,7 @@ function buildTweakGui() {
   vf.close();
 
   // Visual placement editor: see/adjust damage zones + RCS ports, log values to bake back into code.
-  createEditor(gui, { ship, damage, rcs });
+  createEditor(gui, { scene, ship, damage, rcs });
 }
 
 init().catch((e) => {

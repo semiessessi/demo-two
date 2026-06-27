@@ -13,7 +13,7 @@ const TARGET_RADIUS = 2.2; // a small, nimble fighter (Hammerhead is radius 5)
 // Live-tunable layout for the Chig's three rear thruster glows, arranged as an upward equilateral
 // triangle (apex/middle on top, two below). `x` is the half-base width; the triangle height is
 // derived. Tune in the "Chig Thrusters" GUI folder, then bake the values here.
-export const chigThruster = { x: 0.46, y: -0.4, z: 0.52, size: 0.32 };
+export const chigThruster = { x: 0.46, y: -0.4, z: 0.52, size: 0.32, topZ: 0.25 }; // topZ: extra Z on the apex glow
 
 // Fresnel rim params (tunable): a faint cyan-white edge that catches the dark hull's silhouette so
 // the Chigs read against space without losing their near-black panelled look.
@@ -27,7 +27,7 @@ export function layoutChigGlows(obj, p = chigThruster) {
   });
   const h = Math.sqrt(3) * p.x; // equilateral height
   const slots = [
-    [0, p.y + h, p.z], // top / middle (apex)
+    [0, p.y + h, p.z + (p.topZ || 0)], // top / middle (apex) — extra Z offset
     [-p.x, p.y, p.z], // bottom-left
     [p.x, p.y, p.z], // bottom-right
   ];
