@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import GUI from 'lil-gui';
 import { createRenderer } from './renderer.js';
 import { createLighting } from './lighting.js';
+import { createQuality } from './quality.js';
 import { createNebula } from './nebula.js';
 import { buildStarfield } from './starfield.js';
 import { loadShip } from './ship.js';
@@ -154,6 +155,7 @@ let chigKit = null;
 let enemyMgr = null;
 let waves = null;
 let debug = null;
+let quality = null;
 
 // Re-arm a fresh fight after a mission ends (called by gameState.restart()).
 function restartWorld() {
@@ -201,6 +203,7 @@ async function init() {
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
   waves = createWaveManager(enemyMgr);
   vfx = createVfx(scene, camera);
+  quality = createQuality({ lighting, vfx }); // FPS-driven tier ladder: CSM res, shadow-light budget, smoke, vfx
   combat = createCombat(projectiles, enemyMgr, vfx, {
     getPlayerPos: () => ship.pivot.position,
     playerHitRadius: ship.radius * 0.85,
@@ -293,7 +296,8 @@ function startLoop() {
     render();
 
     fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
-    if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps\n${(res.speed | 0)} u/s`;
+    quality.update(dt, fps); // auto-scale shadow/VFX tier to the framerate (rate-limited)
+    if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps\n${(res.speed | 0)} u/s\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
   });
 }
 
@@ -401,6 +405,14 @@ function buildTweakGui() {
   elf.add(el, 'idle', 0, 40, 0.5).name('idle intensity');
   elf.addColor(el, 'color').name('color').onChange(() => lighting.setThrusterParams({}));
   elf.close();
+
+  // Shadows / quality — the FPS-driven tier (0=all shadows off .. 5=ultra) with a manual override.
+  const qf = gui.addFolder('Shadows / Quality');
+  const qParams = { auto: true, tier: quality.tier };
+  qf.add(qParams, 'auto').name('auto-scale (FPS)').onChange((v) => { if (v) quality.setAuto(); });
+  qf.add(qParams, 'tier', 0, quality.tierCount - 1, 1).name('tier (manual)').onChange((v) => { qParams.auto = false; quality.setTier(v); });
+  qf.add(lighting.transientParams, 'intensity', 0, 400, 5).name('transient light');
+  qf.close();
 
   const tp = thrusters.params;
   const relayout = () => thrusters.setParams({});

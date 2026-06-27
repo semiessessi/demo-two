@@ -199,6 +199,115 @@ export function createLighting(scene, camera, renderer, opts = {}) {
     m.life = MUZZLE_LIFE;
   }
 
+  // --- transient shadow spotlights (proximity: shots / engines that get close to a ship) -----------
+  // A small pool of shadow-capable SpotLights re-aimed each frame at the highest-priority emitter->ship
+  // pairs: a passing bolt, the player's engine on an enemy's tail, or (strongly preferred) an enemy
+  // engine on the Hammerhead's tail. Each both LIGHTS and SHADOWS the receiving ship. How many actually
+  // cast = the tier budget (set by quality.js); within a tier we only move/redirect them (no recompile,
+  // because the lights stay visible — three.js recounts only VISIBLE lights, so we never toggle that).
+  const MAX_TRANSIENT = 3;
+  const HAMMERHEAD_BOOST = 4; // strongly prefer lighting/shadowing the player
+  const transientParams = { range: 70, angle: 0.7, penumbra: 0.6, intensity: 150, maxDist: 48 };
+  const transient = [];
+  for (let i = 0; i < MAX_TRANSIENT; i++) {
+    const spot = new THREE.SpotLight(0xffffff, 0, transientParams.range, transientParams.angle, transientParams.penumbra, 2);
+    spot.castShadow = false; // raised to the tier budget by setTransientBudget (one recompile per change)
+    spot.shadow.mapSize.set(1024, 1024);
+    spot.shadow.bias = -0.0004;
+    spot.shadow.normalBias = 0.4;
+    spot.shadow.camera.near = 0.4;
+    spot.shadow.camera.far = transientParams.range;
+    spot.position.set(0, -1e6, 0); // parked far away until assigned
+    const tgt = new THREE.Object3D();
+    scene.add(tgt);
+    spot.target = tgt;
+    scene.add(spot);
+    transient.push({ spot, tgt });
+  }
+  let transientBudget = 0;
+  function setTransientBudget(n) {
+    transientBudget = THREE.MathUtils.clamp(n | 0, 0, MAX_TRANSIENT);
+    for (let i = 0; i < transient.length; i++) {
+      const want = i < transientBudget;
+      if (transient[i].spot.castShadow !== want) transient[i].spot.castShadow = want; // recompile only on change
+    }
+  }
+
+  // reused candidate buffer (no per-frame allocation)
+  const CAND_MAX = 192;
+  const candPool = [];
+  for (let i = 0; i < CAND_MAX; i++) candPool.push({ px: 0, py: 0, pz: 0, tx: 0, ty: 0, tz: 0, cr: 1, cg: 1, cb: 1, score: 0, dist: 0, bright: 0 });
+  let candN = 0;
+  const _wp = new THREE.Vector3();
+
+  function addCandidate(px, py, pz, cr, cg, cb, bright, owner, ctx) {
+    const player = ctx.player;
+    const enemies = ctx.enemies || [];
+    let bestD2 = Infinity, bestIsP = false, bx = 0, by = 0, bz = 0, found = false;
+    if (owner !== 'player') {
+      const dx = player.pos.x - px, dy = player.pos.y - py, dz = player.pos.z - pz;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < bestD2) { bestD2 = d2; bestIsP = true; bx = player.pos.x; by = player.pos.y; bz = player.pos.z; found = true; }
+    }
+    for (const e of enemies) {
+      if (!e.alive || e === owner) continue;
+      const dx = e.pos.x - px, dy = e.pos.y - py, dz = e.pos.z - pz;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < bestD2) { bestD2 = d2; bestIsP = false; bx = e.pos.x; by = e.pos.y; bz = e.pos.z; found = true; }
+    }
+    if (!found) return;
+    const dist = Math.sqrt(bestD2);
+    if (dist > transientParams.maxDist) return;
+    const score = (bright / Math.max(bestD2, 1)) * (bestIsP ? HAMMERHEAD_BOOST : 1);
+    if (score <= 1e-5 || candN >= CAND_MAX) return;
+    const c = candPool[candN++];
+    c.px = px; c.py = py; c.pz = pz; c.tx = bx; c.ty = by; c.tz = bz;
+    c.cr = cr; c.cg = cg; c.cb = cb; c.score = score; c.dist = dist; c.bright = bright;
+  }
+
+  function assignTransient(ctx) {
+    for (const t of transient) t.spot.intensity = 0; // park all
+    if (transientBudget === 0 || !ctx || !ctx.player) return;
+    candN = 0;
+    const enemies = ctx.enemies || [];
+    // A) player engines (real nozzle world positions), only while thrusting -> shadow an enemy on the tail
+    if (thrust01 > 0.02) {
+      for (const pl of thrusterLights) {
+        pl.getWorldPosition(_wp);
+        addCandidate(_wp.x, _wp.y, _wp.z, 0.40, 0.75, 1.0, thrust01, 'player', ctx);
+      }
+    }
+    // B) enemy engines (always thrusting) -> shadow the Hammerhead (boosted) or another enemy
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      addCandidate(e.pos.x, e.pos.y, e.pos.z, 0.70, 0.55, 1.0, 1.0, e, ctx);
+    }
+    // C) live bolts whizzing past a ship
+    const projs = ctx.projectiles;
+    if (projs && projs.live) {
+      for (const b of projs.live) addCandidate(b.pos.x, b.pos.y, b.pos.z, 1.0, 0.95, 0.85, 1.0, null, ctx);
+    }
+    // assign the top `transientBudget` by score to the (shadow-casting) spotlights
+    const k = Math.min(transientBudget, candN);
+    for (let slot = 0; slot < k; slot++) {
+      let mi = -1, ms = -Infinity;
+      for (let i = 0; i < candN; i++) if (candPool[i].score > ms) { ms = candPool[i].score; mi = i; }
+      if (mi < 0) break;
+      const c = candPool[mi];
+      c.score = -Infinity; // consume
+      const t = transient[slot];
+      t.spot.position.set(c.px, c.py, c.pz);
+      t.tgt.position.set(c.tx, c.ty, c.tz);
+      t.tgt.updateMatrixWorld();
+      t.spot.color.setRGB(c.cr, c.cg, c.cb);
+      const d = Math.max(transientParams.range, c.dist * 1.6);
+      t.spot.distance = d;
+      t.spot.shadow.camera.far = d;
+      t.spot.shadow.camera.updateProjectionMatrix();
+      t.spot.intensity = transientParams.intensity * Math.min(1, c.bright);
+    }
+  }
+
   // --- per-frame -----------------------------------------------------------------------------------
 
   function update(dt, ctx) {
@@ -219,6 +328,9 @@ export function createLighting(scene, camera, renderer, opts = {}) {
         m.light.intensity = 0;
       }
     }
+
+    // proximity light+shadow: re-aim the transient spotlights at the closest emitter->ship pairs
+    assignTransient(ctx);
   }
 
   function onResize() {
@@ -242,6 +354,7 @@ export function createLighting(scene, camera, renderer, opts = {}) {
   function setActive(on) {
     for (const pl of thrusterLights) pl.visible = on; // engine lights belong to the flight scene only
     for (const m of muzzlePool) { m.light.visible = on; if (!on) { m.life = 0; m.light.intensity = 0; } }
+    if (!on) for (const t of transient) t.spot.intensity = 0; // park transient lights in the viewer
     if (!on) {
       if (suspended) return;
       suspended = true;
@@ -270,6 +383,11 @@ export function createLighting(scene, camera, renderer, opts = {}) {
     thrusterParams,
     muzzleFlash,
     muzzleParams,
+    setTransientBudget,
+    transientParams,
+    get transientBudget() {
+      return transientBudget;
+    },
     setActive,
     get csm() {
       return csm;
