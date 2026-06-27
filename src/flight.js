@@ -30,8 +30,7 @@ const TUNE = {
   orbitSpring: 6.0, // how fast the orbit springs back when released
 };
 
-export function createFlight(ship, camera, domElement) {
-  const keys = new Set();
+export function createFlight(ship, camera, domElement, input) {
   let enabled = true;
   let camDist = TUNE.camDist;
   let heightRatio = TUNE.heightRatio;
@@ -47,12 +46,6 @@ export function createFlight(ship, camera, domElement) {
   let orbitPitch = 0;
   let dragging = false;
 
-  const isFormEl = (t) => t && (t.tagName === 'INPUT' || t.tagName === 'BUTTON' || t.tagName === 'TEXTAREA');
-  const onKeyDown = (e) => {
-    if (isFormEl(e.target)) return;
-    keys.add(e.code);
-  };
-  const onKeyUp = (e) => keys.delete(e.code);
   const onWheel = (e) => {
     e.preventDefault();
     camDist = THREE.MathUtils.clamp(camDist + e.deltaY * 0.02, TUNE.minDist, TUNE.maxDist);
@@ -74,8 +67,6 @@ export function createFlight(ship, camera, domElement) {
   const onAux = (e) => {
     if (e.button === 1) e.preventDefault();
   };
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
   domElement.addEventListener('wheel', onWheel, { passive: false });
   domElement.addEventListener('mousedown', onMouseDown);
   domElement.addEventListener('auxclick', onAux);
@@ -96,10 +87,6 @@ export function createFlight(ship, camera, domElement) {
   const camUp = new THREE.Vector3(0, 1, 0);
   placeCameraBehind();
 
-  function axis(neg, pos) {
-    return (keys.has(neg) ? -1 : 0) + (keys.has(pos) ? 1 : 0);
-  }
-
   function update(dt) {
     dt = Math.min(dt, 0.05);
     if (!enabled) {
@@ -107,9 +94,10 @@ export function createFlight(ship, camera, domElement) {
       return { throttle, speed };
     }
 
-    const pitchIn = axis('KeyW', 'KeyS') + axis('ArrowUp', 'ArrowDown'); // W / Up = nose down
-    const yawIn = axis('KeyD', 'KeyA') + axis('ArrowRight', 'ArrowLeft'); // A / Left = yaw left
-    const rollIn = axis('KeyE', 'KeyQ'); // Q = roll left
+    // pitch/yaw/roll come from the shared input layer (keyboard + gamepad), same sign convention
+    const pitchIn = input.pitch; // -1 = nose down (W / stick forward)
+    const yawIn = input.yaw; // +1 = yaw left (A / stick left)
+    const rollIn = input.roll; // +1 = roll left (Q / LB)
 
     const tPitch = pitchIn * TUNE.pitchRate;
     const tYaw = yawIn * TUNE.yawRate;
@@ -125,8 +113,8 @@ export function createFlight(ship, camera, domElement) {
     ship.quaternion.multiply(dq);
     ship.quaternion.normalize();
 
-    const boosting = keys.has('ShiftLeft') || keys.has('ShiftRight');
-    const braking = keys.has('ControlLeft') || keys.has('ControlRight');
+    const boosting = input.boost;
+    const braking = input.brake;
     const target = braking ? TUNE.brakeSpeed : boosting ? TUNE.boostSpeed : TUNE.baseSpeed;
     speed += (target - speed) * (1 - Math.exp(-TUNE.accel * dt));
     throttle = THREE.MathUtils.clamp((speed - TUNE.brakeSpeed) / (TUNE.boostSpeed - TUNE.brakeSpeed), 0, 1);
@@ -181,8 +169,6 @@ export function createFlight(ship, camera, domElement) {
   }
 
   function dispose() {
-    window.removeEventListener('keydown', onKeyDown);
-    window.removeEventListener('keyup', onKeyUp);
     domElement.removeEventListener('wheel', onWheel);
     domElement.removeEventListener('mousedown', onMouseDown);
     domElement.removeEventListener('auxclick', onAux);

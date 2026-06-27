@@ -9,6 +9,9 @@ import { createThrusters } from './thruster.js';
 import { createFlight } from './flight.js';
 import { createAudioManager } from './audio.js';
 import { createReactive } from './reactive.js';
+import { createInput } from './input.js';
+import { createProjectiles } from './projectiles.js';
+import { createPlayerCannon } from './weapons.js';
 
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
@@ -83,6 +86,13 @@ const starUniforms = {
 
 const reactive = createReactive();
 const audio = createAudioManager();
+const input = createInput();
+
+// combat systems (created once the ship is loaded)
+let projectiles = null;
+let cannon = null;
+const playerVel = new THREE.Vector3();
+const playerFwd = new THREE.Vector3();
 
 let ship = null;
 let thrusters = null;
@@ -122,7 +132,10 @@ async function init() {
   ship = await loadShip();
   scene.add(ship.pivot);
   thrusters = createThrusters(ship.pivot, ship.nozzles, ship.rearDir, ship.radius);
-  flight = createFlight(ship.pivot, camera, renderer.domElement);
+  flight = createFlight(ship.pivot, camera, renderer.domElement, input);
+
+  projectiles = createProjectiles(scene);
+  cannon = createPlayerCannon(scene, ship, projectiles);
 
   // TEMP: one Chig flying alongside so the new look is visible until enemies.js lands (phase 3).
   chigKit = await loadChig();
@@ -146,7 +159,16 @@ function startLoop() {
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
 
+    input.poll(); // keyboard + gamepad -> shared signals (read by flight + cannon)
     const res = flight.update(dt);
+
+    // player transform for the combat systems
+    playerFwd.set(0, 0, -1).applyQuaternion(ship.pivot.quaternion);
+    playerVel.copy(playerFwd).multiplyScalar(res.speed);
+    const player = { pos: ship.pivot.position, quat: ship.pivot.quaternion, vel: playerVel };
+    cannon.update(dt, input, player);
+    projectiles.update(dt);
+
     const amp = audio.getAmplitude();
     const bands = audio.getBands();
     const r = reactive.update(
