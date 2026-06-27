@@ -19,6 +19,7 @@ import { createCombat } from './combat.js';
 import { createDamageModel } from './damage.js';
 import { createHud } from './hud.js';
 import { createGameState } from './gameState.js';
+import { createDebug } from './debug.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin, never on the deployed site.
@@ -119,6 +120,7 @@ let stars = null;
 let chigKit = null;
 let enemyMgr = null;
 let waves = null;
+let debug = null;
 
 // Re-arm a fresh fight after a mission ends (called by gameState.restart()).
 function restartWorld() {
@@ -172,7 +174,14 @@ async function init() {
   if (DEBUG) {
     // debug handle + live-tuning GUI — local dev only, never on the deployed site
     window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves, damage, cannon, gameState };
+    debug = createDebug({
+      renderer, scene, camera, render, bloom,
+      ship, chigKit, flight, thrusters,
+      lights: { key, rim }, sun, sunGlow, nebula, stars,
+    });
+    window.__dbg.debug = debug;
     buildTweakGui();
+    setStats(true); // show the FPS counter by default in debug
   }
 
   startLoop();
@@ -186,6 +195,7 @@ let fps = 60;
 function startLoop() {
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
+    if (DEBUG && debug && debug.frame(dt)) return; // debug viewer modes own the frame
 
     input.poll(); // keyboard + gamepad -> shared signals (read by flight + cannon)
     const flying = gameState.mode === 'flying';
@@ -327,6 +337,7 @@ window.addEventListener('pagehide', () => flight?.dispose?.(), { once: true });
 // Live tuning panel (lil-gui): hand-align the two thrusters and tweak the chase camera.
 function buildTweakGui() {
   const gui = new GUI({ title: 'Tuning' });
+  debug?.attachGui(gui); // move panel top-left + add the View (mode-switch) folder
   const tp = thrusters.params;
   const relayout = () => thrusters.setParams({});
   const tf = gui.addFolder('Thrusters');
