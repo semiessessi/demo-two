@@ -19,14 +19,17 @@ const BTN = `${FONT}font-size:12px;cursor:pointer;padding:7px 12px;background:rg
   + 'border:1px solid rgba(150,180,255,0.22);border-radius:8px;transition:all 0.12s;';
 const BTN_ON = 'background:rgba(120,170,255,0.32);border-color:rgba(170,210,255,0.7);color:#fff;box-shadow:0 0 10px rgba(120,170,255,0.3);';
 
-// The six weapon mounts + what each may carry (visual loadout for now).
+// Weapon mounts: per wing = 1 fuel (inner) + 3 outer (inner/mid/tip). Outer mounts cycle through
+// missile-pair / lr-missile / empty; a long-range missile auto-implies the single targeting laser.
 const MOUNTS = [
-  { id: 'innerL', label: 'Inner ·L', opts: ['fuel', 'empty'] },
-  { id: 'innerR', label: 'Inner ·R', opts: ['fuel', 'empty'] },
-  { id: 'outerL', label: 'Outer ·L', opts: ['missile-pair', 'empty'] },
-  { id: 'outerR', label: 'Outer ·R', opts: ['missile-pair', 'empty'] },
-  { id: 'tipL', label: 'Tip ·L', opts: ['lr-missile', 'empty'] },
-  { id: 'tipR', label: 'Tip ·R', opts: ['lr-missile', 'empty'] },
+  { id: 'fuelL', label: 'L Fuel', opts: ['fuel', 'empty'] },
+  { id: 'L1', label: 'L Inner', opts: ['missile-pair', 'lr-missile', 'empty'] },
+  { id: 'L2', label: 'L Mid', opts: ['missile-pair', 'lr-missile', 'empty'] },
+  { id: 'L3', label: 'L Tip', opts: ['lr-missile', 'missile-pair', 'empty'] },
+  { id: 'fuelR', label: 'R Fuel', opts: ['fuel', 'empty'] },
+  { id: 'R1', label: 'R Inner', opts: ['missile-pair', 'lr-missile', 'empty'] },
+  { id: 'R2', label: 'R Mid', opts: ['missile-pair', 'lr-missile', 'empty'] },
+  { id: 'R3', label: 'R Tip', opts: ['lr-missile', 'missile-pair', 'empty'] },
 ];
 const ORD_LABEL = { fuel: 'Fuel tank', 'missile-pair': 'Missile pair', 'lr-missile': 'LR missile', empty: 'Empty' };
 

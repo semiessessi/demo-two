@@ -1,15 +1,19 @@
 // Pre-game ("AI Skirmish") settings: ship customisation + loadout + difficulty + environment.
 // Persisted to localStorage, loaded on boot, applied on Launch. Pure data — no DOM, no THREE.
 
-const KEY = 'd2.skirmish.v1';
+const KEY = 'd2.skirmish.v2'; // v2: renamed environments + new 8-point weapon-mount layout
 
 export const DEFAULTS = {
   difficulty: 'veteran', // recruit | veteran | ace
   environment: 'groombridge34', // key into ENVIRONMENT
   skin: 'default', // key into a skins registry (livery.js)
   livery: { color: '#7a8694', callsign: 'VANSEN', squadron: 'WILDCARDS' },
-  // weapon mounts (visual loadout): inner -> fuel, outer -> missile pair, tip -> long-range missile
-  loadout: { innerL: 'fuel', innerR: 'fuel', outerL: 'missile-pair', outerR: 'missile-pair', tipL: 'lr-missile', tipR: 'lr-missile' },
+  // Weapon mounts: per wing = 1 fuel (inner) + 3 outer (inner/mid/tip). Outer mounts choose
+  // missile-pair | lr-missile | empty; a long-range missile auto-implies the (single) targeting laser.
+  loadout: {
+    fuelL: 'fuel', L1: 'missile-pair', L2: 'missile-pair', L3: 'lr-missile',
+    fuelR: 'fuel', R1: 'missile-pair', R2: 'missile-pair', R3: 'lr-missile',
+  },
 };
 
 // Difficulty presets -> drive the existing data knobs in waves.js + enemies.js (params).
