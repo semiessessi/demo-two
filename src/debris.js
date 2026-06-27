@@ -28,7 +28,7 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
   // fragment materials: reuse the chig look (no vertex colors on fragments) + a dark torn interior
   const hullMat = chigMaterial ? chigMaterial.clone() : new THREE.MeshStandardMaterial({ color: 0x3a423c, metalness: 0.45, roughness: 0.45, flatShading: true, side: THREE.DoubleSide });
   hullMat.vertexColors = false;
-  const interiorMat = new THREE.MeshStandardMaterial({ color: 0x1d1916, metalness: 0.6, roughness: 0.6, flatShading: true, side: THREE.DoubleSide });
+  const interiorMat = new THREE.MeshStandardMaterial({ color: 0x1d1916, emissive: 0xff5a1e, emissiveIntensity: 0, metalness: 0.6, roughness: 0.6, flatShading: true, side: THREE.DoubleSide });
   const mats = [hullMat, interiorMat];
 
   const variations = []; // each: [{ geometry, centroid:Vector3 }]
@@ -64,6 +64,7 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
   const _pos = new THREE.Vector3();
   const _n = new THREE.Vector3();
   let quality = 'high';
+  let heat = 0; // fresh cut faces glow hot then cool (shared across recent debris; cheap)
   const CULL2 = 520 * 520; // cull a chunk once it's this far from the player
   const RESTITUTION = 0.6; // bounce energy kept (non-damaging collisions)
   const FRAG_R = 1.1; // approximate chunk collision radius
@@ -96,6 +97,7 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
     if (!variations.length || quality === 'low') return false;
     const roots = variations[(Math.random() * variations.length) | 0];
     const q = e.obj.quaternion;
+    heat = 1; // re-heat the torn interior faces for fresh chunks
     const stack = roots.slice();
     while (stack.length) {
       if (movers.length >= cap) break;
@@ -124,6 +126,7 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
 
   // player: { pos, radius, vel }; enemies: live ships to bounce off (non-damaging).
   function update(dt, player, enemies) {
+    if (heat > 0) { heat = Math.max(0, heat - dt / 2.0); interiorMat.emissiveIntensity = heat * 0.8; } // cool over ~2s
     for (let i = movers.length - 1; i >= 0; i--) {
       const m = movers[i];
       m.life -= dt;
