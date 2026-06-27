@@ -17,11 +17,11 @@ export const DEFAULTS = {
   surfaceBias: 0.55, // fraction of seeds sampled on the hull surface (pushed inward) -> shell plates
   inset: 0.25,
   voidCount: 3,
-  voidSize: 0.5,
+  voidSize: 0.3,
   voidType: 'mix', // 'box' | 'tetra' | 'mix'
-  twist: 0,
-  skew: 0,
-  warp: 0,
+  twist: 0.08, // subtle (0..0.3, skewed low) — a nice default variation
+  skew: 0.06,
+  warp: 0.12,
   warpFreq: 1.5,
   kNeighbors: 12,
   minCellVolume: 1e-4,
