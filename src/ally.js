@@ -12,6 +12,9 @@ const FWD = new THREE.Vector3(0, 0, -1);
 const UP = new THREE.Vector3(0, 1, 0);
 const ZAX = new THREE.Vector3(0, 0, 1);
 
+const HEAL_DELAY = 1.5; // attract auto-repair: seconds without a hit before a ship starts mending
+const HEAL_RATE = 0.3; // fraction of max HP mended per second (so lulls clear the smoke)
+
 const DEFAULT_TUNE = {
   speed: 40, // between Hammerhead cruise (26) and boost (70)
   turnRate: 0.85, // lazy, heavy arcs (< Chig 1.4)
@@ -47,6 +50,7 @@ export function createAlly(scene, opts) {
   } = opts;
   const T = Object.assign({}, DEFAULT_TUNE, opts.tune || {});
   const damageModel = opts.damageModel || createDamageModel({ pivot });
+  let healWait = 0; // attract auto-repair countdown (reset on every hit)
 
   // live refs into the pivot transform + per-instance scratch (NEVER share vectors across allies — see the
   // aliasing bug noted in debris.js).
@@ -167,7 +171,17 @@ export function createAlly(scene, opts) {
 
     if (thrusters) thrusters.update(0.85, dt);
     for (const m of engineMaterials) m.emissiveIntensity = 1.8 + 0.85 * 3.2;
-    damageModel.update(dt, vfx); // per-zone smoke/embers when hurt
+    // ATTRACT auto-repair: slowly mend damaged zones during lulls so the smoke isn't perpetual (and blown
+    // canards/wings regrow). Every hit resets the timer, so a ship under sustained fire keeps smoking.
+    if (!mortal) {
+      healWait -= dt;
+      if (healWait <= 0) for (const z of damageModel.zones) {
+        if (z.hp >= z.maxHp) continue;
+        z.hp = Math.min(z.maxHp, z.hp + z.maxHp * HEAL_RATE * dt);
+        if (!z.alive && z.hp >= z.maxHp * 0.5) { z.alive = true; if (z.node) z.node.visible = true; } // regrow a blown part
+      }
+    }
+    damageModel.update(dt, vfx); // per-zone smoke/embers (auto-stops once a zone heals back above the smoke threshold)
   }
 
   // lerp velocity toward (st - pos) at `turn`, then advance (mirrors enemies.steer)
@@ -190,6 +204,7 @@ export function createAlly(scene, opts) {
 
   function applyHit(worldPoint, dmg, fromPoint) {
     if (!ally.alive) return null;
+    healWait = HEAL_DELAY; // took a hit -> hold off the auto-repair
     const zone = damageModel.applyHit(worldPoint, dmg, fromPoint);
     const lethal = (z) => z && (z.kind === 'cockpit' || z.kind === 'fuselage' || z.kind === 'fuel');
     if (!mortal) {
