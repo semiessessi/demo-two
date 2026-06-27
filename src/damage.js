@@ -40,10 +40,18 @@ export function createDamageModel(ship, opts = {}) {
   addCanard('L Canard', /^L_Canard$/i, -1, new THREE.Vector3(-0.86, -0.12, -2.90), new THREE.Vector3(0.30, 0.15, 0.30));
   addCanard('R Canard', /^R_Canard$/i, 1, new THREE.Vector3(0.86, -0.12, -2.90), new THREE.Vector3(0.30, 0.15, 0.30));
 
+  // Wings (the aileron surfaces): lose EITHER one and the ship tumbles out of control — the only out is
+  // to eject. The node is the L_Aileron / R_Aileron group, blown off + cloned to debris on loss.
+  for (const z of zones) {
+    if (z.name === 'L Wing') z.node = findNode(/^L_Aileron$/i);
+    else if (z.name === 'R Wing') z.node = findNode(/^R_Aileron$/i);
+  }
+
   let onEject = opts.onEject || null;
   let onDestroyed = opts.onDestroyed || null;
   let onFuelRupture = opts.onFuelRupture || null;
   let onCanardLost = opts.onCanardLost || null;
+  let onWingLost = opts.onWingLost || null;
   const localPt = new THREE.Vector3();
   const segB = new THREE.Vector3();
   const _segAB = new THREE.Vector3(), _segAC = new THREE.Vector3(), _segCl = new THREE.Vector3();
@@ -113,6 +121,7 @@ export function createDamageModel(ship, opts = {}) {
       else if (best.kind === 'fuselage' && onDestroyed) onDestroyed();
       else if (best.kind === 'fuel' && onFuelRupture) onFuelRupture(best); // tank rupture is catastrophic
       else if (best.kind === 'canard') { if (best.node) best.node.visible = false; if (onCanardLost) onCanardLost(best, best.node, worldPoint); }
+      else if (best.kind === 'wing') { if (best.node) best.node.visible = false; if (onWingLost) onWingLost(best, best.node, worldPoint); } // wing torn off -> tumble + eject
       // gun: no callback — canFire() reads its zone state and disables the cannon
     }
     return best;
@@ -227,6 +236,7 @@ export function createDamageModel(ship, opts = {}) {
       if (c.onDestroyed) onDestroyed = c.onDestroyed;
       if (c.onFuelRupture) onFuelRupture = c.onFuelRupture;
       if (c.onCanardLost) onCanardLost = c.onCanardLost;
+      if (c.onWingLost) onWingLost = c.onWingLost;
     },
   };
 }

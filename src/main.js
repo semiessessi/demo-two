@@ -252,6 +252,19 @@ async function init() {
       vfx.firework(pt, 0.5);
       vfx.spark(pt, 0xcfe8ff);
     },
+    onWingLost: (zone, node, pt) => {
+      // tear the wing off as tumbling debris (bigger kick than a canard) + a meaty burst, then the ship
+      // snaps into an uncontrollable tumble — the only out is to eject.
+      const sign = zone.center.x < 0 ? -1 : 1;
+      const out = new THREE.Vector3(sign, 0, 0).applyQuaternion(ship.pivot.quaternion);
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(ship.pivot.quaternion);
+      const vel = playerVel.clone().addScaledVector(out, 18).addScaledVector(up, 6);
+      const angVel = new THREE.Vector3((Math.random() * 2 - 1) * 9, (Math.random() * 2 - 1) * 9, (Math.random() * 2 - 1) * 9);
+      vfx.spawnDebris(node, { vel, angVel, life: 2.6 });
+      vfx.firework(pt, 0.8);
+      vfx.spark(pt, 0xffd27a);
+      gameState.tumble('WING TORN OFF — EJECTED');
+    },
   });
 
   if (DEBUG) {
