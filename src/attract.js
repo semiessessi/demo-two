@@ -58,27 +58,42 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
   // --- Chig waves (12, looping) --------------------------------------------
   let difficulty = 0.4;
   let respawnTimer = 0;
-  function spawnWave() {
+  const spawnQueue = [];
+  let spawnTimer = 0;
+  function spawnOneFormation(i, c) {
+    const ang = (i / 3) * Math.PI * 2 + 0.4;
+    const dir = new THREE.Vector3(Math.cos(ang), (Math.random() - 0.5) * 0.3, Math.sin(ang)).normalize();
+    const pos = c.clone().addScaledVector(dir, 410);
+    const heading = c.clone().sub(pos).normalize();
+    enemyMgr.spawnFormation({ pattern: 'vee', count: 4, pos, heading, difficulty });
+    vfx.firework(pos, 1.0); // warp-in flash
+  }
+  // Stagger the 12 Chigs across a few frames: cloning all 12 meshes (+ 3 fireworks) in one frame was the
+  // hitch. The first wave spawns immediately (during the fade-in, before the shader pre-warm).
+  function spawnWave(stagger) {
     updateFocus();
-    const c = focus.pos;
-    for (let i = 0; i < 3; i++) {
-      const ang = (i / 3) * Math.PI * 2 + 0.4;
-      const dir = new THREE.Vector3(Math.cos(ang), (Math.random() - 0.5) * 0.3, Math.sin(ang)).normalize();
-      const pos = c.clone().addScaledVector(dir, 410);
-      const heading = c.clone().sub(pos).normalize();
-      enemyMgr.spawnFormation({ pattern: 'vee', count: 4, pos, heading, difficulty });
-      vfx.firework(pos, 1.0); // warp-in flash
-    }
+    const c = focus.pos.clone();
+    if (stagger) { for (let i = 0; i < 3; i++) spawnQueue.push({ i, c }); spawnTimer = 0; }
+    else for (let i = 0; i < 3; i++) spawnOneFormation(i, c);
+  }
+  function processSpawnQueue(dt) {
+    if (!spawnQueue.length) return;
+    spawnTimer -= dt;
+    if (spawnTimer > 0) return;
+    spawnTimer = 0.5; // one 4-ship formation every ~0.5s
+    const it = spawnQueue.shift();
+    spawnOneFormation(it.i, it.c);
   }
   function maybeRespawn(dt) {
-    if (enemyMgr.count() > 0) { respawnTimer = 0; return; }
+    processSpawnQueue(dt);
+    if (enemyMgr.count() > 0 || spawnQueue.length) { respawnTimer = 0; return; }
     respawnTimer += dt;
     if (respawnTimer >= 2.0) { // let the last death animate
       respawnTimer = 0;
       for (const a of allies) a.patch(); // top the allies back up (revives a downed one)
       downAlly = false;
       difficulty = Math.min(1, difficulty + 0.03); // gentle escalation per loop
-      spawnWave();
+      spawnWave(true); // staggered respawn -> no 12-clone spike
     }
   }
 
@@ -96,59 +111,75 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     }
   }
 
-  // --- auto-cutting cinematic camera ---------------------------------------
-  const SHOTS = ['chase', 'orbit', 'duel'];
-  let shot = 'orbit', shotT = 0, shotDur = 5, subjectIdx = 0, orbitAng = 0, snap = true;
+  // --- cinematic camera -----------------------------------------------------
+  // Always frames real ships / the furball (never empty space), smooth-pans between framings (no hard
+  // cuts -> no jerks), and smooths the look point so a fast-moving / switching target never whips the
+  // camera. Stays close to the action; re-frames every ~6-10s.
+  let shot = 'orbit', shotT = 0, shotDur = 7, subject = null, orbitAng = 0, camInit = false;
   const _pos = new THREE.Vector3(), _tgt = new THREE.Vector3(), _up = new THREE.Vector3();
-  const _f = new THREE.Vector3(), _side = new THREE.Vector3(), _mid = new THREE.Vector3();
+  const _f = new THREE.Vector3(), _side = new THREE.Vector3(), _mid = new THREE.Vector3(), _bc = new THREE.Vector3();
+  const camLook = new THREE.Vector3();
 
-  function aliveAlly(i) { return (allies[i] && allies[i].alive) ? allies[i] : allies.find((a) => a.alive) || allies[0]; }
+  // centre of the whole furball (alive allies + alive Chigs) — what "the action" actually is.
+  function battleCenter(out) {
+    out.set(0, 0, 0);
+    let n = 0;
+    for (const a of allies) if (a.alive) { out.add(a.pos); n++; }
+    for (const e of enemyMgr.enemies) if (e.alive) { out.add(e.pos); n++; }
+    if (n) out.multiplyScalar(1 / n); else out.copy(focus.pos);
+    return out;
+  }
+  // the ally most IN the action (closest to a live target) — never a bystander framing nothing.
+  function engagedAlly() {
+    let best = null, bd = Infinity;
+    for (const a of allies) {
+      if (!a.alive) continue;
+      if (!best) best = a;
+      if (a.target && a.target.alive) { const d = a.pos.distanceToSquared(a.target.pos); if (d < bd) { bd = d; best = a; } }
+    }
+    return best;
+  }
   function pickShot() {
-    let s = SHOTS[(Math.random() * SHOTS.length) | 0];
-    if (s === shot) s = SHOTS[(SHOTS.indexOf(s) + 1) % SHOTS.length];
-    shot = s; shotT = 0; shotDur = 4 + Math.random() * 3; snap = true;
-    subjectIdx = (Math.random() * allies.length) | 0;
+    const r = Math.random();
+    let s = r < 0.5 ? 'chase' : r < 0.82 ? 'duel' : 'orbit';
+    if (s === shot && s !== 'orbit') s = s === 'chase' ? 'duel' : 'chase';
+    shot = s; shotT = 0; shotDur = 6 + Math.random() * 4;
+    subject = engagedAlly();
     orbitAng = Math.random() * Math.PI * 2;
   }
-
   function updateCamera(dt) {
     shotT += dt;
-    if (shotT >= shotDur) pickShot();
+    if (shotT >= shotDur || (subject && !subject.alive)) pickShot();
+    const subj = subject && subject.alive ? subject : engagedAlly();
     _up.copy(UP);
-    if (shot === 'chase') {
-      const a = aliveAlly(subjectIdx);
-      _f.set(0, 0, -1).applyQuaternion(a.quat);
-      _up.set(0, 1, 0).applyQuaternion(a.quat);
-      _pos.copy(a.pos).addScaledVector(_f, -16).addScaledVector(_up, 6.7);
-      if (a.target && a.target.alive) _tgt.copy(a.target.pos); else _tgt.copy(a.pos).addScaledVector(_f, 26);
-    } else if (shot === 'duel') {
-      const a = aliveAlly(subjectIdx);
-      const b = a.target && a.target.alive ? a.target : null;
-      if (b) {
-        _mid.copy(a.pos).add(b.pos).multiplyScalar(0.5);
-        _side.copy(b.pos).sub(a.pos).normalize().cross(UP);
-        if (_side.lengthSq() < 1e-4) _side.set(1, 0, 0);
-        _side.normalize();
-        _pos.copy(_mid).addScaledVector(_side, 34).addScaledVector(UP, 6);
-        _tgt.copy(_mid);
-      } else {
-        _f.set(0, 0, -1).applyQuaternion(a.quat);
-        _pos.copy(a.pos).addScaledVector(_f, -18).addScaledVector(UP, 7);
-        _tgt.copy(a.pos);
-      }
-    } else { // orbit the furball
-      orbitAng += dt * 0.25;
-      _mid.copy(focus.pos);
-      _pos.set(Math.cos(orbitAng) * 70, 22, Math.sin(orbitAng) * 70).add(_mid);
+    if (shot === 'chase' && subj) {
+      _f.set(0, 0, -1).applyQuaternion(subj.quat);
+      _up.set(0, 1, 0).applyQuaternion(subj.quat);
+      _pos.copy(subj.pos).addScaledVector(_f, -14).addScaledVector(_up, 5.5);
+      if (subj.target && subj.target.alive) _tgt.copy(subj.pos).add(subj.target.pos).multiplyScalar(0.5); // frame the run
+      else _tgt.copy(subj.pos).addScaledVector(_f, 8); // frame the ally itself, never empty space far ahead
+    } else if (shot === 'duel' && subj && subj.target && subj.target.alive) {
+      const b = subj.target;
+      _mid.copy(subj.pos).add(b.pos).multiplyScalar(0.5);
+      _side.copy(b.pos).sub(subj.pos).normalize().cross(UP);
+      if (_side.lengthSq() < 1e-4) _side.set(1, 0, 0);
+      _side.normalize();
+      _pos.copy(_mid).addScaledVector(_side, 24).addScaledVector(UP, 6);
       _tgt.copy(_mid);
+    } else { // orbit the furball centre (allies + Chigs) so it's always the action in frame
+      battleCenter(_bc);
+      orbitAng += dt * 0.3;
+      _pos.set(Math.cos(orbitAng) * 46, 18, Math.sin(orbitAng) * 46).add(_bc);
+      _tgt.copy(_bc);
     }
-    if (snap) { camera.position.copy(_pos); camera.up.copy(_up); snap = false; } // hard cut to the new shot
+    if (!camInit) { camera.position.copy(_pos); camera.up.copy(_up); camLook.copy(_tgt); camInit = true; }
     else {
-      const k = 1 - Math.exp(-4 * dt);
-      camera.position.lerp(_pos, k);
-      camera.up.lerp(_up, k).normalize();
+      const kp = 1 - Math.exp(-3.0 * dt);
+      camera.position.lerp(_pos, kp);
+      camera.up.lerp(_up, kp).normalize();
+      camLook.lerp(_tgt, 1 - Math.exp(-2.6 * dt)); // smooth look -> no whip when the target moves or switches
     }
-    camera.lookAt(_tgt);
+    camera.lookAt(camLook);
   }
 
   // combat / targeting hooks
@@ -163,7 +194,7 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     return out;
   }
 
-  spawnWave(); // arm the first fight
+  spawnWave(false); // arm the first fight immediately (hidden by the fade-in)
 
   function update(dt) {
     updateFocus();

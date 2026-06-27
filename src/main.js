@@ -61,15 +61,17 @@ window.addEventListener('resize', () => lighting.onResize());
 
 // Visible sun disc in the sky, in the sun's direction, kept at infinity (moved with the camera).
 // Bright + warm so it blooms.
-const sun = makeSprite(sunGradient, 560, -5); // the bright disc
-const sunGlow = makeSprite(glowGradient, 2900, -6); // soft warm corona, ~5x the disc diameter
-const sunHalo = makeSprite(haloGradient, 7600, -7); // huge faint wash over ~1/3 of the sky
+const sun = makeSprite(sunGradient, 560, -5, 512); // the bright disc
+const sunGlow = makeSprite(glowGradient, 2900, -6, 1024); // soft warm corona, ~5x the disc diameter
+const sunHalo = makeSprite(haloGradient, 7600, -7, 2048); // huge faint wash that fills the view -> most res
 scene.add(sunHalo);
 scene.add(sunGlow);
 scene.add(sun);
 
-function makeCanvasTex(paint) {
-  const s = 256;
+function makeCanvasTex(paint, size = 1024) {
+  // The sun sprites are HUGE on screen (the halo, scaled ~7600, fills the view when you look toward it),
+  // so a 256px texture magnified that much showed its texels as a grid. Render the gradient at high res.
+  const s = size;
   const cv = document.createElement('canvas');
   cv.width = cv.height = s;
   const ctx = cv.getContext('2d');
@@ -103,11 +105,11 @@ function haloGradient(g) {
   g.addColorStop(0.55, 'rgba(225,95,45,0.025)');
   g.addColorStop(1.0, 'rgba(200,80,40,0)');
 }
-function makeSprite(paint, scale, order) {
+function makeSprite(paint, scale, order, size = 1024) {
   const spr = new THREE.Sprite(
     // depthTest true so the ship occludes the sun when it passes in front (and so the sun, like the
     // stars, doesn't paint over the opaque hull in the transparent pass).
-    new THREE.SpriteMaterial({ map: makeCanvasTex(paint), blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true, transparent: true }),
+    new THREE.SpriteMaterial({ map: makeCanvasTex(paint, size), blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true, transparent: true }),
   );
   spr.scale.setScalar(scale);
   spr.renderOrder = order;

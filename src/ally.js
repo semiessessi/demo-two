@@ -21,7 +21,9 @@ const DEFAULT_TUNE = {
   fireConeCos: Math.cos(0.18), // only fire when genuinely on target
   boltSpeed: 380, // == weapons boltSpeed
   damage: 9, // == player bolt
-  autoBank: 0.9, // roll into the turn (== flight TUNE.autoBank)
+  bankGain: 3.0, // how readily a turn becomes roll (higher = visibly banks on even lazy turns)
+  maxBank: 1.0, // steepest bank (rad, ~57deg) — aircraft-like
+  bankResp: 2.6, // how fast roll eases toward the target bank
   sepDist: 26,
   sepStrength: 1.1, // stay off the other allies
   avoidDist: 22,
@@ -140,13 +142,15 @@ export function createAlly(scene, opts) {
       aiming = dist < T.fireRange && _fwd.dot(_toT.multiplyScalar(1 / dist)) > T.fireConeCos;
     }
 
-    // bank into the turn: how far the steer direction lies off our right axis
+    // bank like an aircraft: project the steer direction onto the ship's right axis -> how hard we're
+    // turning, amplify it, and roll INTO the turn (so even gentle, lazy turns produce a visible bank).
     _dir.copy(st).sub(pos);
     if (_dir.lengthSq() > 1e-6) _dir.normalize();
     _right.copy(_fwd).cross(UP);
     if (_right.lengthSq() > 1e-6) _right.normalize();
-    const bankTarget = THREE.MathUtils.clamp(-_dir.dot(_right), -1, 1) * T.autoBank;
-    ally.roll += (bankTarget - ally.roll) * (1 - Math.exp(-4 * dt));
+    const turn = THREE.MathUtils.clamp(_dir.dot(_right) * T.bankGain, -1, 1); // +1 = turning hard right
+    const bankTarget = -turn * T.maxBank; // roll into the turn
+    ally.roll += (bankTarget - ally.roll) * (1 - Math.exp(-T.bankResp * dt));
 
     steer(dt, aiming ? T.aimTurnRate : T.turnRate);
     orient();
