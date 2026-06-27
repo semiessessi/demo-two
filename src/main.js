@@ -486,6 +486,8 @@ function buildTweakGui() {
     gf.add(cannon.params, 'fireRate', 3, 40, 1).name('rounds/sec');
     gf.add(cannon.params, 'gimbalMax', 0, 1.2, 0.02).name('gimbal yaw');
     gf.add(cannon.params, 'gimbalMaxV', 0, 1, 0.02).name('gimbal down');
+    gf.add(cannon.params, 'gimbalUp', 0, 0.8, 0.02).name('gimbal up');
+    gf.add(cannon.params, 'switchMargin', 0, 0.5, 0.01).name('target switch');
     gf.add(cannon.params, 'autoTrack').name('auto-track');
     gf.add(cannon.params, 'lead').name('auto-lead');
     gf.add(cannon.params, 'targetRange', 60, 400, 10).name('acquire range');
