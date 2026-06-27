@@ -18,6 +18,11 @@ export function createRenderer(container) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.95;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Shadows: enabled from the start so receiver shaders compile with the shadow chunks. The cascaded
+  // sun shadows (and the dynamic light shadows) are driven by lighting.js; the quality controller can
+  // still drop individual casters or disable shadows entirely on weak hardware.
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();

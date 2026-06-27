@@ -58,6 +58,7 @@ export async function loadShip() {
       g.metalness = 0.55;
       g.color = new THREE.Color(0x14140f);
       g.envMapIntensity = 1.1;
+      o.receiveShadow = true; // sun/ship shadows fall across the glass (glass itself doesn't cast)
     } else if (/engine.*glow/i.test(mat) || /engine[\s_]*glow/i.test(o.name)) {
       const g = (o.material = m.clone());
       g.emissive = new THREE.Color(/orange/i.test(mat) ? 0xff7a2a : 0x66e0ff);
@@ -82,6 +83,8 @@ export async function loadShip() {
       m.opacity = 1;
       m.metalness = 0.35;
       m.envMapIntensity = 0.5;
+      o.castShadow = true; // hull self-shadows + shadows other ships
+      o.receiveShadow = true;
     }
   });
 

@@ -29,7 +29,7 @@ function visibleBox(root) {
 }
 
 export function createDebug(ctx) {
-  const { renderer, scene, camera, render, bloom, ship, chigKit, flight, thrusters, lights, sun, sunGlow, nebula, stars } =
+  const { renderer, scene, camera, render, bloom, ship, chigKit, flight, thrusters, lights, lighting, sun, sunGlow, nebula, stars } =
     ctx;
 
   let mode = 'flight'; // 'flight' | 'hammerhead' | 'chig'
@@ -136,7 +136,7 @@ export function createDebug(ctx) {
     stars.visible = false;
     sun.visible = false;
     sunGlow.visible = false;
-    lights.key.visible = false;
+    lighting.setActive(false); // tear down the flight CSM sun (USE_CSM materials misbehave under the viewer's rig)
     lights.rim.visible = false;
     scene.environment = null; // neutral lighting — no nebula reflections
     bloom.strength = 0.15; // keep a touch for emissives, no over-glow under bright light
@@ -166,7 +166,7 @@ export function createDebug(ctx) {
     stars.visible = true;
     sun.visible = true;
     sunGlow.visible = true;
-    lights.key.visible = true;
+    lighting.setActive(true); // rebuild the flight CSM sun
     lights.rim.visible = true;
     ship.pivot.visible = true;
     if (thrusters?.group) thrusters.group.visible = true;

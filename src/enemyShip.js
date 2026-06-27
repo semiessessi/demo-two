@@ -121,7 +121,7 @@ export async function loadChig() {
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     o.geometry = geo;
     o.material = material;
-    o.castShadow = o.receiveShadow = false;
+    o.castShadow = o.receiveShadow = true; // chig hull self-shadows + shadows / is shadowed by others
   });
 
   // recenter + scale to a known size (same bbox approach as ship.js)

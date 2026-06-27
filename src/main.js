@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import GUI from 'lil-gui';
 import { createRenderer } from './renderer.js';
+import { createLighting } from './lighting.js';
 import { createNebula } from './nebula.js';
 import { buildStarfield } from './starfield.js';
 import { loadShip } from './ship.js';
@@ -36,17 +37,18 @@ const { renderer, scene, camera, composer, bloom, render } = createRenderer(app)
 
 // Lighting: a warm orange "sun" as the main light, a cool rim from the opposite side for separation,
 // and a dim hemisphere fill so shadowed sides aren't pure black.
-const key = new THREE.DirectionalLight(0xffb070, 2.6); // warm sun; now that the hull has diffuse, this reads as proper sunlight
-key.position.set(-55, 30, -30); // direction the sunlight comes FROM (front-left so the sun is in view)
-scene.add(key);
-const rim = new THREE.DirectionalLight(0xb8b8b8, 0.7); // neutral grey back-light (was blue)
+// The warm "sun" main light is now a cascaded-shadow-casting rig (CSM) owned by lighting.js, so it
+// self-shadows the hull and lets ships shadow each other.
+const sunDir = new THREE.Vector3(-55, 30, -30).normalize(); // direction the sunlight comes FROM
+const rim = new THREE.DirectionalLight(0xb8b8b8, 0.7); // neutral grey back-light, fill only (no shadow)
 rim.position.set(45, -8, 40);
 scene.add(rim);
-scene.add(new THREE.HemisphereLight(0x6e6e74, 0x141414, 0.95)); // neutral grey fill (was blue-tinted)
+scene.add(new THREE.HemisphereLight(0x6e6e74, 0x141414, 0.95)); // neutral grey fill
+const lighting = createLighting(scene, camera, renderer, { sunColor: 0xffb070, sunDir, sunIntensity: 2.6 });
+window.addEventListener('resize', () => lighting.onResize());
 
-// Visible sun disc in the sky, in the key-light's direction, kept at infinity (moved with the
-// camera). Bright + warm so it blooms.
-const sunDir = new THREE.Vector3().copy(key.position).normalize();
+// Visible sun disc in the sky, in the sun's direction, kept at infinity (moved with the camera).
+// Bright + warm so it blooms.
 const sun = makeSprite(sunGradient, 560, -5); // the bright disc
 const sunGlow = makeSprite(glowGradient, 2900, -6); // soft warm corona, ~5x the disc diameter
 const sunHalo = makeSprite(haloGradient, 7600, -7); // huge faint wash over ~1/3 of the sky
@@ -191,6 +193,9 @@ async function init() {
   });
 
   chigKit = await loadChig();
+  // register the lit hull materials so the cascaded sun shadows fall on them (self + ship-to-ship)
+  lighting.registerTree(ship.pivot);
+  lighting.registerTree(chigKit.template);
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
   waves = createWaveManager(enemyMgr);
   vfx = createVfx(scene, camera);
@@ -216,7 +221,7 @@ async function init() {
     debug = createDebug({
       renderer, scene, camera, render, bloom,
       ship, chigKit, flight, thrusters,
-      lights: { key, rim }, sun, sunGlow, nebula, stars,
+      lights: { rim }, lighting, sun, sunGlow, nebula, stars,
     });
     window.__dbg.debug = debug;
     buildTweakGui();
@@ -280,6 +285,8 @@ function startLoop() {
     sunHalo.position.copy(camera.position).addScaledVector(sunDir, 3700);
     nebula.uniforms.uTime.value += dt;
     starUniforms.uTime.value += dt;
+
+    lighting.update(dt, { player, thrust: r.thrust, projectiles, enemies: enemyMgr.enemies, cannon }); // fit cascades to the camera (+ dynamic lights, later phases)
 
     render();
 
