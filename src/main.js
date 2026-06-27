@@ -4,7 +4,7 @@ import { createRenderer } from './renderer.js';
 import { createNebula } from './nebula.js';
 import { buildStarfield } from './starfield.js';
 import { loadShip } from './ship.js';
-import { loadChig, spawnChig, layoutChigGlows, chigThruster } from './enemyShip.js';
+import { loadChig, layoutChigGlows, chigThruster } from './enemyShip.js';
 import { createThrusters } from './thruster.js';
 import { createFlight } from './flight.js';
 import { createAudioManager } from './audio.js';
@@ -12,6 +12,8 @@ import { createReactive } from './reactive.js';
 import { createInput } from './input.js';
 import { createProjectiles } from './projectiles.js';
 import { createPlayerCannon } from './weapons.js';
+import { createEnemyManager } from './enemies.js';
+import { createWaveManager } from './waves.js';
 
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
@@ -99,20 +101,8 @@ let thrusters = null;
 let flight = null;
 let stars = null;
 let chigKit = null;
-let testChig = null; // TEMP single Chig for previewing the model / tuning its thrusters
-let chigTuning = false;
-
-// TEMP: pose the preview Chig either alongside the player or centred ahead for thruster tuning.
-function setChigPose(mode) {
-  if (!testChig) return;
-  if (mode === 'tuning') {
-    testChig.position.set(0, 0, -11); // centred ahead, tail toward the camera so all 3 glows spread out
-    testChig.rotation.set(0.18, 0, 0); // slight nose-down so the top reads too
-  } else {
-    testChig.position.set(9, 1, -16); // flying alongside, rear-3/4
-    testChig.rotation.set(0.12, 2.4, 0);
-  }
-}
+let enemyMgr = null;
+let waves = null;
 
 async function init() {
   stars = await buildStarfield(starUniforms);
@@ -137,14 +127,12 @@ async function init() {
   projectiles = createProjectiles(scene);
   cannon = createPlayerCannon(scene, ship, projectiles);
 
-  // TEMP: one Chig flying alongside so the new look is visible until enemies.js lands (phase 3).
   chigKit = await loadChig();
-  testChig = spawnChig(chigKit.template);
-  ship.pivot.add(testChig);
-  setChigPose('alongside');
+  enemyMgr = createEnemyManager(scene, chigKit, projectiles);
+  waves = createWaveManager(enemyMgr);
 
-  // TEMP debug handle for live orientation/thruster tuning
-  window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, chig: testChig };
+  // TEMP debug handle for live tuning
+  window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves };
   buildTweakGui();
 
   startLoop();
@@ -167,7 +155,10 @@ function startLoop() {
     playerVel.copy(playerFwd).multiplyScalar(res.speed);
     const player = { pos: ship.pivot.position, quat: ship.pivot.quaternion, vel: playerVel };
     cannon.update(dt, input, player);
+    enemyMgr.update(dt, player);
+    waves.update(dt, player);
     projectiles.update(dt);
+    enemyMgr.prune();
 
     const amp = audio.getAmplitude();
     const bands = audio.getBands();
@@ -278,10 +269,6 @@ window.addEventListener('keydown', (e) => {
     setTimeout(setPlayIcon, 60);
   } else if (e.code === 'KeyF') {
     setStats(!statsOn);
-  } else if (e.code === 'KeyC') {
-    // TEMP: toggle the Chig thruster-tuning pose (centred ahead, side-on)
-    chigTuning = !chigTuning;
-    setChigPose(chigTuning ? 'tuning' : 'alongside');
   }
 });
 
@@ -303,15 +290,31 @@ function buildTweakGui() {
   cf.add(flight, 'camDist', 6, 50, 0.5).name('distance (wheel)').listen();
   cf.add(flight, 'heightRatio', 0, 1, 0.02).name('height ratio');
 
-  // Chig thrusters (press C to pose a Chig ahead for tuning). Tweaks the 3 rear glows.
+  // Chig thrusters — tweaks the 3 rear glows on the template + every live enemy.
+  const relayoutChig = () => {
+    if (chigKit) layoutChigGlows(chigKit.template, chigThruster);
+    if (enemyMgr) for (const e of enemyMgr.enemies) layoutChigGlows(e.obj, chigThruster);
+  };
   const ct = gui.addFolder('Chig Thrusters');
-  const relayoutChig = () => testChig && layoutChigGlows(testChig, chigThruster);
   ct.add(chigThruster, 'x', 0, 2, 0.02).name('side spread ±X').onChange(relayoutChig);
   ct.add(chigThruster, 'y', -1, 1, 0.02).name('offset Y').onChange(relayoutChig);
   ct.add(chigThruster, 'zCenter', 0, 3, 0.02).name('centre Z').onChange(relayoutChig);
   ct.add(chigThruster, 'zSide', 0, 3, 0.02).name('sides Z').onChange(relayoutChig);
   ct.add(chigThruster, 'size', 0.2, 2.5, 0.02).name('glow size').onChange(relayoutChig);
   ct.close();
+
+  // Enemies + waves
+  const ef = gui.addFolder('Enemies');
+  ef.add(enemyMgr.params, 'speed', 10, 90, 1);
+  ef.add(enemyMgr.params, 'fireRate', 0.2, 5, 0.1).name('fire rate');
+  ef.add(enemyMgr.params, 'fireRange', 80, 500, 10).name('fire range');
+  ef.add(enemyMgr.params, 'passesBeforeDogfight', 0, 5, 1).name('passes->dogfight');
+  ef.close();
+  const wf = gui.addFolder('Waves');
+  wf.add(waves.params, 'maxEnemies', 3, 40, 1).name('max enemies');
+  wf.add(waves.params, 'interval', 1, 20, 0.5).name('interval (s)');
+  wf.add(waves.params, 'spawnDist', 150, 700, 10).name('spawn dist');
+  wf.close();
 }
 
 init().catch((e) => {
