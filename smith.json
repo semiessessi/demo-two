@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "project": { "id": "demo-two" },
+  "repos": [
+    {
+      "name": "main",
+      "primary": true,
+      "url": "git@github.com:semiessessi/demo-two.git",
+      "defaultBranch": "master"
+    }
+  ],
+  "buildProducts": [
+    {
+      "name": "site",
+      "rules": [
+        {
+          "name": "build-and-deploy",
+          "nodeSelector": { "os": "windows" },
+          "command": {
+            "windows": { "interpreter": "ps1", "script": "deploy/build.ps1" }
+          }
+        }
+      ]
+    }
+  ],
+  "triggers": [
+    { "type": "poll", "branches": ["master"], "intervalSeconds": 120, "product": "site" }
+  ]
+}

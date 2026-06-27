@@ -6,9 +6,9 @@ workers_dev = true
 [assets]
 directory = "./dist"
 
-# Custom domain (optional). Uncomment to attach; Cloudflare creates the DNS record + TLS
-# cert on first `wrangler deploy`. Requires the redmarmosetstudios.com zone on the same
-# account as the deploy token. Without this it deploys to <name>.workers.dev.
-# [[routes]]
-# pattern = "d2.redmarmosetstudios.com"
-# custom_domain = true
+# Attach the custom domain. Cloudflare creates the DNS record + TLS cert on
+# first `wrangler deploy`. Requires the redmarmosetstudios.com zone to live on
+# the same Cloudflare account as the deploy token.
+[[routes]]
+pattern = "d2.redmarmosetstudios.com"
+custom_domain = true
