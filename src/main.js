@@ -530,6 +530,24 @@ function buildTweakGui() {
   }
   vf.close();
 
+  // Deaths — spawn a chig just ahead and trigger a death sequence so you can watch it (flight only).
+  const df = gui.addFolder('Deaths (test)');
+  const _fwd = new THREE.Vector3();
+  const _rt = new THREE.Vector3();
+  function testDeath(type) {
+    if (!enemyMgr) return;
+    _fwd.set(0, 0, -1).applyQuaternion(ship.pivot.quaternion);
+    _rt.set(1, 0, 0).applyQuaternion(ship.pivot.quaternion);
+    const pos = ship.pivot.position.clone().addScaledVector(_fwd, 55).addScaledVector(_rt, 6).addScaledVector(THREE.Object3D.DEFAULT_UP, 3);
+    const f = enemyMgr.spawnFormation({ count: 1, pos, heading: _fwd.clone(), difficulty: 0.5 });
+    if (f.members[0]) enemyMgr.kill(f.members[0], type);
+  }
+  df.add({ t: () => testDeath('instant') }, 't').name('instant');
+  df.add({ t: () => testDeath('spinout') }, 't').name('spin-out (smoking)');
+  df.add({ t: () => testDeath('chained') }, 't').name('chained (obliterate)');
+  df.add({ t: () => testDeath() }, 't').name('random');
+  df.close();
+
   // Visual placement editor: see/adjust damage zones + RCS ports, log values to bake back into code.
   createEditor(gui, { scene, ship, damage, rcs });
 }

@@ -345,16 +345,17 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   //   • instant  — one big blast, gone.
   //   • spin-out — tumbles + trails smoke for a moment, then the final blast.
   //   • chained  — small pop, then two big ones that obliterate it into tiny fragments.
-  function kill(e) {
+  function kill(e, forceType) {
     if (!e.alive) return;
     e.alive = false;
     kills++;
     const r = Math.random();
-    if (r < 0.45) {
+    const type = forceType || (r < 0.45 ? 'instant' : r < 0.75 ? 'spinout' : 'chained');
+    if (type === 'instant') {
       e.death = { type: 'instant', t: 0, done: true };
       if (vfx) vfx.explosion(e.pos, DEATH_SCALE);
       e.obj.visible = false;
-    } else if (r < 0.75) {
+    } else if (type === 'spinout') {
       e.death = {
         type: 'spinout', t: 0, dur: 0.9 + Math.random() * 0.9, done: false, smokeAcc: 0,
         spin: new THREE.Vector3((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 8),
