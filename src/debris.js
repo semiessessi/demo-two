@@ -63,32 +63,41 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
   const _dir = new THREE.Vector3();
   const _pos = new THREE.Vector3();
   const _n = new THREE.Vector3();
+  const _v2 = new THREE.Vector3();
   let quality = 'high';
   let heat = 0; // fresh cut faces glow hot then cool (shared across recent debris; cheap)
+  let elapsed = 0;
   const CULL2 = 520 * 520; // cull a chunk once it's this far from the player
   const RESTITUTION = 0.6; // bounce energy kept (non-damaging collisions)
   const FRAG_R = 1.1; // approximate chunk collision radius
 
-  function spawnChunk(node, e, q, scale) {
+  // Add one chunk mover. `comWorld` = where the chunk's COM goes; it flies outward from `fromPos`.
+  // If allowReBreak and the node has children, it may shatter again mid-flight (secondary re-break).
+  function addMover(node, comWorld, quat, fromPos, baseVel, scale, allowReBreak) {
     if (movers.length >= cap) return;
     const mesh = new THREE.Mesh(node.geometry, mats);
     mesh.castShadow = true;
     mesh.frustumCulled = false;
-    _pos.copy(node.centroid).applyQuaternion(q); // chunk's COM offset in world
-    mesh.position.copy(e.pos).add(_pos);
-    mesh.quaternion.copy(q);
-    _dir.copy(_pos);
+    mesh.position.copy(comWorld);
+    mesh.quaternion.copy(quat);
+    _dir.copy(comWorld).sub(fromPos);
     if (_dir.lengthSq() < 1e-4) _dir.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
     _dir.normalize();
     const vel = _dir.multiplyScalar((3 + Math.random() * 12) * scale); // 3..15
-    if (e.vel) vel.addScaledVector(e.vel, 0.4);
+    if (baseVel) vel.addScaledVector(baseVel, 0.4);
     vel.x += (Math.random() - 0.5) * 5; vel.y += (Math.random() - 0.5) * 5; vel.z += (Math.random() - 0.5) * 5;
     scene.add(mesh);
-    movers.push({
-      mesh, vel: vel.clone(),
+    const mover = {
+      mesh, vel,
       ang: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8),
       life: 7 + Math.random() * 4, // backstop; mostly culled by distance
-    });
+      node: null, reBreakAt: 0,
+    };
+    if (allowReBreak && node.children && node.children.length && Math.random() < 0.4) {
+      mover.node = node;
+      mover.reBreakAt = elapsed + 0.4 + Math.random() * 0.7; // shatter again shortly after
+    }
+    movers.push(mover);
   }
 
   // Spawn debris at a dying enemy. Walks the fracture tree: each chunk re-breaks into finer pieces,
@@ -103,9 +112,10 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
       if (movers.length >= cap) break;
       const node = stack.pop();
       const r = Math.random();
-      if (node.children.length && r < node.rule.reBreak) { for (const c of node.children) stack.push(c); continue; } // re-break
+      if (node.children.length && r < node.rule.reBreak) { for (const c of node.children) stack.push(c); continue; } // re-break now
       if (r < node.rule.reBreak + node.rule.destroy) continue; // vaporized — no chunk
-      spawnChunk(node, e, q, scale); // detach whole chunk
+      _v2.copy(node.centroid).applyQuaternion(q).add(e.pos); // chunk COM in world
+      addMover(node, _v2, q, e.pos, e.vel, scale, true); // detach (may re-break again mid-flight)
     }
     return true;
   }
@@ -126,9 +136,20 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
 
   // player: { pos, radius, vel }; enemies: live ships to bounce off (non-damaging).
   function update(dt, player, enemies) {
+    elapsed += dt;
     if (heat > 0) { heat = Math.max(0, heat - dt / 2.0); interiorMat.emissiveIntensity = heat * 0.8; } // cool over ~2s
     for (let i = movers.length - 1; i >= 0; i--) {
       const m = movers[i];
+      // secondary re-break: shatter this chunk into its children mid-flight
+      if (m.reBreakAt && elapsed >= m.reBreakAt) {
+        heat = 1;
+        const pq = m.mesh.quaternion, ppos = m.mesh.position, pn = m.node;
+        for (const c of pn.children) {
+          _v2.copy(c.centroid).sub(pn.centroid).applyQuaternion(pq).add(ppos); // child COM world
+          addMover(c, _v2, pq, ppos, m.vel, 1, false);
+        }
+        scene.remove(m.mesh); movers.splice(i, 1); continue;
+      }
       m.life -= dt;
       if (m.life <= 0 || (player && m.mesh.position.distanceToSquared(player.pos) > CULL2)) {
         scene.remove(m.mesh); movers.splice(i, 1); continue;
