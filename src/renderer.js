@@ -12,9 +12,10 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 // the single biggest lever: at dpr 2 we shade 4x the fragments. Cap at 1.3 (like demo-1) — ~25% fewer
 // fullscreen fragments than 1.5, ~4x cheaper than 2.0, for a slight, mostly-unnoticed softening.
 const MAX_PR = 1.3;
-// Firefox on Linux/Mesa runs multisampled half-float renderbuffers (the EffectComposer HDR target)
-// through a slow blit path that tanks even strong GPUs. Detect it and drop to a plain 8-bit, non-MSAA
-// composer target: bloom loses some HDR punch and edges alias a touch, but it stops being a slideshow.
+// Firefox on Linux/Mesa runs the MULTISAMPLED resolve/blit of the EffectComposer HDR target through a
+// slow path that tanks even strong GPUs — so on Firefox we drop MSAA (samples 0). We keep the HDR
+// HALF-FLOAT format though: it's not the slow part, and an 8-bit intermediate bands hard on the smooth
+// low-brightness nebula/bloom gradients. (Without MSAA, bright sub-pixel points alias a little more.)
 const IS_FIREFOX = typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent || '');
 
 export function createRenderer(container) {
@@ -58,8 +59,8 @@ export function createRenderer(container) {
   // keeps bright (>1) values for the bloom threshold.
   const dpr = renderer.getDrawingBufferSize(new THREE.Vector2());
   const renderTarget = new THREE.WebGLRenderTarget(dpr.x, dpr.y, {
-    type: IS_FIREFOX ? THREE.UnsignedByteType : THREE.HalfFloatType,
-    samples: IS_FIREFOX ? 0 : 4,
+    type: THREE.HalfFloatType, // always HDR — 8-bit here banded the nebula/bloom gradients badly
+    samples: IS_FIREFOX ? 0 : 4, // drop only MSAA on Firefox (its multisampled resolve is the slow path)
   });
   const composer = new EffectComposer(renderer, renderTarget);
   composer.addPass(new RenderPass(scene, camera));
