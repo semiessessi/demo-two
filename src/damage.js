@@ -9,55 +9,36 @@ import * as THREE from 'three';
 export function createDamageModel(ship, opts = {}) {
   const pivot = ship.pivot;
   pivot.updateMatrixWorld(true);
-  const R = ship.radius;
-
-  function meshCenterLocal(re, fallback) {
-    let mesh = null;
-    pivot.traverse((o) => {
-      if (o.isMesh && re.test(o.name)) mesh = o;
-    });
-    if (!mesh) return fallback;
-    const c = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
-    return pivot.worldToLocal(c);
-  }
-
-  const noz = (ship.nozzles || []).slice().sort((a, b) => a.x - b.x);
-  const lEng = noz[0] ? noz[0].clone() : new THREE.Vector3(-R * 0.3, 0, R * 0.6);
-  const rEng = noz[noz.length - 1] ? noz[noz.length - 1].clone() : new THREE.Vector3(R * 0.3, 0, R * 0.6);
 
   const zones = [];
-  // `size` is per-axis half-extents (Vector3) for an axis-aligned ELLIPSOID — flat/long parts no longer
-  // need a coarse oversized sphere. A plain number still works as a uniform sphere. Tune live in the editor.
+  // `size` is per-axis half-extents (Vector3) for an axis-aligned ELLIPSOID; a plain number = a uniform
+  // sphere. Centres + radii are hand-tuned in the debug editor and logged back here ("log zones → console").
   const add = (name, center, size, hp, kind) => {
     const radii = typeof size === 'number' ? new THREE.Vector3(size, size, size) : size.clone();
     zones.push({ name, center, radii, hp, maxHp: hp, kind, alive: true, trail: null });
   };
 
-  add('Cockpit', meshCenterLocal(/canopy/i, new THREE.Vector3(0, 0.3, -R * 0.4)), new THREE.Vector3(1.0, 0.8, 1.4), 55, 'cockpit');
-  add('L Engine', lEng, new THREE.Vector3(0.9, 0.9, 1.7), 20, 'engine'); // nacelle (long in z); ~2 enemy pulses
-  add('R Engine', rEng, new THREE.Vector3(0.9, 0.9, 1.7), 20, 'engine');
-  add('L Wing', meshCenterLocal(/l_aileron/i, new THREE.Vector3(-R * 0.8, 0, 0.3)), new THREE.Vector3(1.7, 0.45, 1.5), 20, 'wing'); // wide + flat
-  add('R Wing', meshCenterLocal(/r_aileron/i, new THREE.Vector3(R * 0.8, 0, 0.3)), new THREE.Vector3(1.7, 0.45, 1.5), 20, 'wing');
-  add('Gun', new THREE.Vector3(0, -R * 0.12, -R * 0.7), new THREE.Vector3(0.6, 0.6, 1.3), 20, 'gun'); // front; destroyed -> can't fire
-  add('L Fuel', new THREE.Vector3(-R * 0.3, -R * 0.05, R * 0.18), new THREE.Vector3(0.85, 0.7, 1.5), 25, 'fuel'); // rupture -> catastrophic
-  add('R Fuel', new THREE.Vector3(R * 0.3, -R * 0.05, R * 0.18), new THREE.Vector3(0.85, 0.7, 1.5), 25, 'fuel');
-  add('Fuselage', new THREE.Vector3(0, 0, 0), new THREE.Vector3(1.4, 1.0, 3.6), 120, 'fuselage'); // long body
+  add('Cockpit', new THREE.Vector3(0.00, 0.20, -2.30), new THREE.Vector3(0.35, 0.45, 0.70), 55, 'cockpit');
+  add('L Engine', new THREE.Vector3(-0.45, 0.00, 3.20), new THREE.Vector3(0.30, 0.30, 0.30), 20, 'engine'); // ~2 enemy pulses
+  add('R Engine', new THREE.Vector3(0.45, 0.00, 3.20), new THREE.Vector3(0.30, 0.30, 0.30), 20, 'engine');
+  add('L Wing', new THREE.Vector3(-2.00, 0.11, 1.25), new THREE.Vector3(1.70, 0.45, 1.00), 20, 'wing');
+  add('R Wing', new THREE.Vector3(2.00, 0.11, 1.25), new THREE.Vector3(1.70, 0.45, 1.00), 20, 'wing');
+  add('Gun', new THREE.Vector3(0.00, -0.60, -2.45), new THREE.Vector3(0.20, 0.15, 0.45), 20, 'gun'); // front; destroyed -> can't fire
+  add('L Fuel', new THREE.Vector3(-1.25, -0.05, 1.05), new THREE.Vector3(0.20, 0.20, 1.30), 25, 'fuel'); // rupture -> catastrophic
+  add('R Fuel', new THREE.Vector3(1.25, -0.05, 1.05), new THREE.Vector3(0.20, 0.20, 1.30), 25, 'fuel');
+  add('Fuselage', new THREE.Vector3(0.00, 0.00, 0.00), new THREE.Vector3(1.20, 0.50, 3.60), 120, 'fuselage');
 
   // Forward canards: small, hard-to-hit control surfaces. Only DIRECT hits (the bolt's travel segment
   // pierces the ellipsoid — see applyHit) take them out, so they're rare and don't steal nearby hits.
   const findNode = (re) => { let n = null; pivot.traverse((o) => { if (!n && re.test(o.name)) n = o; }); return n; };
-  function addCanard(name, re, sx) {
-    const node = findNode(re);
-    const center = node
-      ? pivot.worldToLocal(new THREE.Box3().setFromObject(node).getCenter(new THREE.Vector3()))
-      : new THREE.Vector3(sx * 0.86, -0.12, -2.94);
-    add(name, center, new THREE.Vector3(0.9, 0.35, 0.7), 10, 'canard'); // small + flat; hp 10 = one enemy pulse; tune live
+  function addCanard(name, re, sx, center, radii) {
+    add(name, center, radii, 10, 'canard'); // hp 10 = one enemy pulse; rare (direct hits only)
     const z = zones[zones.length - 1];
-    z.node = node; // the L_Canard / R_Canard group — hidden + cloned to debris when destroyed
+    z.node = findNode(re); // the L_Canard / R_Canard group — hidden + cloned to debris when destroyed
     z.sparkPoint = new THREE.Vector3(sx * 0.4, -0.1, -2.7); // inboard root near the cockpit (stub sparks)
   }
-  addCanard('L Canard', /^L_Canard$/i, -1);
-  addCanard('R Canard', /^R_Canard$/i, 1);
+  addCanard('L Canard', /^L_Canard$/i, -1, new THREE.Vector3(-0.86, -0.12, -2.90), new THREE.Vector3(0.30, 0.15, 0.30));
+  addCanard('R Canard', /^R_Canard$/i, 1, new THREE.Vector3(0.86, -0.12, -2.90), new THREE.Vector3(0.30, 0.15, 0.30));
 
   let onEject = opts.onEject || null;
   let onDestroyed = opts.onDestroyed || null;
