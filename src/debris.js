@@ -134,9 +134,9 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
     _dir.copy(comWorld).sub(fromPos);
     if (_dir.lengthSq() < 1e-4) _dir.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
     _dir.normalize();
-    const vel = _dir.multiplyScalar((3 + Math.random() * 12) * scale); // 3..15
-    if (baseVel) vel.addScaledVector(baseVel, 0.4);
-    vel.x += (Math.random() - 0.5) * 5; vel.y += (Math.random() - 0.5) * 5; vel.z += (Math.random() - 0.5) * 5;
+    const vel = _dir.multiplyScalar((28 + Math.random() * 48) * scale); // strong outward burst (28..76) so it scatters even at flight speed
+    if (baseVel) vel.addScaledVector(baseVel, 0.15); // only a little of the wreck's momentum -> the burst dominates the look
+    vel.x += (Math.random() - 0.5) * 18; vel.y += (Math.random() - 0.5) * 18; vel.z += (Math.random() - 0.5) * 18;
     const mover = {
       mesh, vel,
       ang: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8),

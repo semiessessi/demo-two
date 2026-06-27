@@ -13,9 +13,9 @@ import { formationSlots } from './formations.js';
 
 export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   const params = {
-    speed: 40,
+    speed: 60, // faster than the Hammerhead's cruise so they can reposition + run you down
     turnRate: 1.4, // lower = can't perfectly stick to the player's tail (overshoots, makes passes)
-    aimTurnRate: 5.0, // sharper turn while locked on a target in gun range -> nails a straight-flying player
+    aimTurnRate: 2.8, // wider turning circle than before (was 5.0): can't pivot on a dime, so they swoop + re-attack
     passDist: 70,
     egressTime: 2.0, // longer break-off after a run -> looser, easier to catch
     passesBeforeDogfight: 3, // spend more time in formation strafing runs before breaking up
@@ -33,6 +33,9 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     avoidStrength: 1.4, // how hard they veer off to avoid ramming
     pursueDist: 42, // dogfight: how far behind the player a hunter tries to sit (their six)
     pursueFlank: 22, // lateral fan so multiple hunters don't all stack on the exact tail
+    extendDist: 240, // dogfight: how far out a hunter blasts before swinging back for a fresh run
+    extendTime: 2.6, // seconds a hunter spends extending out
+    attackTime: 3.2, // seconds pressing the attack before breaking off to extend
     maxSpread: 0, // rad — random fire-cone spread (OFF: enemies fire dead on the lead; raise to add spray)
     jinkStrength: 18, // how far an evasive pilot weaves sideways
     persSpread: 0.6, // per-pilot random variation in personality traits (GUI-tunable)
@@ -282,18 +285,32 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         // target lets them line up the tail and shred it; turning constantly throws off both their tail
         // position AND their firing lead — manoeuvring is the counter.
         if (!e.wingOf) e.role = 'point';
-        flank.crossVectors(pfwd, UP).normalize(); // player's right
-        st.copy(player.pos)
-          .addScaledVector(pfwd, -params.pursueDist)
-          .addScaledVector(flank, Math.cos(e.attackAngle || 0) * params.pursueFlank)
-          .addScaledVector(UP, Math.sin(e.attackAngle || 0) * params.pursueFlank * 0.5);
+        if (e.extendT > 0) {
+          // EXTEND: blast out clear of the player, then swing back for a fresh run (boom-and-zoom).
+          e.extendT -= dt;
+          awayDir.copy(e.pos).sub(player.pos);
+          if (awayDir.lengthSq() < 1e-4) awayDir.copy(e.vel);
+          awayDir.normalize();
+          flank.crossVectors(awayDir, UP).normalize();
+          st.copy(player.pos).addScaledVector(awayDir, params.extendDist).addScaledVector(flank, (e.wingSide || 1) * params.extendDist * 0.45);
+        } else {
+          // hunt the player's SIX: slide in behind along their heading, fanned out by attackAngle.
+          flank.crossVectors(pfwd, UP).normalize(); // player's right
+          st.copy(player.pos)
+            .addScaledVector(pfwd, -params.pursueDist)
+            .addScaledVector(flank, Math.cos(e.attackAngle || 0) * params.pursueFlank)
+            .addScaledVector(UP, Math.sin(e.attackAngle || 0) * params.pursueFlank * 0.5);
+          // pressed the attack a while? break off and extend out so the next pass is a fresh run.
+          if (distP < params.fireRange) { e.attackT = (e.attackT || 0) + dt; if (e.attackT > params.attackTime) { e.extendT = params.extendTime; e.attackT = 0; } }
+          else e.attackT = Math.max(0, (e.attackT || 0) - dt * 0.5);
+        }
       }
 
       // In gun range, point the nose at the player's intercept LEAD so the boresight shot connects AND the
       // ship visibly flies toward where it shoots. The lead is an exact constant-velocity solve (iterated),
       // so a STRAIGHT-flying player gets nailed; manoeuvring breaks the prediction. Out of range the mode
       // station above (six approach / wing slot) sets up the run.
-      const inGunRange = e.mode !== 'formation' && e.mode !== 'scatter' && distP < params.fireRange;
+      const inGunRange = e.mode !== 'formation' && e.mode !== 'scatter' && !(e.extendT > 0) && distP < params.fireRange;
       if (inGunRange) {
         let tHit = distP / params.pulseSpeed;
         st.copy(player.pos);
