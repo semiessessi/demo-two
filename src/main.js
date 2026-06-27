@@ -18,6 +18,12 @@ import { createVfx } from './vfx.js';
 import { createCombat } from './combat.js';
 import { createDamageModel } from './damage.js';
 
+// Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
+// shown on the Vite dev server and any localhost origin, never on the deployed site.
+const DEBUG =
+  import.meta.env.DEV ||
+  ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
 const { renderer, scene, camera, composer, bloom, render } = createRenderer(app);
@@ -144,9 +150,11 @@ async function init() {
   damage = createDamageModel(ship);
   combat.setOnPlayerHit((pt, dmg) => damage.applyHit(pt, dmg));
 
-  // TEMP debug handle for live tuning
-  window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves, damage, cannon };
-  buildTweakGui();
+  if (DEBUG) {
+    // debug handle + live-tuning GUI — local dev only, never on the deployed site
+    window.__dbg = { align: ship.align, pivot: ship.pivot, camera, ship, thrusters, flight, enemyMgr, waves, damage, cannon };
+    buildTweakGui();
+  }
 
   startLoop();
   reveal();
@@ -284,7 +292,7 @@ window.addEventListener('keydown', (e) => {
     audio.resumeContext();
     audio.toggle();
     setTimeout(setPlayIcon, 60);
-  } else if (e.code === 'KeyF') {
+  } else if (DEBUG && e.code === 'KeyF') {
     setStats(!statsOn);
   }
 });
