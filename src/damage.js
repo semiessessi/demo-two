@@ -27,7 +27,7 @@ export function createDamageModel(ship, opts = {}) {
 
   const zones = [];
   const add = (name, center, radius, hp, kind) =>
-    zones.push({ name, center, radius, hp, maxHp: hp, kind, alive: true });
+    zones.push({ name, center, radius, hp, maxHp: hp, kind, alive: true, trail: null });
 
   add('Cockpit', meshCenterLocal(/canopy/i, new THREE.Vector3(0, 0.3, -R * 0.4)), R * 0.5, 55, 'cockpit');
   add('L Engine', lEng, R * 0.5, 20, 'engine'); // fragile: ~2 enemy pulses (10 dmg) knock it out
@@ -70,19 +70,54 @@ export function createDamageModel(ship, opts = {}) {
 
   let acc = 0;
   const wp = new THREE.Vector3();
+  // Hold smoke back until a zone has taken real damage — light taps stay clean (it built up too fast
+  // before). Below this fraction the zone trails smoke; the lower the HP, the thicker.
+  const SMOKE_AT = 0.6;
+  function zonePos(z) {
+    // live world position of the zone (the ship is moving) — the smoke trail samples this each tick
+    if (!z._posGet) {
+      const v = new THREE.Vector3();
+      z._posGet = () => { v.copy(z.center); pivot.localToWorld(v); return v; };
+    }
+    return z._posGet;
+  }
   function update(dt, vfx) {
     acc += dt;
     if (acc < 0.1) return;
+    const stepDt = acc;
     acc = 0;
+    const useTrail = !!vfx.createTrail && vfx.quality !== 'low';
     for (const z of zones) {
-      // Smoke once a zone has been hit and while it's still alive; stop the moment it's destroyed
-      // ("goes out"). So an engine starts smoking on the first hit and stops when the second kills it.
-      if (!z.alive || z.hp >= z.maxHp) continue;
-      wp.copy(z.center);
-      pivot.localToWorld(wp);
-      if (vfx.smoke) vfx.smoke(wp);
       const frac = z.hp / z.maxHp;
-      if (frac < 0.5 && vfx.ember && Math.random() < 0.5) vfx.ember(wp, frac); // a few flames when badly hurt
+      const smoking = z.alive && frac < SMOKE_AT;
+      if (!smoking) {
+        if (z.trail) { z.trail.stop(); z.trail = null; } // repaired or destroyed -> stop trailing
+        continue;
+      }
+      if (useTrail) {
+        // raymarched smoke trail: thicker + larger the more wounded the zone is
+        if (!z.trail) {
+          const hurt = (SMOKE_AT - frac) / SMOKE_AT; // 0..1 as it worsens
+          z.trail = vfx.createTrail({
+            getPos: zonePos(z),
+            life: 2.2,
+            radius: 2.0 + hurt * 1.8,
+            spawnDist: 5.5,
+            spawnInterval: 0.4,
+            density: 0.55 + hurt * 0.5,
+          });
+        }
+        z.trail.update(stepDt);
+      } else if (vfx.smoke) {
+        wp.copy(z.center);
+        pivot.localToWorld(wp);
+        vfx.smoke(wp);
+      }
+      if (frac < 0.4 && vfx.ember && Math.random() < 0.4) { // a few flames only when badly hurt
+        wp.copy(z.center);
+        pivot.localToWorld(wp);
+        vfx.ember(wp, frac);
+      }
     }
   }
 
@@ -100,6 +135,7 @@ export function createDamageModel(ship, opts = {}) {
     for (const z of zones) {
       z.hp = z.maxHp;
       z.alive = true;
+      if (z.trail) { z.trail.stop(); z.trail = null; }
     }
   }
 

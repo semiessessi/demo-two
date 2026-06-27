@@ -23,10 +23,12 @@ import { createGameState } from './gameState.js';
 import { createDebug } from './debug.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
-// shown on the Vite dev server and any localhost origin, never on the deployed site.
+// shown on the Vite dev server and any localhost origin. It can also be opted into on the deployed
+// site with a ?debug query param (off by default) so the live build can be inspected / tuned.
 const DEBUG =
   import.meta.env.DEV ||
-  ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) ||
+  /[?&]debug\b/.test(window.location.search);
 
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');

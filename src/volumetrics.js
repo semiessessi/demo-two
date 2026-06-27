@@ -310,6 +310,7 @@ export function createVolumetrics(scene, camera) {
     const spawnInterval = opts.spawnInterval ?? 0.14;
     const life = opts.life ?? 3.0;
     const radius = opts.radius ?? 3.2;
+    const density = opts.density ?? 1;
     const last = new THREE.Vector3();
     let started = false;
     let accT = 0;
@@ -332,7 +333,7 @@ export function createVolumetrics(scene, camera) {
           _drift.y += 1.0; // buoyancy
           _drift.x += (Math.random() - 0.5) * 1.2;
           _drift.z += (Math.random() - 0.5) * 1.2;
-          puff(pos, { life, radius, drift: _drift, blobs: 3 });
+          puff(pos, { life, radius, drift: _drift, blobs: 3, density });
         }
       },
       stop() { stopped = true; },
