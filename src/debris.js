@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 
 // Runtime ship-fracture debris. A Web Worker (fracture-worker.js) generates fracture variations off
 // the main thread; we cache them as they arrive and grow the pool toward `count` (64). On an enemy
@@ -6,36 +7,60 @@ import * as THREE from 'three';
 // and flings them outward with spin, fading by shrink. Until the first variation lands, burst() is a
 // no-op (caller keeps the explosion-only death).
 
-function extractHull(template) {
+// Extract a CSG-friendly hull in the template's rig-local space (template must be at origin/identity).
+// Default: the single biggest visible mesh (good for a clean low-poly model like the Chig).
+// convex: merge ALL visible meshes into one convex envelope — for detailed multi-mesh models (the
+// Hammerhead is 171k verts across 45 meshes); the convex hull is clean, low-poly and CSG-safe.
+function extractHull(template, convex = false) {
   template.updateMatrixWorld(true);
+  if (convex) {
+    const pts = [];
+    const v = new THREE.Vector3();
+    let mat = null;
+    let best = 0;
+    template.traverse((o) => {
+      if (!(o.isMesh && o.visible && o.geometry && o.geometry.attributes.position)) return;
+      const p = o.geometry.attributes.position;
+      if (p.count > best) { best = p.count; mat = Array.isArray(o.material) ? o.material[0] : o.material; }
+      const step = Math.max(1, Math.floor(p.count / 4000)); // sample (hull only needs extreme points)
+      for (let i = 0; i < p.count; i += step) { v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); pts.push(v.clone()); }
+    });
+    const g = new ConvexGeometry(pts);
+    return { pos: Float32Array.from(g.attributes.position.array), index: null, material: mat };
+  }
   let mesh = null;
   let best = 0;
   template.traverse((o) => {
-    if (o.isMesh && o.geometry && o.geometry.attributes.position) {
+    if (o.isMesh && o.visible && o.geometry && o.geometry.attributes.position) {
       const n = o.geometry.attributes.position.count;
       if (n > best) { best = n; mesh = o; }
     }
   });
   const g = mesh.geometry.clone();
-  g.applyMatrix4(mesh.matrixWorld); // template space (template at origin)
+  g.applyMatrix4(mesh.matrixWorld);
   return {
     pos: Float32Array.from(g.attributes.position.array),
     index: g.index ? Uint32Array.from(g.index.array) : null,
+    material: Array.isArray(mesh.material) ? mesh.material[0] : mesh.material,
   };
 }
 
-export function createDebris(scene, { chigTemplate, chigMaterial, vfx = null, count = 64, cap = 240 } = {}) {
-  // fragment materials: reuse the chig look (no vertex colors on fragments) + a dark torn interior
-  const hullMat = chigMaterial ? chigMaterial.clone() : new THREE.MeshStandardMaterial({ color: 0x3a423c, metalness: 0.45, roughness: 0.45, flatShading: true, side: THREE.DoubleSide });
+export function createDebris(scene, { template, material, convex = false, vfx = null, count = 64, cap = 240 } = {}) {
+  const hull = extractHull(template, convex);
+  // fragment materials: reuse the source hull look (no vertex colors, faceted) + a dark torn interior
+  const srcMat = material || hull.material;
+  const hullMat = srcMat ? srcMat.clone() : new THREE.MeshStandardMaterial({ color: 0x3a423c, metalness: 0.45, roughness: 0.45 });
   hullMat.vertexColors = false;
+  hullMat.flatShading = true;
+  hullMat.side = THREE.DoubleSide;
+  hullMat.needsUpdate = true;
   const interiorMat = new THREE.MeshStandardMaterial({ color: 0x1d1916, emissive: 0xff5a1e, emissiveIntensity: 0, metalness: 0.6, roughness: 0.6, flatShading: true, side: THREE.DoubleSide });
   const mats = [hullMat, interiorMat];
 
-  const variations = []; // each: [{ geometry, centroid:Vector3 }]
+  const variations = []; // each: [rootNode, ...] of a fracture tree
   let worker = null;
   try {
     worker = new Worker(new URL('./fracture-worker.js', import.meta.url), { type: 'module' });
-    const hull = extractHull(chigTemplate);
     worker.onmessage = (e) => {
       const m = e.data;
       if (m.type !== 'variation' || !m.nodes || !m.nodes.length) return;

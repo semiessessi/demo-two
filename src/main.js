@@ -158,6 +158,7 @@ let thrusters = null;
 let rcs = null;
 let debris = null;
 let debrisPlayer = null;
+let playerDebris = null;
 let flight = null;
 let stars = null;
 let chigKit = null;
@@ -175,6 +176,8 @@ function restartWorld() {
   projectiles.reset();
   waves.reset();
   if (debris) debris.reset();
+  if (playerDebris) playerDebris.reset();
+  if (ship.model) ship.model.visible = true; // re-show the hull after a destroyed cutscene
   flight.setSpeedScale(1);
   flight.setRollScale(1);
   flight.setPitchScale(1);
@@ -218,9 +221,10 @@ async function init() {
   waves = createWaveManager(enemyMgr);
   vfx = createVfx(scene, camera, { lightDir: sunDir }); // align smoke self-shadow with the real sun
   enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
-  debris = createDebris(scene, { chigTemplate: chigKit.template, chigMaterial: chigKit.material, vfx });
+  debris = createDebris(scene, { template: chigKit.template, material: chigKit.material, vfx });
   enemyMgr.setDebris(debris); // ship-fracture chunks on death
   debrisPlayer = { pos: ship.pivot.position, radius: ship.radius, vel: playerVel };
+  playerDebris = createDebris(scene, { template: ship.pivot, convex: true, vfx, count: 12, cap: 160 }); // player Hammerhead (171k verts/45 meshes) -> convex-hull proxy, shatters when destroyed
   quality = createQuality({ lighting, vfx, debris, setRenderScale }); // FPS-driven tier ladder: render scale, CSM res, shadow-light budget, smoke, vfx, debris
   combat = createCombat(projectiles, enemyMgr, vfx, {
     getPlayerPos: () => ship.pivot.position,
@@ -231,7 +235,7 @@ async function init() {
 
   hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
   targetDisplay = createTargetDisplay(chigKit.template);
-  gameState = createGameState({ ship, camera, flight, hud, vfx, onRestart: restartWorld });
+  gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld });
   damage.setCallbacks({
     onEject: () => gameState.eject(),
     onDestroyed: () => gameState.destroyed(),
@@ -302,7 +306,8 @@ function startLoop() {
     combat.update(dt);
     if (flying) damage.update(dt, vfx);
     vfx.update(dt);
-    if (debris) debris.update(dt, debrisPlayer, enemyMgr.enemies); // ship-chunk debris: drift, bounce, cull
+    if (debris) debris.update(dt, debrisPlayer, enemyMgr.enemies); // enemy debris: drift, bounce, cull
+    if (playerDebris) playerDebris.update(dt, null, enemyMgr.enemies); // player wreck debris (no self-collide)
     enemyMgr.prune();
     gameState.update(dt, input);
     hud.update({ waves, enemies: enemyMgr.enemies, player, ejectProgress: gameState.ejectProgress });

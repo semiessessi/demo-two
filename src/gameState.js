@@ -8,7 +8,7 @@ import * as THREE from 'three';
 const EJECT_HOLD = 1.0;
 const CUTSCENE = 2.6;
 
-export function createGameState({ ship, camera, flight, hud, vfx, onRestart }) {
+export function createGameState({ ship, camera, flight, hud, vfx, debris, playerVel, onRestart }) {
   let mode = 'flying';
   let ejectHold = 0;
   let cutscene = 0;
@@ -37,7 +37,14 @@ export function createGameState({ ship, camera, flight, hud, vfx, onRestart }) {
     beginCutscene('EJECTED — MISSION OVER');
   }
   function destroyed() {
-    if (mode === 'flying' && vfx) vfx.explosion(ship.pivot.position, 1.8);
+    if (mode === 'flying') {
+      if (vfx) vfx.explosion(ship.pivot.position, 1.8);
+      // the Hammerhead shatters into debris — hide the intact hull (fall back to an intact tumble if
+      // the fracture pool isn't ready yet). Eject() keeps the ship whole (pilot bails); only this path fractures.
+      if (debris && debris.burst({ pos: ship.pivot.position, obj: ship.pivot, vel: playerVel }, 1.4) && ship.model) {
+        ship.model.visible = false;
+      }
+    }
     beginCutscene('SHIP DESTROYED');
   }
 
