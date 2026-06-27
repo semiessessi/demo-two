@@ -35,8 +35,12 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
 
   // allies #2,#3: clone the align subtree (shares geometry + CSM-registered materials so they stay lit/
   // shadowed), wrap a fresh pivot, give each its own thrusters + engine light spill.
-  for (const off of [new THREE.Vector3(-16, 0, 9), new THREE.Vector3(16, 0, 9)]) {
+  for (const off of [
+    new THREE.Vector3(-16, 0, 9), new THREE.Vector3(16, 0, 9),
+    new THREE.Vector3(-34, 3, 20), new THREE.Vector3(34, 3, 20), new THREE.Vector3(0, -4, 22),
+  ]) {
     const align = ship.align.clone(true);
+    align.traverse((o) => { if (o.isMesh) o.castShadow = false; }); // 6 detailed Hammerheads is heavy -> clones don't cast shadows (still lit + receive)
     const pv = new THREE.Group();
     pv.add(align);
     pv.position.copy(off);
@@ -66,7 +70,7 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
   const spawnQueue = [];
   let spawnTimer = 0;
   function spawnOneFormation(i, c) {
-    const ang = (i / 3) * Math.PI * 2 + 0.4;
+    const ang = (i / 6) * Math.PI * 2 + 0.4;
     const dir = new THREE.Vector3(Math.cos(ang), (Math.random() - 0.5) * 0.3, Math.sin(ang)).normalize();
     const pos = c.clone().addScaledVector(dir, 410);
     const heading = c.clone().sub(pos).normalize();
@@ -78,8 +82,8 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
   function spawnWave(stagger) {
     updateFocus();
     const c = focus.pos.clone();
-    if (stagger) { for (let i = 0; i < 3; i++) spawnQueue.push({ i, c }); spawnTimer = 0; }
-    else for (let i = 0; i < 3; i++) spawnOneFormation(i, c);
+    if (stagger) { for (let i = 0; i < 6; i++) spawnQueue.push({ i, c }); spawnTimer = 0; }
+    else for (let i = 0; i < 6; i++) spawnOneFormation(i, c);
   }
   function processSpawnQueue(dt) {
     if (!spawnQueue.length) return;
