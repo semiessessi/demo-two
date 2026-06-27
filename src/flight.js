@@ -3,7 +3,7 @@ import * as THREE from 'three';
 // Arcade flight model + chase camera (keyboard to fly). The ship is a THREE.Object3D (the pivot from
 // ship.js): we spin it with local-axis angular rates from the keys, auto-bank it into yaw turns,
 // push it forward along its own -Z, and trail a spring-damped camera behind + above it that rolls
-// partway with the ship so banks are felt without nausea.
+// with the ship so left/right stay relative to the cockpit.
 //   - mouse wheel  : zoom (chase distance)
 //   - middle-drag  : orbit around the ship; springs back to the chase position on release
 
@@ -24,8 +24,8 @@ const TUNE = {
   maxDist: 60,
   posSpring: 4.5,
   dragSpring: 16, // snappier camera while orbiting
-  upSpring: 3.0,
-  rollBlend: 0.5,
+  upSpring: 8.0,
+  rollBlend: 1.0, // camera up = ship up: the view rolls fully with the hull so left/right stay cockpit-relative
   orbitSens: 0.005, // rad per pixel of middle-drag
   orbitSpring: 6.0, // how fast the orbit springs back when released
 };

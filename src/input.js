@@ -34,6 +34,7 @@ export function createInput() {
     brake: false,
     fire: 0,
     gunAimX: 0,
+    gunAimY: 0,
     ejectHeld: false,
     gamepad: false,
     keys,
@@ -59,6 +60,7 @@ export function createInput() {
     let fire = keys.has('Space') ? 1 : 0;
     let eject = keys.has('KeyJ');
     let gunAimX = 0;
+    let gunAimY = 0;
 
     const gp = firstPad();
     input.gamepad = !!gp;
@@ -72,7 +74,8 @@ export function createInput() {
       fire = Math.max(fire, btn(7)); // right trigger
       boost = boost || btn(6) > 0.3; // left trigger
       brake = brake || btn(1) > 0.5; // B
-      gunAimX = dz(ax[2] || 0); // right stick X -> gun gimbal
+      gunAimX = dz(ax[2] || 0); // right stick X -> gun gimbal (yaw)
+      gunAimY = dz(ax[3] || 0); // right stick Y -> gun gimbal (pitch)
       eject = eject || btn(3) > 0.5 || btn(8) > 0.5; // Y or View/Back
     }
 
@@ -83,6 +86,7 @@ export function createInput() {
     input.brake = brake;
     input.fire = fire;
     input.gunAimX = clamp1(gunAimX);
+    input.gunAimY = clamp1(gunAimY);
     input.ejectHeld = eject;
     return input;
   }

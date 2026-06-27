@@ -1,13 +1,12 @@
 import * as THREE from 'three';
 import { FORMATION_PATTERNS } from './formations.js';
 
-// Continuous waves: spawns a new formation ahead of the player on an interval (while under the live
-// cap) and immediately if the field is clear. Mild escalation in size as the wave number climbs.
+// Waves: a new formation arrives only once the previous wave has been fully defeated, after a short
+// breather. Spawns ahead of the player; mild escalation in size as the wave number climbs.
 
 export function createWaveManager(enemies, opts = {}) {
   const params = {
-    maxEnemies: 16,
-    interval: 6, // s between waves while under the cap
+    gap: 3, // s after a wave is cleared before the next arrives
     spawnDist: 380,
     minSize: 3,
     maxSize: 5,
@@ -41,16 +40,19 @@ export function createWaveManager(enemies, opts = {}) {
   }
 
   function update(dt, player) {
-    timer -= dt;
-    if (enemies.count() >= params.maxEnemies) return;
-    if (timer <= 0 || enemies.count() === 0) {
+    if (enemies.count() > 0) {
+      timer = params.gap; // a wave is still active — hold the next one back
+      return;
+    }
+    timer -= dt; // field is clear — count down the breather, then send the next wave
+    if (timer <= 0) {
       spawn(player);
-      timer = params.interval;
+      timer = params.gap;
     }
   }
 
   function reset() {
-    timer = 2.0;
+    timer = params.gap;
     wave = 0;
   }
 

@@ -17,11 +17,14 @@ const FONT = 'font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#cdd
 export function createHud(damage, opts = {}) {
   const onRestart = opts.onRestart || (() => {});
 
-  // crosshair
-  const cross = el('div', 'position:fixed;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;'
+  // crosshair (follows the gun aim) + a target lock reticle
+  const cross = el('div', 'position:fixed;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);'
     + 'border:1.5px solid rgba(170,210,255,0.7);border-radius:50%;pointer-events:none;z-index:50;'
     + 'box-shadow:0 0 6px rgba(120,170,255,0.5);', document.body);
-  el('div', 'position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px;border-radius:50%;background:#dff;', cross);
+  el('div', 'position:absolute;left:50%;top:50%;width:3px;height:3px;transform:translate(-50%,-50%);border-radius:50%;background:#dff;', cross);
+  const reticle = el('div', 'position:fixed;left:50%;top:50%;width:42px;height:42px;transform:translate(-50%,-50%);'
+    + 'border:2px solid rgba(255,90,90,0.85);border-radius:7px;pointer-events:none;z-index:51;display:none;'
+    + 'box-shadow:0 0 9px rgba(255,80,80,0.45);', document.body);
 
   // counters (top-left)
   const counters = el('div', `position:fixed;top:12px;left:14px;padding:8px 12px;${PANEL}${FONT}`
@@ -148,6 +151,17 @@ export function createHud(damage, opts = {}) {
   function hideMissionOver() {
     over.style.display = 'none';
   }
+  function setAim(x, y) {
+    cross.style.left = x == null ? '50%' : `${x}px`;
+    cross.style.top = x == null ? '50%' : `${y}px`;
+  }
+  function setTarget(x, y, on) {
+    reticle.style.display = on ? 'block' : 'none';
+    if (on) {
+      reticle.style.left = `${x}px`;
+      reticle.style.top = `${y}px`;
+    }
+  }
 
-  return { update, showMissionOver, hideMissionOver };
+  return { update, showMissionOver, hideMissionOver, setAim, setTarget };
 }

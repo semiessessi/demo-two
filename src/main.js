@@ -112,6 +112,24 @@ let hud = null;
 let gameState = null;
 const playerVel = new THREE.Vector3();
 const playerFwd = new THREE.Vector3();
+const tmpV = new THREE.Vector3();
+const aimPoint = new THREE.Vector3();
+
+// Move the HUD crosshair to the gun's aim direction and the reticle onto the locked target.
+function updateAimHud(aim) {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  aimPoint.copy(ship.pivot.position).addScaledVector(aim.aimDir, 250);
+  tmpV.copy(aimPoint).project(camera);
+  hud.setAim(tmpV.z < 1 ? (tmpV.x * 0.5 + 0.5) * W : null, (-tmpV.y * 0.5 + 0.5) * H);
+  const t = aim.target;
+  if (t && t.alive) {
+    tmpV.copy(t.pos).project(camera);
+    hud.setTarget((tmpV.x * 0.5 + 0.5) * W, (-tmpV.y * 0.5 + 0.5) * H, tmpV.z < 1);
+  } else {
+    hud.setTarget(0, 0, false);
+  }
+}
 
 let ship = null;
 let thrusters = null;
@@ -154,7 +172,7 @@ async function init() {
   flight = createFlight(ship.pivot, camera, renderer.domElement, input);
 
   projectiles = createProjectiles(scene);
-  cannon = createPlayerCannon(scene, ship, projectiles);
+  cannon = createPlayerCannon(scene, ship, projectiles, { getEnemies: () => (enemyMgr ? enemyMgr.enemies : []) });
 
   chigKit = await loadChig();
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
@@ -209,7 +227,8 @@ function startLoop() {
     playerFwd.set(0, 0, -1).applyQuaternion(ship.pivot.quaternion);
     playerVel.copy(playerFwd).multiplyScalar(res.speed);
     const player = { pos: ship.pivot.position, quat: ship.pivot.quaternion, vel: playerVel };
-    if (flying) cannon.update(dt, input, player);
+    if (flying) updateAimHud(cannon.update(dt, input, player));
+    else hud.setTarget(0, 0, false);
     enemyMgr.update(dt, player);
     if (gameState.mode !== 'over') waves.update(dt, player);
     projectiles.update(dt);
@@ -367,7 +386,11 @@ function buildTweakGui() {
   if (cannon) {
     const gf = gui.addFolder('Cannon');
     gf.add(cannon.params, 'fireRate', 3, 40, 1).name('rounds/sec');
-    gf.add(cannon.params, 'gimbalMax', 0, 1, 0.02).name('gimbal max');
+    gf.add(cannon.params, 'gimbalMax', 0, 1.2, 0.02).name('gimbal yaw');
+    gf.add(cannon.params, 'gimbalMaxV', 0, 1, 0.02).name('gimbal down');
+    gf.add(cannon.params, 'autoTrack').name('auto-track');
+    gf.add(cannon.params, 'lead').name('auto-lead');
+    gf.add(cannon.params, 'targetRange', 60, 400, 10).name('acquire range');
     gf.add(cannon.params, 'boltScale', 0.2, 2, 0.05).name('bolt size');
     gf.add(cannon.params.muzzle, 'x', -3, 3, 0.05).name('muzzle X');
     gf.add(cannon.params.muzzle, 'y', -3, 3, 0.05).name('muzzle Y');
@@ -383,8 +406,9 @@ function buildTweakGui() {
   ef.add(enemyMgr.params, 'passesBeforeDogfight', 0, 5, 1).name('passes->dogfight');
   ef.close();
   const wf = gui.addFolder('Waves');
-  wf.add(waves.params, 'maxEnemies', 3, 40, 1).name('max enemies');
-  wf.add(waves.params, 'interval', 1, 20, 0.5).name('interval (s)');
+  wf.add(waves.params, 'gap', 0, 12, 0.5).name('gap after clear (s)');
+  wf.add(waves.params, 'minSize', 1, 8, 1).name('min size');
+  wf.add(waves.params, 'maxSize', 1, 12, 1).name('max size');
   wf.add(waves.params, 'spawnDist', 150, 700, 10).name('spawn dist');
   wf.close();
 }

@@ -14,20 +14,19 @@ import { formationSlots } from './formations.js';
 export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   const params = {
     speed: 40,
-    turnRate: 2.2,
+    turnRate: 1.4, // lower = can't perfectly stick to the player's tail (overshoots, makes passes)
     passDist: 70,
-    egressTime: 1.6,
-    passesBeforeDogfight: 2,
-    fireRate: 1.3,
-    fireRange: 240,
-    fireConeCos: Math.cos(0.26),
+    egressTime: 2.0, // longer break-off after a run -> looser, easier to catch
+    passesBeforeDogfight: 3, // spend more time in formation strafing runs before breaking up
+    formationSpacing: 14, // looser formation
+    fireRate: 1.2,
+    fireRange: 260,
+    fireConeCos: Math.cos(0.32),
     pulseSpeed: 230,
     pulseDamage: 10,
     hp: 30,
     color: 0x5fb0ff,
     rollRate: 4.0, // rad/s of barrel-rolling when not aiming
-    flankRadius: 42, // dogfight: how far points weave around the player
-    flankRate: 0.9, // rad/s the flank angle sweeps
     wingSpacing: 12, // how far a wingman trails its point
     avoidDist: 34, // start peeling away from the player inside this range
     avoidStrength: 1.4, // how hard they veer off to avoid ramming
@@ -59,7 +58,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   const awayDir = new THREE.Vector3();
 
   function spawnFormation({ pattern = 'vee', count = 4, pos, heading }) {
-    const slots = formationSlots(pattern, count, 8);
+    const slots = formationSlots(pattern, count, params.formationSpacing);
     const anchor = { pos: pos.clone(), vel: heading.clone().setLength(params.speed), phase: 'ingress', egress: 0, passes: 0 };
     const f = { anchor, members: [], slots, initialCount: count, dogfight: false };
     for (let i = 0; i < count; i++) {
@@ -81,7 +80,8 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         role: 'point',
         wingOf: null,
         wingSide: i % 2 === 0 ? 1 : -1,
-        attackAngle: Math.random() * Math.PI * 2,
+        phase: 'ingress', // per-enemy attack-run state in the dogfight
+        egress: 0,
       };
       obj.position.copy(e.pos);
       scene.add(obj);
@@ -187,6 +187,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
 
     for (const e of enemies) {
       if (!e.alive) continue;
+      const distP = e.pos.distanceTo(player.pos);
 
       // choose a steering target
       if (e.mode === 'formation') {
@@ -205,37 +206,39 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         br.crossVectors(bf, UP).normalize();
         st.copy(p.pos).addScaledVector(bf, -params.wingSpacing).addScaledVector(br, e.wingSide * params.wingSpacing * 0.7);
       } else {
-        // point (or orphaned wingman): weave/flank around the player
+        // point (or orphaned wingman): solo attack RUNS — bore in at the player (so they pass in
+        // front and can be shot head-on), break off when close, coast, then come round for another.
         if (!e.wingOf) e.role = 'point';
-        e.attackAngle += params.flankRate * dt;
-        flank.set(
-          Math.cos(e.attackAngle) * params.flankRadius,
-          Math.sin(e.attackAngle * 0.7) * params.flankRadius * 0.4,
-          Math.sin(e.attackAngle) * params.flankRadius,
-        );
-        st.copy(player.pos).add(flank);
+        if (e.phase === 'egress') {
+          st.copy(e.pos).addScaledVector(e.vel, 1); // hold heading -> fly past / break off
+          e.egress -= dt;
+          if (e.egress <= 0) e.phase = 'ingress';
+        } else {
+          st.copy(player.pos); // bore in
+          if (distP < params.passDist) {
+            e.phase = 'egress';
+            e.egress = params.egressTime;
+          }
+        }
       }
 
       // collision avoidance — peel away when too close so they don't ram the player
-      const distP = e.pos.distanceTo(player.pos);
       if (distP < params.avoidDist) {
         awayDir.copy(e.pos).sub(player.pos).normalize();
         const push = (params.avoidDist - distP) / params.avoidDist; // 0..1
         st.addScaledVector(awayDir, push * params.avoidStrength * params.avoidDist);
       }
 
-      // aiming check (for fire + roll)
-      toP.copy(player.pos).sub(e.pos);
-      const dist = toP.length() || 1;
-      efwd.copy(FWD).applyQuaternion(e.obj.quaternion);
-      const aiming = dist < params.fireRange && efwd.dot(toP.multiplyScalar(1 / dist)) > params.fireConeCos;
-
+      // Move + orient FIRST, then decide aiming with the CURRENT nose, so the firing test and the
+      // bolt direction use the same forward (otherwise bolts appear to fire off the line of travel).
       e.fireCd -= dt;
-      updateRoll(e, aiming, dt);
       steer(e, st, dt, e.mode === 'formation' ? params.speed : params.speed * 1.05);
       orient(e);
-      // recompute forward after orient for the muzzle/fire direction
       efwd.copy(FWD).applyQuaternion(e.obj.quaternion);
+      toP.copy(player.pos).sub(e.pos);
+      const dist = toP.length() || 1;
+      const aiming = dist < params.fireRange && efwd.dot(toP.multiplyScalar(1 / dist)) > params.fireConeCos;
+      updateRoll(e, aiming, dt);
       tryFire(e, player, aiming);
     }
   }
