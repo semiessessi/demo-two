@@ -71,13 +71,36 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
   const RESTITUTION = 0.6; // bounce energy kept (non-damaging collisions)
   const FRAG_R = 1.1; // approximate chunk collision radius
 
+  // Pre-created pool of chunk meshes — reused across deaths + re-breaks so a burst never allocates a
+  // Mesh or churns the scene graph (that per-chunk new Mesh()/scene.add() was the death-hitch). castShadow
+  // stays OFF: the chunks are tiny + short-lived and aren't worth a per-cascade shadow pass each.
+  const _placeholder = new THREE.BufferGeometry();
+  _placeholder.setAttribute('position', new THREE.BufferAttribute(new Float32Array(18), 3));
+  _placeholder.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(18), 3));
+  _placeholder.addGroup(0, 3, 0); _placeholder.addGroup(3, 3, 1); // touch both materials for the pre-warm
+  const pool = [];
+  for (let i = 0; i < cap; i++) {
+    const mesh = new THREE.Mesh(_placeholder, mats);
+    mesh.castShadow = false; mesh.frustumCulled = false; mesh.visible = false;
+    scene.add(mesh); pool.push(mesh);
+  }
+  let poolNext = 0;
+  function grabMesh() {
+    for (let n = 0; n < pool.length; n++) {
+      const idx = (poolNext + n) % pool.length;
+      if (!pool[idx].visible) { poolNext = (idx + 1) % pool.length; return pool[idx]; }
+    }
+    return null; // pool exhausted — skip
+  }
+
   // Add one chunk mover. `comWorld` = where the chunk's COM goes; it flies outward from `fromPos`.
   // If allowReBreak and the node has children, it may shatter again mid-flight (secondary re-break).
   function addMover(node, comWorld, quat, fromPos, baseVel, scale, allowReBreak) {
-    if (movers.length >= cap) return;
-    const mesh = new THREE.Mesh(node.geometry, mats);
-    mesh.castShadow = true;
-    mesh.frustumCulled = false;
+    const mesh = grabMesh();
+    if (!mesh) return; // pool exhausted
+    mesh.geometry = node.geometry;
+    mesh.scale.setScalar(1);
+    mesh.visible = true;
     mesh.position.copy(comWorld);
     mesh.quaternion.copy(quat);
     _dir.copy(comWorld).sub(fromPos);
@@ -86,7 +109,6 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
     const vel = _dir.multiplyScalar((3 + Math.random() * 12) * scale); // 3..15
     if (baseVel) vel.addScaledVector(baseVel, 0.4);
     vel.x += (Math.random() - 0.5) * 5; vel.y += (Math.random() - 0.5) * 5; vel.z += (Math.random() - 0.5) * 5;
-    scene.add(mesh);
     const mover = {
       mesh, vel,
       ang: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8),
@@ -148,11 +170,11 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
           _v2.copy(c.centroid).sub(pn.centroid).applyQuaternion(pq).add(ppos); // child COM world
           addMover(c, _v2, pq, ppos, m.vel, 1, false);
         }
-        scene.remove(m.mesh); movers.splice(i, 1); continue;
+        m.mesh.visible = false; m.mesh.scale.setScalar(1); movers.splice(i, 1); continue; // return to pool
       }
       m.life -= dt;
       if (m.life <= 0 || (player && m.mesh.position.distanceToSquared(player.pos) > CULL2)) {
-        scene.remove(m.mesh); movers.splice(i, 1); continue;
+        m.mesh.visible = false; m.mesh.scale.setScalar(1); movers.splice(i, 1); continue; // return to pool
       }
       m.mesh.position.addScaledVector(m.vel, dt);
       m.vel.multiplyScalar(1 - 0.35 * dt); // gentle drag
@@ -166,7 +188,7 @@ export function createDebris(scene, { chigTemplate, chigMaterial, count = 64, ca
   }
 
   function reset() {
-    for (const m of movers) scene.remove(m.mesh);
+    for (const m of movers) { m.mesh.visible = false; m.mesh.scale.setScalar(1); }
     movers.length = 0;
   }
 

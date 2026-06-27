@@ -32,7 +32,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     avoidStrength: 1.4, // how hard they veer off to avoid ramming
     pursueDist: 42, // dogfight: how far behind the player a hunter tries to sit (their six)
     pursueFlank: 22, // lateral fan so multiple hunters don't all stack on the exact tail
-    maxSpread: 0.09, // rad — fire-cone spread for a totally inaccurate pilot (accuracy 0)
+    maxSpread: 0, // rad — random fire-cone spread (OFF: enemies fire dead on the lead; raise to add spray)
     jinkStrength: 18, // how far an evasive pilot weaves sideways
     persSpread: 0.6, // per-pilot random variation in personality traits (GUI-tunable)
   };

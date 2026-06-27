@@ -263,6 +263,10 @@ async function init() {
     setStats(true); // show the FPS counter by default in debug
   }
 
+  // Pre-warm every material's shader program once now (during the fade-in) so the FIRST explosion /
+  // death-debris / muzzle flash doesn't pay a compile stall mid-fight.
+  try { renderer.compile(scene, camera); } catch (e) { console.warn('[prewarm] compile skipped', e); }
+
   startLoop();
   reveal();
 }
@@ -331,7 +335,7 @@ function startLoop() {
 
     fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
     quality.update(dt, fps); // auto-scale shadow/VFX tier to the framerate (rate-limited)
-    if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps\n${(res.speed | 0)} u/s\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
+    if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
   });
 }
 
