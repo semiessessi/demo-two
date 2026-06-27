@@ -39,7 +39,7 @@ const THRUSTERS = /[?&]thrusters\b/.test(window.location.search);
 
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
-const { renderer, scene, camera, composer, bloom, render } = createRenderer(app);
+const { renderer, scene, camera, composer, bloom, render, setRenderScale } = createRenderer(app);
 
 // Lighting: a warm orange "sun" as the main light, a cool rim from the opposite side for separation,
 // and a dim hemisphere fill so shadowed sides aren't pure black.
@@ -210,7 +210,7 @@ async function init() {
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
   waves = createWaveManager(enemyMgr);
   vfx = createVfx(scene, camera, { lightDir: sunDir }); // align smoke self-shadow with the real sun
-  quality = createQuality({ lighting, vfx }); // FPS-driven tier ladder: CSM res, shadow-light budget, smoke, vfx
+  quality = createQuality({ lighting, vfx, setRenderScale }); // FPS-driven tier ladder: render scale, CSM res, shadow-light budget, smoke, vfx
   combat = createCombat(projectiles, enemyMgr, vfx, {
     getPlayerPos: () => ship.pivot.position,
     playerHitRadius: ship.radius * 0.85,

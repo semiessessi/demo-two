@@ -38,6 +38,7 @@ uniform float uEmissive;  // 0 = pure smoke; >0 = hot fire amount (explosions, f
 uniform float uNoiseScale;
 uniform float uDrift;
 uniform float uSteps;
+uniform float uSelfShadow; // 1 = run the per-step self-shadow march; 0 = read fully lit (distant/low tier)
 uniform vec3 uColSmoke;   // smoke albedo (gets lit)
 uniform vec3 uLightDir;   // toward the key light (normalized)
 uniform vec3 uLightColor;
@@ -127,9 +128,14 @@ void main() {
       float dT = exp(-ext * dt);
 
       // --- smoke: self-shadow toward the key light (3-tap Beer-Lambert) ---
-      float sh = 0.0;
-      for (int j = 1; j <= 3; j++) sh += densityLite(p + uLightDir * lstep * float(j));
-      float lit = exp(-sh * lstep * uSigma * 1.1);
+      // Gated: distant / low-tier puffs skip the 3 extra fbm marches per step and read fully lit. The
+      // self-shadow reads as 3D thickness up close but is barely legible far away, so it's cheap to drop.
+      float lit = 1.0;
+      if (uSelfShadow > 0.5) {
+        float sh = 0.0;
+        for (int j = 1; j <= 3; j++) sh += densityLite(p + uLightDir * lstep * float(j));
+        lit = exp(-sh * lstep * uSigma * 1.1);
+      }
       vec3 smoke = uColSmoke * (uAmbient + uLightColor * lit);
       smoke *= 1.0 - 0.55 * exp(-d * 3.0); // Beer-Powder: darker thin edges
 
@@ -198,6 +204,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
         uNoiseScale: { value: 2.4 },
         uDrift: { value: 0.3 },
         uSteps: { value: 32 },
+        uSelfShadow: { value: 1 },
         uColSmoke: { value: new THREE.Color() },
         uLightDir: { value: lightDir.clone() },
         uLightColor: { value: COL.light.clone() },
@@ -354,6 +361,10 @@ export function createVolumetrics(scene, camera, opts = {}) {
     else if (distSq > 70 * 70) st = quality === 'low' ? 11 : 18;
     if (k > 0.6) st = Math.max(9, st - 5);
     u.uSteps.value = st;
+    // Self-shadow is the per-step 3-tap fbm march — easily the puff's heaviest cost. Drop it on low tier
+    // and for distant puffs (its 3D thickness cue is illegible far away anyway). Explosions keep it (few,
+    // close, hero) via the uniform's default of 1.
+    u.uSelfShadow.value = (quality === 'low' || distSq > 110 * 110) ? 0 : 1;
   }
 
   function retire(s) {

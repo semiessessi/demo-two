@@ -7,13 +7,28 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 // Renderer + scene + chase camera + post chain (RenderPass -> UnrealBloom -> OutputPass).
 // OutputPass applies tone mapping + sRGB at the end; intermediate passes work in linear HDR so the
 // bloom blooms on real brightness (emissive thrusters, star cores).
+
+// This demo is fill-rate bound (fullscreen nebula + raymarched volumetrics), so device-pixel-ratio is
+// the single biggest lever: at dpr 2 we shade 4x the fragments. Cap at 1.3 (like demo-1) — ~25% fewer
+// fullscreen fragments than 1.5, ~4x cheaper than 2.0, for a slight, mostly-unnoticed softening.
+const MAX_PR = 1.3;
+// Firefox on Linux/Mesa runs multisampled half-float renderbuffers (the EffectComposer HDR target)
+// through a slow blit path that tanks even strong GPUs. Detect it and drop to a plain 8-bit, non-MSAA
+// composer target: bloom loses some HDR punch and edges alias a touch, but it stops being a slideshow.
+const IS_FIREFOX = typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent || '');
+
 export function createRenderer(container) {
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
     powerPreference: 'high-performance',
     stencil: false,
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // renderScale (0.5..1) is the quality controller's fill-rate lever on top of the MAX_PR cap.
+  let renderScale = 1;
+  let curW = window.innerWidth;
+  let curH = window.innerHeight;
+  const effectivePR = () => Math.min(window.devicePixelRatio || 1, MAX_PR) * renderScale;
+  renderer.setPixelRatio(effectivePR());
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.95;
@@ -43,8 +58,8 @@ export function createRenderer(container) {
   // keeps bright (>1) values for the bloom threshold.
   const dpr = renderer.getDrawingBufferSize(new THREE.Vector2());
   const renderTarget = new THREE.WebGLRenderTarget(dpr.x, dpr.y, {
-    type: THREE.HalfFloatType,
-    samples: 4,
+    type: IS_FIREFOX ? THREE.UnsignedByteType : THREE.HalfFloatType,
+    samples: IS_FIREFOX ? 0 : 4,
   });
   const composer = new EffectComposer(renderer, renderTarget);
   composer.addPass(new RenderPass(scene, camera));
@@ -61,12 +76,27 @@ export function createRenderer(container) {
   composer.addPass(new OutputPass());
 
   function setSize(w, h) {
+    curW = w;
+    curH = h;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    renderer.setPixelRatio(effectivePR());
     renderer.setSize(w, h);
+    // EffectComposer caches its own pixelRatio (set at construction) — keep it in sync or its HDR
+    // targets render at the wrong resolution after a scale change.
+    composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(w, h);
   }
   window.addEventListener('resize', () => setSize(window.innerWidth, window.innerHeight));
 
-  return { renderer, scene, camera, composer, bloom, render: () => composer.render(), setSize };
+  // Quality controller lever: drop the internal render resolution (0.5..1) under load, then restore it.
+  // Cheap and reversible — it just re-sizes the buffers; no shader recompiles.
+  function setRenderScale(s) {
+    const ns = Math.min(1, Math.max(0.5, s));
+    if (ns === renderScale) return;
+    renderScale = ns;
+    setSize(curW, curH);
+  }
+
+  return { renderer, scene, camera, composer, bloom, render: () => composer.render(), setSize, setRenderScale };
 }

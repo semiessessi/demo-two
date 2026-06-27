@@ -40,9 +40,17 @@ float noise(vec3 x) {
              mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
                  mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
 }
+// The backdrop fills the screen every frame, so its octave count is a flat per-pixel tax. Base uses 5
+// octaves for the large cloud structure; the detail lookup runs at 3x frequency where the extra-fine
+// octaves are imperceptible on a dimmed (~10%) backdrop, so it gets a cheaper 3-octave variant.
 float fbm(vec3 p) {
   float v = 0.0, a = 0.5;
-  for (int i = 0; i < 6; i++) { v += a * noise(p); p *= 2.02; a *= 0.5; }
+  for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.02; a *= 0.5; }
+  return v;
+}
+float fbmDetail(vec3 p) {
+  float v = 0.0, a = 0.5;
+  for (int i = 0; i < 3; i++) { v += a * noise(p); p *= 2.02; a *= 0.5; }
   return v;
 }
 
@@ -51,7 +59,7 @@ void main() {
   // slow drift so the nebula isn't dead-static
   vec3 p = dir * 2.6 + vec3(0.0, 0.0, uTime * 0.012);
   float base = fbm(p);
-  float detail = fbm(p * 3.1 + base * 1.5);
+  float detail = fbmDetail(p * 3.1 + base * 1.5);
   float density = pow(clamp(base * 0.7 + detail * 0.5, 0.0, 1.0), 1.7);
 
   // colour ramp: base -> mid clouds -> hot cores
