@@ -48,7 +48,6 @@ function extractHull(template, convex = false) {
 export function createDebris(scene, { template, material, convex = false, vfx = null, count = 64, cap = 240 } = {}) {
   const hull = extractHull(template, convex);
   const tag = convex ? 'player' : 'enemy';
-  console.log('[debris] ' + tag + ' hull verts', hull.pos.length / 3, 'indexed', !!hull.index);
   // fragment materials: reuse the source hull look (no vertex colors, faceted) + a dark torn interior
   const srcMat = material || hull.material;
   const hullMat = srcMat ? srcMat.clone() : new THREE.MeshStandardMaterial({ color: 0x3a423c, metalness: 0.45, roughness: 0.45 });
@@ -78,7 +77,6 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
       for (const id in byId) { const n = byId[id]; if (n.parent != null && byId[n.parent]) byId[n.parent].children.push(n); }
       const roots = (m.roots || []).map((id) => byId[id]).filter(Boolean);
       if (roots.length) variations.push(roots); // each variation = array of root tree-nodes
-      if (variations.length === 1) console.log('[debris] ' + tag + ' first variation ready — nodes', m.nodes.length);
     };
     worker.postMessage(
       { type: 'gen', pos: hull.pos, index: hull.index, count, opts: { kNeighbors: 8 } },
