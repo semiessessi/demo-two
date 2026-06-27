@@ -276,5 +276,5 @@ export function createVfx(scene, camera, opts = {}) {
     vol.setQuality(q);
   }
 
-  return { explosion, spark, ember, smoke, spawnDebris, clearDebris, update, setQuality, setSmokeShadows: vol.setSmokeShadows, createTrail: vol.createTrail, get quality() { return quality; }, _vol: vol };
+  return { explosion, firework, spark, ember, smoke, spawnDebris, clearDebris, update, setQuality, setSmokeShadows: vol.setSmokeShadows, createTrail: vol.createTrail, get quality() { return quality; }, _vol: vol };
 }
