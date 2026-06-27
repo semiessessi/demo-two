@@ -221,7 +221,7 @@ async function init() {
   debris = createDebris(scene, { chigTemplate: chigKit.template, chigMaterial: chigKit.material });
   enemyMgr.setDebris(debris); // ship-fracture chunks on death
   debrisPlayer = { pos: ship.pivot.position, radius: ship.radius, vel: playerVel };
-  quality = createQuality({ lighting, vfx, setRenderScale }); // FPS-driven tier ladder: render scale, CSM res, shadow-light budget, smoke, vfx
+  quality = createQuality({ lighting, vfx, debris, setRenderScale }); // FPS-driven tier ladder: render scale, CSM res, shadow-light budget, smoke, vfx, debris
   combat = createCombat(projectiles, enemyMgr, vfx, {
     getPlayerPos: () => ship.pivot.position,
     playerHitRadius: ship.radius * 0.85,

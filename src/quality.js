@@ -50,7 +50,7 @@ const DOWN_HOLD = 3;    // ticks of sag before stepping down (~0.3s — react fa
 const UP_HOLD = 12;     // ticks of headroom before stepping up (~1.2s — climb slowly)
 const COOLDOWN = 20;    // ticks to wait after any change (~2s) so recompiles/CSM rebuilds settle
 
-export function createQuality({ lighting, vfx, setRenderScale, startTier } = {}) {
+export function createQuality({ lighting, vfx, debris, setRenderScale, startTier } = {}) {
   let current = startTier != null ? clamp(startTier, 0, TIERS.length - 1) : deviceStartTier();
   let acc = 0;          // time accumulator -> fires a decision every TICK
   let downTicks = 0;
@@ -66,6 +66,7 @@ export function createQuality({ lighting, vfx, setRenderScale, startTier } = {})
     lighting.setTransientBudget(t.transient);
     if (vfx.setSmokeShadows) vfx.setSmokeShadows(t.smokeCast);
     vfx.setQuality(t.vfx);
+    if (debris) debris.setQuality(t.vfx); // 'low' (potato) -> no fracture chunks on death
   }
 
   apply(current);
