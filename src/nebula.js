@@ -20,7 +20,7 @@ uniform float uPulse;
 uniform float uBrightness;
 uniform float uSaturation;
 uniform float uMilkyWay; // brightness of the tilted Milky Way band
-uniform float uMwTilt;   // tilt of the band plane (rad)
+uniform vec3 uMwPole;    // unit galactic NORTH pole (scene coords) — the Milky Way is the great circle perpendicular to it
 uniform vec3 uColorA; // deep base
 uniform vec3 uColorB; // mid clouds
 uniform vec3 uColorC; // hot cores
@@ -56,6 +56,7 @@ float fbmDetail(vec3 p) {
 
 void main() {
   vec3 dir = normalize(vDir);
+  float galLat = dot(dir, uMwPole); // sine of galactic latitude: 0 on the Milky-Way plane, ±1 at its poles
   // slow drift so the nebula isn't dead-static
   vec3 p = dir * 2.6 + vec3(0.0, 0.0, uTime * 0.012);
   float base = fbm(p);
@@ -67,7 +68,7 @@ void main() {
   col = mix(col, uColorC, smoothstep(0.62, 0.95, density) * 0.85);
 
   // a brighter band across the galaxy plane for some structure
-  float band = exp(-pow(dir.y * 2.3, 2.0));
+  float band = exp(-pow(galLat * 2.3, 2.0));
   col += uColorB * band * 0.18;
 
   col *= 0.55 + 0.9 * density;
@@ -77,11 +78,10 @@ void main() {
   col *= 1.0 + uPulse * 0.5; // music breath
   col *= uBrightness;        // overall dimmer (user: ~10%)
 
-  // Milky Way: a narrower, brighter band on a tilted plane, broken up by the fbm into dust lanes,
-  // tinted warm-grey. Added AFTER the nebula dimming so it sits above the 10% backdrop and reads as
-  // the brightest diffuse feature. uMilkyWay scales it; uMwTilt rotates the band plane.
-  float ct = cos(uMwTilt), st = sin(uMwTilt);
-  float my = dir.y * ct - dir.z * st;            // distance from the tilted plane
+  // Milky Way: a narrower, brighter band on the REAL galactic plane (perpendicular to uMwPole, the
+  // galactic north pole in the star catalog's frame), broken into dust lanes by the fbm, tinted warm-grey.
+  // Added AFTER the nebula dimming so it reads as the brightest diffuse feature. uMilkyWay scales it.
+  float my = galLat;                             // distance from the real galactic plane
   float mw = exp(-pow(my * 4.2, 2.0));            // tight bright core of the band
   float lanes = mix(0.4, 1.0, clamp(detail * 1.3, 0.0, 1.0)); // dark dust lanes from the noise
   vec3 mwTint = mix(vec3(0.62, 0.66, 0.78), uColorC, 0.18);    // warm-grey, a hint of the core colour
@@ -97,7 +97,7 @@ export function createNebula() {
     uBrightness: { value: 0.1 }, // ~10% overall — keep the backdrop subtle
     uSaturation: { value: 0.32 }, // greyer still — the blue was too rich
     uMilkyWay: { value: 0.12 }, // tilted galactic band brightness (sits above the dimmed nebula)
-    uMwTilt: { value: 0.6 }, // ~34° tilt so the band crosses the sky diagonally
+    uMwPole: { value: new THREE.Vector3(0.868, 0.456, -0.198) }, // galactic N pole (real RA 192.86°, Dec +27.13°) mapped into the catalog's scene frame -> band through Crux, Cygnus, past Orion
     uColorA: { value: new THREE.Color(0x04050f) }, // deep blue-black base
     uColorB: { value: new THREE.Color(0x223080) }, // blue clouds (dominant)
     uColorC: { value: new THREE.Color(0xd8401f) }, // red hot cores (accent touches)

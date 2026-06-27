@@ -588,7 +588,7 @@ function buildTweakGui() {
   // Sky — Milky Way band
   const sf = gui.addFolder('Sky');
   sf.add(nebula.uniforms.uMilkyWay, 'value', 0, 0.4, 0.01).name('milky way');
-  sf.add(nebula.uniforms.uMwTilt, 'value', -1.6, 1.6, 0.02).name('mw tilt');
+  // (the band orientation is now fixed to the real galactic plane via uMwPole — no tilt slider)
   sf.close();
 
   // VFX — trigger + tune the volumetric explosions/smoke
