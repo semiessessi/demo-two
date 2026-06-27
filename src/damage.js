@@ -32,13 +32,23 @@ export function createDamageModel(ship, opts = {}) {
   add('Cockpit', meshCenterLocal(/canopy/i, new THREE.Vector3(0, 0.3, -R * 0.4)), R * 0.5, 55, 'cockpit');
   add('L Engine', lEng, R * 0.5, 20, 'engine'); // fragile: ~2 enemy pulses (10 dmg) knock it out
   add('R Engine', rEng, R * 0.5, 20, 'engine');
-  add('L Wing', meshCenterLocal(/l_aileron/i, new THREE.Vector3(-R * 0.8, 0, 0.3)), R * 0.7, 80, 'wing');
-  add('R Wing', meshCenterLocal(/r_aileron/i, new THREE.Vector3(R * 0.8, 0, 0.3)), R * 0.7, 80, 'wing');
+  add('L Wing', meshCenterLocal(/l_aileron/i, new THREE.Vector3(-R * 0.8, 0, 0.3)), R * 0.7, 20, 'wing'); // ~2 hits
+  add('R Wing', meshCenterLocal(/r_aileron/i, new THREE.Vector3(R * 0.8, 0, 0.3)), R * 0.7, 20, 'wing');
+  add('Gun', new THREE.Vector3(0, -R * 0.12, -R * 0.7), R * 0.4, 20, 'gun'); // front; destroyed -> can't fire
+  add('L Fuel', new THREE.Vector3(-R * 0.3, -R * 0.05, R * 0.18), R * 0.4, 25, 'fuel'); // rupture -> catastrophic
+  add('R Fuel', new THREE.Vector3(R * 0.3, -R * 0.05, R * 0.18), R * 0.4, 25, 'fuel');
   add('Fuselage', new THREE.Vector3(0, 0, 0), R * 0.7, 120, 'fuselage');
 
   let onEject = opts.onEject || null;
   let onDestroyed = opts.onDestroyed || null;
+  let onFuelRupture = opts.onFuelRupture || null;
   const localPt = new THREE.Vector3();
+
+  // The front gun is offline once its zone is destroyed (the player cannon checks this each frame).
+  function canFire() {
+    for (const z of zones) if (z.kind === 'gun' && !z.alive) return false;
+    return true;
+  }
 
   function applyHit(worldPoint, dmg) {
     pivot.worldToLocal(localPt.copy(worldPoint));
@@ -59,6 +69,8 @@ export function createDamageModel(ship, opts = {}) {
       best.alive = false;
       if (best.kind === 'cockpit' && onEject) onEject();
       else if (best.kind === 'fuselage' && onDestroyed) onDestroyed();
+      else if (best.kind === 'fuel' && onFuelRupture) onFuelRupture(best); // tank rupture is catastrophic
+      // gun: no callback — canFire() reads its zone state and disables the cannon
     }
     return best;
   }
@@ -143,12 +155,14 @@ export function createDamageModel(ship, opts = {}) {
     zones,
     applyHit,
     speedScale,
+    canFire,
     update,
     totalHp,
     reset,
     setCallbacks(c) {
       if (c.onEject) onEject = c.onEject;
       if (c.onDestroyed) onDestroyed = c.onDestroyed;
+      if (c.onFuelRupture) onFuelRupture = c.onFuelRupture;
     },
   };
 }

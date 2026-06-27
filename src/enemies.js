@@ -30,6 +30,8 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     wingSpacing: 12, // how far a wingman trails its point
     avoidDist: 34, // start peeling away from the player inside this range
     avoidStrength: 1.4, // how hard they veer off to avoid ramming
+    pursueDist: 42, // dogfight: how far behind the player a hunter tries to sit (their six)
+    pursueFlank: 22, // lateral fan so multiple hunters don't all stack on the exact tail
     maxSpread: 0.09, // rad — fire-cone spread for a totally inaccurate pilot (accuracy 0)
     jinkStrength: 18, // how far an evasive pilot weaves sideways
     persSpread: 0.6, // per-pilot random variation in personality traits (GUI-tunable)
@@ -289,20 +291,16 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
         br.crossVectors(bf, UP).normalize();
         st.copy(p.pos).addScaledVector(bf, -params.wingSpacing).addScaledVector(br, e.wingSide * params.wingSpacing * 0.7);
       } else {
-        // point (or orphaned wingman): solo attack RUNS — bore in at the player (so they pass in
-        // front and can be shot head-on), break off at the pilot's standoff, coast, then come round.
+        // point (or orphaned wingman): hunt the player's SIX. Slide in behind along their heading and
+        // hold station on the tail, fanned out by attackAngle so hunters don't stack. A straight-flying
+        // target lets them line up the tail and shred it; turning constantly throws off both their tail
+        // position AND their firing lead — manoeuvring is the counter.
         if (!e.wingOf) e.role = 'point';
-        if (e.phase === 'egress') {
-          st.copy(e.pos).addScaledVector(e.vel, 1); // hold heading -> fly past / break off
-          e.egress -= dt;
-          if (e.egress <= 0) e.phase = 'ingress';
-        } else {
-          st.copy(player.pos); // bore in
-          if (distP < e.p.standoff) {
-            e.phase = 'egress';
-            e.egress = params.egressTime;
-          }
-        }
+        flank.crossVectors(pfwd, UP).normalize(); // player's right
+        st.copy(player.pos)
+          .addScaledVector(pfwd, -params.pursueDist)
+          .addScaledVector(flank, Math.cos(e.attackAngle || 0) * params.pursueFlank)
+          .addScaledVector(UP, Math.sin(e.attackAngle || 0) * params.pursueFlank * 0.5);
       }
 
       // evasive weave — evasive pilots juke sideways, harder when the player's nose is on them

@@ -185,7 +185,10 @@ async function init() {
   flight = createFlight(ship.pivot, camera, renderer.domElement, input);
 
   projectiles = createProjectiles(scene);
-  cannon = createPlayerCannon(scene, ship, projectiles, { getEnemies: () => (enemyMgr ? enemyMgr.enemies : []) });
+  cannon = createPlayerCannon(scene, ship, projectiles, {
+    getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
+    canFire: () => !damage || damage.canFire(), // gun subsystem destroyed -> cannon offline
+  });
 
   chigKit = await loadChig();
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
@@ -201,7 +204,11 @@ async function init() {
   hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
   targetDisplay = createTargetDisplay(chigKit.template);
   gameState = createGameState({ ship, camera, flight, hud, vfx, onRestart: restartWorld });
-  damage.setCallbacks({ onEject: () => gameState.eject(), onDestroyed: () => gameState.destroyed() });
+  damage.setCallbacks({
+    onEject: () => gameState.eject(),
+    onDestroyed: () => gameState.destroyed(),
+    onFuelRupture: () => gameState.destroyed(), // tank rupture -> fireball + ship lost
+  });
 
   if (DEBUG) {
     // debug handle + live-tuning GUI — local dev only, never on the deployed site

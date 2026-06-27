@@ -31,6 +31,7 @@ const MANUAL_DEADZONE = 0.1;
 
 export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
   const getEnemies = opts.getEnemies || (() => []);
+  const canFire = opts.canFire || (() => true); // false once the Gun subsystem is destroyed
   const params = {
     fireRate: 27,
     boltSpeed: 380,
@@ -212,7 +213,7 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
     aimDir.applyQuaternion(qPitch).normalize();
 
     cooldown -= dt;
-    if ((input?.fire || 0) > 0.5 && cooldown <= 0) {
+    if ((input?.fire || 0) > 0.5 && cooldown <= 0 && canFire()) {
       cooldown = 1 / params.fireRate;
       muzzle();
       vel.copy(aimDir).multiplyScalar(params.boltSpeed);
