@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 // Debug-only visual editor for placement data that has no on-screen representation otherwise:
 //   • DAMAGE ZONES — drawn as wireframe spheres (colour-coded by kind) at each zone's centre/radius.
-//   • RCS PORTS    — drawn as a marker + a direction arrow showing where the exhaust shoots.
+//   • RCS PORTS    — drawn as the jet cone itself (apex along the exhaust dir) at full-fire size.
 // Both attach under ship.pivot (local frame) so they track the ship in flight AND the model viewers.
 // lil-gui controls move/resize each item live; "log → console" buttons print the current values as
 // code/JSON to paste back into damage.js / rcs.js. Built only under the DEBUG flag.
@@ -67,37 +67,41 @@ export function createEditor(gui, { scene, ship, damage, rcs }) {
     const portGroup = new THREE.Group();
     portGroup.visible = false;
     pivot.add(portGroup);
-    const markGeo = new THREE.OctahedronGeometry(0.28);
-    const marks = rcs.ports.map((p) => {
-      const mark = new THREE.Mesh(markGeo, new THREE.MeshBasicMaterial({ color: 0x9fe2ff, depthTest: false, transparent: true, opacity: 0.9 }));
-      const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-      const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0x9fe2ff, depthTest: false }));
-      mark.frustumCulled = line.frustumCulled = false;
-      mark.renderOrder = line.renderOrder = 999;
-      portGroup.add(mark);
-      portGroup.add(line);
-      return { p, mark, line };
+    // Show the actual JET (a cone, apex along the exhaust dir, base at the port) at a representative
+    // full-fire size from the live jet radius/length — WYSIWYG instead of a marker + arrow.
+    const coneGeo = new THREE.ConeGeometry(0.5, 1, 12, 1, true); // apex +Y, matches rcs.js
+    const UP = new THREE.Vector3(0, 1, 0);
+    const cones = rcs.ports.map((p) => {
+      const mat = new THREE.MeshBasicMaterial({ color: 0x9fe2ff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide, opacity: 0.8 });
+      const cone = new THREE.Mesh(coneGeo, mat);
+      cone.frustumCulled = false;
+      cone.renderOrder = 999;
+      portGroup.add(cone);
+      return { p, cone };
     });
-    const _a = new THREE.Vector3();
-    const _b = new THREE.Vector3();
-    const _d = new THREE.Vector3();
+    const _dir = new THREE.Vector3();
+    const _q = new THREE.Quaternion();
     function syncPorts() {
-      for (const { p, mark, line } of marks) {
-        _a.set(p.pos[0], p.pos[1], p.pos[2]);
-        mark.position.copy(_a);
-        _d.set(p.dir[0], p.dir[1], p.dir[2]);
-        if (_d.lengthSq() < 1e-6) _d.set(0, 1, 0); else _d.normalize();
-        _b.copy(_a).addScaledVector(_d, 2.2); // arrow length
-        line.geometry.setFromPoints([_a, _b]);
+      const jr = rcs.jet ? rcs.jet.radius : 0.1;
+      const jl = rcs.jet ? rcs.jet.length : 0.5;
+      const len = 2.9 * jl; // a full-fire jet (preview); matches rcs.js update() at level 1
+      const wid = 0.8 * jr;
+      for (const { p, cone } of cones) {
+        _dir.set(p.dir[0], p.dir[1], p.dir[2]);
+        if (_dir.lengthSq() < 1e-6) _dir.set(0, 1, 0); else _dir.normalize();
+        _q.setFromUnitVectors(UP, _dir);
+        cone.quaternion.copy(_q);
+        cone.scale.set(wid, len, wid);
+        cone.position.set(p.pos[0], p.pos[1], p.pos[2]).addScaledVector(_dir, len * 0.5); // base at the port
       }
     }
     syncPorts();
 
     const pf = gui.addFolder('RCS Ports (edit)');
-    pf.add(portGroup, 'visible').name('show ports');
+    pf.add(portGroup, 'visible').name('show ports (jets)');
     if (rcs.jet) {
-      pf.add(rcs.jet, 'radius', 0.02, 1, 0.01).name('jet radius ×');
-      pf.add(rcs.jet, 'length', 0.1, 2, 0.05).name('jet length ×');
+      pf.add(rcs.jet, 'radius', 0.02, 1, 0.01).name('jet radius ×').onChange(syncPorts);
+      pf.add(rcs.jet, 'length', 0.1, 2, 0.05).name('jet length ×').onChange(syncPorts);
       pf.add(rcs.jet, 'gain', 0.2, 8, 0.1).name('jet gain');
     }
     rcs.ports.forEach((p) => {

@@ -8,6 +8,8 @@ import * as THREE from 'three';
 // target. We instead test the SEGMENT the bolt travelled this frame against each target sphere.
 // `onPlayerHit(worldPoint, damage)` is set by main once the damage model exists.
 
+const DEATH_EXPL_SCALE = 2.8; // enemy-death blast ~3x the old size
+
 export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
   const getPlayerPos = opts.getPlayerPos;
   const params = { playerHitRadius: opts.playerHitRadius || 4.5 };
@@ -44,7 +46,7 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
             projectiles.kill(b);
             if (e.hp <= 0) {
               e.alive = false;
-              vfx.explosion(e.pos, 1);
+              vfx.explosion(e.pos, DEATH_EXPL_SCALE);
             }
             break;
           }

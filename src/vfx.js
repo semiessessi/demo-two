@@ -23,9 +23,9 @@ function radialTexture(stops) {
   return t;
 }
 
-const MAX = 160;
+const MAX = 220;
 const SMOKE_MAX = 48;
-const STREAK_MAX = 240;
+const STREAK_MAX = 420;
 
 function detectQuality() {
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
@@ -175,15 +175,17 @@ export function createVfx(scene, camera, opts = {}) {
   }
 
   function firework(pos, scale) {
-    // hot radiating spark streaks (a couple of temperatures) — the sci-fi "blast" look
-    sparkBurst(pos, 0xffd9a0, { count: Math.round(18 * scale), speed: 26 * scale, life: 0.5, lenScale: 0.07, width: 1.5, maxLen: 9 });
-    sparkBurst(pos, 0xfff4d6, { count: Math.round(8 * scale), speed: 42 * scale, life: 0.34, lenScale: 0.05, width: 1.0, maxLen: 6 });
-    // glowing blob chunks flung outward (additive fire sprites)
-    const n = Math.round(10 * scale);
+    // MANY but SMALL radiating spark streaks (a few temperatures) — the sci-fi "blast" look
+    sparkBurst(pos, 0xffd9a0, { count: Math.round(42 * scale), speed: 28 * scale, life: 0.5, lenScale: 0.06, width: 0.9, maxLen: 6 });
+    sparkBurst(pos, 0xfff4d6, { count: Math.round(20 * scale), speed: 46 * scale, life: 0.34, lenScale: 0.05, width: 0.7, maxLen: 5 });
+    // fine fast shrapnel — lots of tiny short streaks
+    sparkBurst(pos, 0xffe6c0, { count: Math.round(30 * scale), speed: 34 * scale, life: 0.22, lenScale: 0.04, width: 0.5, maxLen: 3 });
+    // glowing blob chunks flung outward (additive fire sprites) — more, smaller
+    const n = Math.round(26 * scale);
     for (let i = 0; i < n; i++) {
-      randDir(_v).multiplyScalar((9 + Math.random() * 22) * scale);
+      randDir(_v).multiplyScalar((10 + Math.random() * 26) * scale);
       const col = Math.random() < 0.5 ? 0xff8a3a : 0xffc878;
-      emit(fireTex, col, pos, { life: 0.5 + Math.random() * 0.55, from: 0.6 * scale, to: (2.0 + Math.random() * 2.2) * scale, vel: _v.clone() });
+      emit(fireTex, col, pos, { life: 0.45 + Math.random() * 0.5, from: 0.35 * scale, to: (0.9 + Math.random() * 1.1) * scale, vel: _v.clone() });
     }
   }
 

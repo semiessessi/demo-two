@@ -11,10 +11,10 @@ import * as THREE from 'three';
 // fires asymmetrically. Firing is derived from geometry (see update), so no per-port axis is needed.
 // Tail "up" pairs mirror their "down" siblings in Y. Positions are pivot-local; edit live, then bake.
 export const RCS_PORTS = [
-  { name: 'Nose down L', pos: [-0.9, -0.1, -3.1], dir: [0, 1, 0] },
-  { name: 'Nose down R', pos: [0.9, -0.1, -3.1], dir: [0, 1, 0] },
-  { name: 'Nose up L', pos: [-0.9, 0.1, -3.1], dir: [0, -1, 0] },
-  { name: 'Nose up R', pos: [0.9, 0.1, -3.1], dir: [0, -1, 0] },
+  { name: 'Nose down L', pos: [-0.9, -0.15, -3.1], dir: [0, 1, 0] },
+  { name: 'Nose down R', pos: [0.9, -0.15, -3.1], dir: [0, 1, 0] },
+  { name: 'Nose up L', pos: [-0.9, -0.1, -3.1], dir: [0, -1, 0] },
+  { name: 'Nose up R', pos: [0.9, -0.1, -3.1], dir: [0, -1, 0] },
   { name: 'Tail down L', pos: [-0.2, 0.4, 2.7], dir: [0, 1, 0] },
   { name: 'Tail down R', pos: [0.2, 0.4, 2.7], dir: [0, 1, 0] },
   { name: 'Tail up L', pos: [-0.2, -0.4, 2.7], dir: [0, -1, 0] },

@@ -144,7 +144,7 @@ void main() {
       if (uEmissive > 0.001) {
         float rc = clamp(1.0 - length(p) / uRadius, 0.0, 1.0); // hotter toward the core
         float heat = clamp(uEmissive * clamp(d * 1.3, 0.0, 1.0) * (0.4 + 0.6 * rc), 0.0, 1.0);
-        emit = fireRamp(heat) * (0.3 + heat * heat * 4.5);
+        emit = fireRamp(heat) * (0.3 + heat * heat * 5.5);
       }
 
       vec3 S = smoke + emit;
@@ -243,7 +243,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
     return arr;
   }
 
-  const EXPL_MAX = 8;
+  const EXPL_MAX = 12;
   const PUFF_MAX = 44;
   const explPool = makePool(EXPL_MAX);
   const puffPool = makePool(PUFF_MAX);
@@ -261,30 +261,42 @@ export function createVolumetrics(scene, camera, opts = {}) {
 
   const _tmp = new THREE.Vector3();
 
-  function explosion(pos, scale = 1) {
-    const s = pick(explPool);
+  // Configure one explosion volume (a solid noisy fireball) on a pooled slot — no recursion.
+  function configExpl(s, cpos, cscale) {
     s.alive = true;
     s.kind = 'expl';
     s.age = 0;
-    s.maxLife = 1.8;
-    s.baseScale = 9 * scale;
+    s.maxLife = 1.7 + Math.random() * 0.3;
+    s.baseScale = 9 * cscale;
     s.seed = Math.random() * 100;
     s.densMul = 1;
-    s.drift.set(0, 0.7 * scale, 0);
+    s.drift.set(0, 0.7 * cscale, 0);
     const u = s.mat.uniforms;
-    u.uCenter.value.copy(pos);
+    u.uCenter.value.copy(cpos);
     u.uSeed.value = s.seed;
-    u.uNoiseScale.value = 2.1;
+    u.uNoiseScale.value = 2.4; // finer detail
     u.uDrift.value = 0.5;
     u.uColSmoke.value.copy(COL.explSmoke);
     u.uBlobCount.value = 0;
-    s.mesh.position.copy(pos);
+    s.mesh.position.copy(cpos);
     s.mesh.visible = true;
     stepExplosion(s, 0);
+  }
+
+  function explosion(pos, scale = 1) {
+    configExpl(pick(explPool), pos, scale); // primary fireball
+    if (quality !== 'low') {
+      // satellite lobes -> a richer, lumpier blast
+      for (let i = 0; i < 3; i++) {
+        _tmp.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 5 * scale, (Math.random() - 0.5) * 4 * scale, (Math.random() - 0.5) * 5 * scale));
+        configExpl(pick(explPool), _tmp, scale * 0.45);
+      }
+    }
     // lingering thick smoke left behind after the fireball cools
-    for (let i = 0; i < 2; i++) {
-      _tmp.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 4 * scale, (Math.random() - 0.5) * 3 * scale, (Math.random() - 0.5) * 4 * scale));
-      puff(_tmp, { life: 2.8, radius: 3.2 * scale, density: 1.1, drift: new THREE.Vector3((Math.random() - 0.5) * 1.5, 1.6, (Math.random() - 0.5) * 1.5), blobs: 3 });
+    const puffN = quality === 'low' ? 2 : 4;
+    for (let i = 0; i < puffN; i++) {
+      _tmp.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 5 * scale, (Math.random() - 0.5) * 3 * scale, (Math.random() - 0.5) * 5 * scale));
+      puff(_tmp, { life: 3.0, radius: 4.0 * scale, density: 1.1, drift: new THREE.Vector3((Math.random() - 0.5) * 1.5, 1.6, (Math.random() - 0.5) * 1.5), blobs: 3 });
     }
   }
 
@@ -328,7 +340,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
     u.uCenter.value.copy(s.mesh.position);
     u.uRadius.value = cur * 0.78;
     u.uDensity.value = 1.7 * Math.exp(-age * 1.2) * tunable.densityMul;
-    u.uEmissive.value = Math.max(0, 1 - age / 0.55); // white-hot ~0.55s, then cools to thick smoke
+    u.uEmissive.value = Math.max(0, 1.25 - age / 0.5); // white-hot core flash, then cools to thick smoke
     u.uSigma.value = tunable.fireSigma;
     u.uTime.value = elapsed;
     u.uSteps.value = quality === 'low' ? 24 : tunable.explSteps;
