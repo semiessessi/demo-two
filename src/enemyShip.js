@@ -13,7 +13,11 @@ const TARGET_RADIUS = 2.2; // a small, nimble fighter (Hammerhead is radius 5)
 // Live-tunable layout for the Chig's three rear thruster glows, arranged as an upward equilateral
 // triangle (apex/middle on top, two below). `x` is the half-base width; the triangle height is
 // derived. Tune in the "Chig Thrusters" GUI folder, then bake the values here.
-export const chigThruster = { x: 0.46, y: -0.4, z: 0.52, size: 0.25 };
+export const chigThruster = { x: 0.46, y: -0.4, z: 0.52, size: 0.32 };
+
+// Fresnel rim params (tunable): a faint cyan-white edge that catches the dark hull's silhouette so
+// the Chigs read against space without losing their near-black panelled look.
+export const chigRim = { color: 0x7fd6ff, power: 2.6, strength: 0.55 };
 
 // Position + size the three engine-glow sprites on a chig instance (or the template) from `p`.
 export function layoutChigGlows(obj, p = chigThruster) {
@@ -78,6 +82,27 @@ export async function loadChig() {
     vertexColors: true,
     side: THREE.DoubleSide,
   });
+
+  // Fresnel rim: add a cyan edge glow at grazing angles so the silhouette is legible against the
+  // backdrop. Injected after lighting, before tonemapping, using the standard shader's view-space
+  // normal + view position. Uniforms are exposed (rimUniforms) so the GUI can tune them live.
+  const rimUniforms = {
+    uRimColor: { value: new THREE.Color(chigRim.color) },
+    uRimPower: { value: chigRim.power },
+    uRimStrength: { value: chigRim.strength },
+  };
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uRimColor = rimUniforms.uRimColor;
+    shader.uniforms.uRimPower = rimUniforms.uRimPower;
+    shader.uniforms.uRimStrength = rimUniforms.uRimStrength;
+    shader.fragmentShader = `uniform vec3 uRimColor;\nuniform float uRimPower;\nuniform float uRimStrength;\n${shader.fragmentShader}`.replace(
+      '#include <opaque_fragment>',
+      `#include <opaque_fragment>
+       float rim = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), uRimPower);
+       gl_FragColor.rgb += uRimColor * rim * uRimStrength;`,
+    );
+  };
+  material.userData.rimUniforms = rimUniforms;
 
   root.traverse((o) => {
     if (!o.isMesh) return;
