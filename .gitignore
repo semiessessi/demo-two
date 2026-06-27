@@ -6,3 +6,6 @@ assets-src/
 .serena/
 .DS_Store
 *.local
+
+# wrangler local dev state
+.wrangler/

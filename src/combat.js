@@ -12,6 +12,9 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
   const getPlayerPos = opts.getPlayerPos;
   const params = { playerHitRadius: opts.playerHitRadius || 4.5 };
   let onPlayerHit = opts.onPlayerHit || null;
+  // attract/co-op: when set, enemy bolts route to whichever of these friendly ships they hit. Each entry is
+  // { pos, radius, hit(worldPoint, dmg, segStart) }. When null, the single-player path below is used instead.
+  let getFriendlies = opts.getFriendlies || null;
 
   const seg = new THREE.Vector3();
   const toC = new THREE.Vector3();
@@ -61,6 +64,17 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
             break;
           }
         }
+      } else if (b.team === 'enemy' && getFriendlies) {
+        // attract/co-op: test the bolt against every friendly ship; the first one hit takes the damage.
+        for (const f of getFriendlies()) {
+          const rr = f.radius + b.radius;
+          if (segDistSq(segStart, b.pos, f.pos) <= rr * rr) {
+            vfx.spark(b.pos, 0x9fd0ff);
+            f.hit(b.pos, b.damage, segStart);
+            projectiles.kill(b);
+            break;
+          }
+        }
       } else if (b.team === 'enemy' && getPlayerPos) {
         const pp = getPlayerPos();
         const rr = params.playerHitRadius + b.radius;
@@ -95,6 +109,9 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
     params,
     setOnPlayerHit(fn) {
       onPlayerHit = fn;
+    },
+    setFriendlies(fn) {
+      getFriendlies = fn;
     },
   };
 }

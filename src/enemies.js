@@ -210,8 +210,11 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     projectiles.spawn({ pos: muzzle, vel: evel, color: 0xffffff, team: 'enemy', damage: params.pulseDamage, life: 2.6, radius: 0.7, scale: 1.35, width: 2, glow: 2.8, noise: 0.6 });
   }
 
-  function update(dt, player) {
-    if (player.quat) pfwd.set(0, 0, -1).applyQuaternion(player.quat);
+  function update(dt, defaultTarget, targetFor) {
+    // defaultTarget = the one shared target (the player in normal play, a focus point in attract). Optional
+    // targetFor(e) lets each enemy chase a DIFFERENT friendly (attract: nearest ally; co-op later: nearest of
+    // player+allies). When targetFor is absent, every enemy uses defaultTarget -> identical to before.
+    if (defaultTarget.quat) pfwd.set(0, 0, -1).applyQuaternion(defaultTarget.quat);
     for (let fi = formations.length - 1; fi >= 0; fi--) {
       const f = formations[fi];
       f.members = f.members.filter((m) => m.alive);
@@ -234,11 +237,11 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
       if (!f.dogfight && !f.scatter) {
         const a = f.anchor;
         if (a.phase === 'ingress') {
-          desired.copy(player.pos).sub(a.pos).setLength(params.speed);
+          desired.copy(defaultTarget.pos).sub(a.pos).setLength(params.speed);
           a.vel.lerp(desired, 1 - Math.exp(-params.turnRate * 0.8 * dt));
           a.vel.setLength(params.speed);
           a.pos.addScaledVector(a.vel, dt);
-          if (a.pos.distanceTo(player.pos) < params.passDist) {
+          if (a.pos.distanceTo(defaultTarget.pos) < params.passDist) {
             a.phase = 'egress';
             a.egress = params.egressTime;
           }
@@ -255,6 +258,11 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
 
     for (const e of enemies) {
       if (!e.alive) continue;
+      // each enemy may chase its OWN friendly (attract/co-op); falls back to the shared default target. The
+      // rest of this loop reads `player`, so per-enemy targeting needs no other change. pfwd is recomputed
+      // here so the six-station + threat sense use THIS enemy's target's forward.
+      const player = (targetFor && targetFor(e)) || defaultTarget;
+      if (player.quat) pfwd.set(0, 0, -1).applyQuaternion(player.quat);
       const distP = e.pos.distanceTo(player.pos);
 
       // choose a steering target
