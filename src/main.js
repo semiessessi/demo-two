@@ -595,10 +595,10 @@ async function init() {
       gameState.tumble('WING TORN OFF — EJECTED');
     },
   });
-  // Cinematic battle behind the pre-game menu (skirmish only): the player ship is ally #1 (reusing the
-  // player's own RCS so there's no doubled jet rig), plus clones vs looping Chigs. Building it is the bulk
-  // of the boot cost, so the default (non-skirmish) path skips it entirely.
-  if (SKIRMISH) attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting, rcs });
+  // Cinematic battle behind both the title menu (default) and the pre-game/co-op menu (?skirmish):
+  // the player ship is ally #1 (reusing the player's own RCS so there's no doubled jet rig), plus clones
+  // vs looping Chigs.
+  attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting, rcs });
   }
 
   if (DEBUG && !ATTRACT) {
@@ -628,9 +628,8 @@ async function init() {
   refreshMe().then(applyProfile);
   onSessionChange(applyProfile);
 
-  if (SKIRMISH) enterMenu(); // open on the AI Skirmish setup screen (flight begins on Launch)
-  else if (ATTRACT) bootAttract(); // pure attract: cinematic AI battle, no player/menu boot
-  else bootFlight();         // default: straight into flight with the saved settings (light load, no menu)
+  if (SKIRMISH) enterMenu(); // ?skirmish: the pre-game / co-op lobby (flight begins on Launch)
+  else bootAttract();        // default: the title menu over the attract cinematic (Multiplayer -> ?skirmish)
   if (ROOM && pregame) { startCoop('joiner', ROOM.toUpperCase()); if (pregame.setRoster) pregame.setRoster([], ROOM.toUpperCase()); } // ?room -> auto-join
   startLoop();
   reveal();
