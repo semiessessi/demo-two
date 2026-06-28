@@ -325,7 +325,6 @@ const starUniforms = {
 const reactive = createReactive();
 const audio = createAudioManager();
 const sfx = createSfx({ getContext: audio.ensureContext, camera, enabled: SOUND }); // shares audio's AudioContext; opt-in via ?sound
-applyVolumes(settings.volume); // apply the saved audio mix (master/effects/music) up front
 const touchControls = createTouchControls(); // on-screen flight controls (touch devices only; no-op stub otherwise)
 const input = createInput(touchControls.read);
 
@@ -367,6 +366,7 @@ let debrisPlayer = null;
 let playerDebris = null;
 let pregame = null;
 const settings = loadSettings(); // AI Skirmish setup (ship/loadout/difficulty/environment), persisted
+applyVolumes(settings.volume); // apply the saved audio mix up front (after settings + sfx + audio exist)
 let flight = null;
 let stars = null;
 let chigKit = null;

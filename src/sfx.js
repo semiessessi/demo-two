@@ -18,7 +18,7 @@ const MANIFEST = {
   flybys: ['/sfx/chig-flyby-1', '/sfx/chig-flyby-2'], // Chig whoosh past the camera (random-picked; add more variants here)
   chigShot: '/sfx/chig-shot', // Chig weapon shot — one-shot per enemy bolt (voice-capped so it can't starve booms)
 };
-const EXTS = ['.mp3', '.ogg', '.wav'];
+const EXTS = ['.wav', '.mp3', '.ogg']; // .wav first (the bundled format) -> no 404 spam probing .mp3/.ogg that aren't there
 
 const MAX_VOICES = 12;
 const REF_DIST = 120; // full volume within this range of the camera (was 80 — the furball sat past it -> too quiet)
