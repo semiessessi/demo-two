@@ -36,6 +36,7 @@ import { loadSettings, DIFFICULTY, ENVIRONMENT } from './settings.js';
 import { createAttract } from './attract.js';
 import { createAttractMenu } from './attractMenu.js';
 import { createOptions } from './options.js';
+import { createGamepadMenu } from './gamepadMenu.js';
 import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlanet, createRingedPlanet } from './celestial.js';
 import { createPeerTransport } from './net/peer.js';
 import { createNetGame } from './net/netgame.js';
@@ -377,6 +378,7 @@ let quality = null;
 let attract = null;
 let attractMenu = null; // title-screen menu overlay (logo + New Game / Multiplayer / Controls / Options)
 let options = null; // audio-mix options overlay
+const menuGamepad = createGamepadMenu({ onFirstButton: () => firstGesture() }); // d-pad/stick menu nav + audio unlock
 let net = null; // co-op netplay (null = single-player)
 let runSubmitted = false; // leaderboard: submit a run once when it ends
 
@@ -484,9 +486,9 @@ function armMenuBattle() {
   if (hud) hud.setVisible(false);
 }
 // In-page overlay swaps (no reload, battle keeps running):
-function showTitle() { if (pregame) pregame.hide(); if (options) options.hide(); if (attractMenu) attractMenu.show(); }
-function showMultiplayer() { if (attractMenu) attractMenu.hide(); if (options) options.hide(); if (pregame) pregame.show(); }
-function showOptions() { if (attractMenu) attractMenu.hide(); if (pregame) pregame.hide(); if (options) options.show(); }
+function showTitle() { if (pregame) pregame.hide(); if (options) options.hide(); if (attractMenu) attractMenu.show(); menuGamepad.setMenu(attractMenu && attractMenu.el); }
+function showMultiplayer() { if (attractMenu) attractMenu.hide(); if (options) options.hide(); if (pregame) pregame.show(); menuGamepad.setMenu(pregame && pregame.root, { onBack: showTitle }); }
+function showOptions() { if (attractMenu) attractMenu.hide(); if (pregame) pregame.hide(); if (options) options.show(); menuGamepad.setMenu(options && options.el, { onBack: showTitle }); }
 // Apply the saved audio mix: master scales everything; effects -> SFX bus, music -> music. (voice reserved.)
 function applyVolumes(v) {
   if (!v) return;
@@ -809,6 +811,7 @@ function startLoop() {
     clock.update(); // THREE.Timer — advance before getDelta()
     const dt = Math.min(clock.getDelta(), 0.1);
     if (DEBUG && debug && debug.frame(dt)) return; // debug viewer modes own the frame
+    if (!(gameState && gameState.mode === 'flying')) menuGamepad.poll(dt); // gamepad menu nav (+ audio unlock); skipped in flight so it never fights the flight controls
     if (ATTRACT) { attractFrame(dt); return; } // standalone ?attract: a leaner, player-less frame
     if (attract && gameState.mode === 'menu') { touchControls.setVisible(false); attractFrame(dt); return; } // cinematic battle behind the menu (hide touch controls)
 
