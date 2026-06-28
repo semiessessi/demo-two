@@ -442,7 +442,7 @@ async function init() {
     debrisPlayer = { pos: ship.pivot.position, radius: ship.radius, vel: playerVel };
     playerDebris = createDebris(scene, { template: ship.pivot, convex: true, vfx, count: 12, cap: 160 }); // player Hammerhead (171k verts/45 meshes) -> convex-hull proxy, shatters when destroyed
   }
-  quality = createQuality({ lighting, vfx, debris, setRenderScale }); // FPS-driven tier ladder: render scale, CSM res, shadow-light budget, smoke, vfx, debris
+  quality = createQuality({ lighting, vfx, debris, setRenderScale, gpuFrameMs }); // GPU-ms two-rate autoscaler: per-frame volumetric steps + debounced tier (render scale, CSM, shadow budget, smoke, vfx)
   combat = createCombat(projectiles, enemyMgr, vfx, {
     getPlayerPos: () => ship.pivot.position,
     playerHitRadius: ship.radius * 0.85,
@@ -559,8 +559,8 @@ function attractFrame(dt) {
   }
   render();
   fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
-  quality.update(dt, fps); // auto-scale shadow/VFX tier (6 Hammerheads + 24 Chigs is heavy)
-  if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
+  quality.update(dt); // auto-scale shadow/VFX tier (6 Hammerheads + 24 Chigs is heavy)
+  if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (man)'} · P${Math.round(quality.pressure * 100)} · ×${quality.renderScale.toFixed(2)}`;
 }
 
 function startLoop() {
@@ -640,8 +640,8 @@ function startLoop() {
     render();
 
     fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
-    quality.update(dt, fps); // auto-scale shadow/VFX tier to the framerate (rate-limited)
-    if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
+    quality.update(dt); // auto-scale shadow/VFX tier to the framerate (rate-limited)
+    if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (man)'} · P${Math.round(quality.pressure * 100)} · ×${quality.renderScale.toFixed(2)}`;
   });
 }
 

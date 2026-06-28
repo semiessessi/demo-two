@@ -286,6 +286,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
   let elapsed = 0;
   let quality = 'high';
   const tunable = { explSteps: 48, puffSteps: 22, densityMul: 1, fireSigma: 2.2, smokeSigma: 3.6 };
+  let load = 0; // 0..1 autoscaler pressure (set per frame): trims raymarch steps + drops self-shadow under GPU load
 
   function pick(pool) {
     for (const s of pool) if (!s.alive) return s;
@@ -386,8 +387,8 @@ export function createVolumetrics(scene, camera, opts = {}) {
     if (distSq > 160 * 160) st = quality === 'low' ? 14 : 20;
     else if (distSq > 80 * 80) st = quality === 'low' ? 18 : 26;
     if (near) st = quality === 'low' ? 10 : 16;
-    u.uSteps.value = st;
-    u.uSelfShadow.value = (quality === 'low' || near || distSq > 130 * 130) ? 0 : 1;
+    u.uSteps.value = load > 0 ? Math.max(8, Math.round(st * (1 - 0.4 * load))) : st; // autoscaler trims steps under GPU load
+    u.uSelfShadow.value = (quality === 'low' || near || distSq > 130 * 130 || load > 0.6) ? 0 : 1;
   }
 
   function stepPuff(s, dt) {
@@ -421,10 +422,10 @@ export function createVolumetrics(scene, camera, opts = {}) {
     else if (distSq > 70 * 70) st = quality === 'low' ? 11 : 18;
     if (near) st = quality === 'low' ? 6 : 10;
     if (k > 0.6) st = Math.max(8, st - 5);
-    u.uSteps.value = st;
+    u.uSteps.value = load > 0 ? Math.max(6, Math.round(st * (1 - 0.4 * load))) : st; // autoscaler trims steps under GPU load
     // Self-shadow is the per-step 3-tap fbm march — easily the puff's heaviest cost. Drop it on low tier,
-    // for distant puffs (illegible far away), and when the camera is inside the puff (invisible from within).
-    u.uSelfShadow.value = (quality === 'low' || near || distSq > 110 * 110) ? 0 : 1;
+    // for distant puffs (illegible far away), when the camera is inside the puff, or under GPU load.
+    u.uSelfShadow.value = (quality === 'low' || near || distSq > 110 * 110 || load > 0.5) ? 0 : 1;
   }
 
   function retire(s) {
@@ -484,6 +485,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
   }
 
   function setQuality(q) { quality = q; }
+  function setLoad(p) { load = p < 0 ? 0 : p > 1 ? 1 : p; } // per-frame autoscaler pressure (0..1)
 
   // --- occlusion pre-pass plumbing ---
   function setOcclusion(depthTex, near, far) {
@@ -507,5 +509,5 @@ export function createVolumetrics(scene, camera, opts = {}) {
     if (!smokeShadows) for (const s of puffPool) s.mesh.castShadow = false;
   }
 
-  return { explosion, puff, createTrail, update, setQuality, setOcclusion, updateOcclusion, setHiddenForDepth, setSmokeShadows, tunable };
+  return { explosion, puff, createTrail, update, setQuality, setLoad, setOcclusion, updateOcclusion, setHiddenForDepth, setSmokeShadows, tunable };
 }
