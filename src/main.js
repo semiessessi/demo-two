@@ -484,6 +484,7 @@ function armMenuBattle() {
     if (combat) combat.setFriendlies(attract.friendlies); // enemy bolts hit the allies, not the player
   }
   if (hud) hud.setVisible(false);
+  if (targetDisplay) targetDisplay.setVisible(false); // the TARGET panel is flight-only (don't leave a black square on the menu)
 }
 // In-page overlay swaps (no reload, battle keeps running):
 function showTitle() { if (pregame) pregame.hide(); if (options) options.hide(); if (attractMenu) attractMenu.show(); menuGamepad.setMenu(attractMenu && attractMenu.el); }
@@ -528,6 +529,7 @@ function coopLaunch(s) {
   restartWorld();
   if (pregame) pregame.hide();
   if (hud) hud.setVisible(true);
+  if (targetDisplay) targetDisplay.setVisible(true);
   firstGesture();
   gameState.launch();
 }
@@ -541,6 +543,7 @@ function launchSkirmish(s) {
   restartWorld();
   if (pregame) pregame.hide();
   if (hud) hud.setVisible(true);
+  if (targetDisplay) targetDisplay.setVisible(true);
   firstGesture(); // the launch click is a user gesture -> unlock + start audio (autoplay policy)
   gameState.launch();
 }
@@ -550,6 +553,7 @@ function bootFlight() {
   applySettings(settings);
   restartWorld();
   if (hud) hud.setVisible(true);
+  if (targetDisplay) targetDisplay.setVisible(true);
   if (gameState.mode === 'menu') gameState.launch(); // menu -> flying (audio unlocks on first input)
 }
 // Fade to black, THEN hard-navigate. The next screen re-boots its whole stack (heavy), so masking it as a

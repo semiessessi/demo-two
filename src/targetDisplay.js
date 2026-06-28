@@ -18,7 +18,7 @@ const FONT = 'font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#cdd
 const SIZE = 188; // match the LIDAR
 
 export function createTargetDisplay(chigTemplate) {
-  const wrap = el('div', `position:fixed;bottom:266px;right:18px;padding:8px;${PANEL}z-index:50;width:${SIZE}px;`, document.body);
+  const wrap = el('div', `position:fixed;bottom:266px;right:18px;padding:8px;${PANEL}z-index:50;width:${SIZE}px;display:none;`, document.body);
   el('div', `font-size:10px;letter-spacing:0.14em;color:#9fb0d0;${FONT}margin:0 0 5px 2px;`, wrap).textContent = 'TARGET';
   const canvas = el('canvas', 'display:block;border-radius:8px;background:rgba(8,10,16,0.55);', wrap);
   canvas.width = SIZE;
@@ -91,5 +91,5 @@ export function createTargetDisplay(chigTemplate) {
     wrap.remove();
   }
 
-  return { update, dispose };
+  return { update, dispose, setVisible(v) { wrap.style.display = v ? 'block' : 'none'; } };
 }
