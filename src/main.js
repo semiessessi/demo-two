@@ -470,15 +470,22 @@ function bootFlight() {
   if (hud) hud.setVisible(true);
   if (gameState.mode === 'menu') gameState.launch(); // menu -> flying (audio unlocks on first input)
 }
+// Fade to black, THEN hard-navigate. The next screen re-boots its whole stack (heavy), so masking it as a
+// deliberate fade reads far better than the frozen-frame hitch of an abrupt reload.
+function fadeToAndNavigate(url) {
+  if (fadeEl) { fadeEl.style.transition = 'opacity 0.34s ease'; fadeEl.classList.remove('gone'); }
+  setTimeout(() => { location.href = url; }, 360);
+}
+
 // Pure ?attract: no player systems (no damage/gameState/waves/flight) and no menu — just apply the saved
 // environment and run the self-contained cinematic battle. (bootFlight/enterMenu both touch player-only
 // systems, so attract must NOT route through them.)
 function bootAttract() {
   applyEnvironment({ ...settings, environment: 'cerberus' }); // attract showcases the Cerberus black hole by default
   if (attract) { attract.resume(); attract.setVisible(true); }
-  // Title menu over the cinematic: logo + New Game / Multiplayer / Options (only Multiplayer is live for now).
+  // Title menu over the cinematic: logo + New Game / Multiplayer / Controls / Options (only Multiplayer is live).
   const menu = createAttractMenu({
-    onMultiplayer: () => { location.href = location.pathname + '?skirmish'; },
+    onMultiplayer: () => fadeToAndNavigate(location.pathname + '?skirmish'),
     onControls: () => infoEl?.classList.toggle('open'), // same toggle as Tab
   });
   menu.show();
@@ -556,6 +563,7 @@ async function init() {
     onChange: (s) => { applyEnvironment(s); applyLoadout(ship, s.loadout); },
     onHost: () => startCoop('host'),
     onJoin: (code) => { startCoop('joiner', code); },
+    onBack: () => fadeToAndNavigate(location.pathname + '?attract'), // back to the title screen
   });
   damage.setCallbacks({
     onEject: () => gameState.eject(),

@@ -33,15 +33,21 @@ const STATIONS = [
 ];
 const ORD_LABEL = { fuel: 'Fuel tank', 'missile-pair': 'Missile pair', 'lr-missile': 'LR missile', laser: 'Laser', empty: 'Empty' };
 
-export function createPregame({ settings, onLaunch, onChange, onHost, onJoin }) {
+export function createPregame({ settings, onLaunch, onChange, onHost, onJoin, onBack }) {
   const fire = () => { saveSettings(settings); if (onChange) onChange(settings); };
 
   const root = el('div', 'position:fixed;inset:0;z-index:200;display:none;pointer-events:none;', document.body);
-  // left console panel (clicks land here; the ship shows to the right / behind)
-  const panel = el('div', `position:absolute;left:0;top:0;bottom:0;width:340px;padding:22px 20px;overflow-y:auto;`
-    + `pointer-events:auto;${PANEL}${FONT}border-radius:0 16px 16px 0;`
-    + 'display:flex;flex-direction:column;gap:18px;box-shadow:0 0 40px rgba(0,0,0,0.5);', root);
+  // centred console panel (clicks land here; the cinematic shows behind) — matches the title-menu placement
+  const panel = el('div', `position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);`
+    + `width:min(400px,calc(100vw - 32px));max-height:calc(100vh - 48px);padding:24px 24px;overflow-y:auto;`
+    + `pointer-events:auto;${PANEL}${FONT}border-radius:18px;`
+    + 'display:flex;flex-direction:column;gap:18px;box-shadow:0 0 50px rgba(0,0,0,0.55);', root);
 
+  if (onBack) { // return to the title screen
+    const back = el('button', BTN + 'align-self:flex-start;', panel);
+    back.textContent = '‹ Main Menu';
+    back.onclick = () => onBack();
+  }
   el('div', `${FONT}font-size:22px;letter-spacing:0.22em;color:#eaeefc;text-shadow:0 0 16px rgba(120,170,255,0.4);`, panel)
     .textContent = 'MULTIPLAYER';
   el('div', `${FONT}font-size:11px;color:#8a96b4;margin-top:-12px;`, panel)
