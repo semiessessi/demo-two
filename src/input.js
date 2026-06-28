@@ -40,6 +40,8 @@ export function createInput(touchRead) {
     lockPressed: false, // edge: target lock pressed this frame (X / right-stick click)
     ejectHeld: false,
     gamepad: false,
+    invertKeys: false, // invert keyboard pitch (W/S) — set from Options
+    invertStick: false, // invert gamepad stick pitch — set from Options
     keys,
     poll,
     dispose,
@@ -56,7 +58,7 @@ export function createInput(touchRead) {
 
   function poll() {
     // keyboard — WASD flies (arrows now drive the gun, not flight)
-    let pitch = axisKey('KeyW', 'KeyS'); // W = nose down (-1)
+    let pitch = axisKey('KeyW', 'KeyS') * (input.invertKeys ? -1 : 1); // W = nose down (-1); invertKeys flips it
     let yaw = axisKey('KeyD', 'KeyA'); // A = yaw left (+1)
     let roll = axisKey('KeyE', 'KeyQ'); // Q = roll left (+1)
     let boost = keys.has('ShiftLeft') || keys.has('ShiftRight');
@@ -74,7 +76,7 @@ export function createInput(touchRead) {
       const ax = gp.axes || [];
       const bt = gp.buttons || [];
       const btn = (i) => (bt[i] ? bt[i].value || (bt[i].pressed ? 1 : 0) : 0);
-      pitch += dz(ax[1] || 0); // stick forward (negative) = nose down -> matches W (-1)
+      pitch += dz(ax[1] || 0) * (input.invertStick ? -1 : 1); // stick forward = nose down; invertStick flips it
       yaw += dz(-(ax[0] || 0)); // stick left (negative) = yaw left (+1)
       roll += (btn(4) > 0.5 ? 1 : 0) + (btn(5) > 0.5 ? -1 : 0); // LB roll left, RB roll right
       fire = Math.max(fire, btn(7)); // right trigger

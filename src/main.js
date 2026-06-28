@@ -377,6 +377,7 @@ let playerDebris = null;
 let pregame = null;
 const settings = loadSettings(); // AI Skirmish setup (ship/loadout/difficulty/environment), persisted
 applyVolumes(settings.volume); // apply the saved audio mix up front (after settings + sfx + audio exist)
+input.invertKeys = !!settings.invertKeys; input.invertStick = !!settings.invertStick; // saved pitch-invert prefs
 let flight = null;
 let stars = null;
 let chigKit = null;
@@ -703,6 +704,7 @@ async function init() {
     });
     options = createOptions({
       settings, onChange: applyVolumes, onBack: showTitle,
+      onInvert: (s) => { input.invertKeys = !!s.invertKeys; input.invertStick = !!s.invertStick; },
       invertPitch: { show: touchControls.active, initial: touchControls.invertPitch, onChange: (on) => touchControls.setInvertPitch(on) },
     });
     attractMenu = createAttractMenu({
