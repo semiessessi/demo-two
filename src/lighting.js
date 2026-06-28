@@ -45,6 +45,7 @@ export function createLighting(scene, camera, renderer, opts = {}) {
   let suspended = false; // debug viewer owns the frame
   let cascades = 3;
   let shadowMapSize = 2048;
+  const CASTER_DIST2 = 160 * 160; // beyond this from the camera, a Chig stops casting sun shadows (few px on screen)
 
   function normalBiasFor(size) {
     return size >= 4096 ? 0.05 : size >= 2048 ? 0.08 : 0.12;
@@ -328,6 +329,22 @@ export function createLighting(scene, camera, renderer, opts = {}) {
         m.light.intensity = muzzleParams.peak * Math.max(0, m.life / MUZZLE_LIFE);
       } else if (m.light.intensity !== 0) {
         m.light.intensity = 0;
+      }
+    }
+
+    // Distant-caster LOD: a Chig far from the camera is a few pixels — drop it from the sun shadow pass.
+    // Toggling a CASTER's castShadow is free (no recompile); cache state and only traverse on a change.
+    const enemies = ctx && ctx.enemies;
+    if (enemies) {
+      const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+      for (const e of enemies) {
+        if (!e.alive || !e.obj) continue;
+        const dx = e.pos.x - cx, dy = e.pos.y - cy, dz = e.pos.z - cz;
+        const near = dx * dx + dy * dy + dz * dz < CASTER_DIST2;
+        if (e._castLOD !== near) {
+          e._castLOD = near;
+          e.obj.traverse((o) => { if (o.isMesh) o.castShadow = near; });
+        }
       }
     }
 

@@ -11,8 +11,8 @@
 // Ladder (high -> low). "transient" is the number of proximity shadow spotlights (engines/shots);
 // "scale" is the internal render-resolution multiplier (on top of the 1.3 device-pixel-ratio cap) —
 // the cheapest lever for this fill-rate-bound demo, so it drops first as the tier falls.
-//   5 ultra : scale 1.0 · CSM 4096/4 · transient 3 · smoke-cast · vfx high
-//   4 high  : scale 1.0 · CSM 4096/3 · transient 2 · smoke-cast · vfx high
+//   5 ultra : scale 1.0 · CSM 4096/3 · transient 3 · smoke-cast · vfx high
+//   4 high  : scale 1.0 · CSM 2048/3 · transient 2 · smoke-cast · vfx high
 //   3 med   : scale 0.9 · CSM 2048/3 · transient 1 ·            · vfx high
 //   2 low   : scale 0.8 · CSM 1024/3 · transient 0 ·            · vfx high
 //   1 vlow  : scale 0.7 · NO sun shadows (plain sun) · transient 0 · vfx high
@@ -23,8 +23,8 @@ const TIERS = [
   { name: 'vlow', scale: 0.7, csm: false, size: 1024, casc: 2, transient: 0, smokeCast: false, vfx: 'high' },
   { name: 'low', scale: 0.8, csm: true, size: 1024, casc: 3, transient: 0, smokeCast: false, vfx: 'high' },
   { name: 'med', scale: 0.9, csm: true, size: 2048, casc: 3, transient: 1, smokeCast: false, vfx: 'high' },
-  { name: 'high', scale: 1.0, csm: true, size: 4096, casc: 3, transient: 2, smokeCast: false, vfx: 'high' },
-  { name: 'ultra', scale: 1.0, csm: true, size: 4096, casc: 4, transient: 3, smokeCast: false, vfx: 'high' },
+  { name: 'high', scale: 1.0, csm: true, size: 2048, casc: 3, transient: 2, smokeCast: false, vfx: 'high' }, // default desktop tier: 2048/3 (was 4096 — 4x less shadow fill, ~identical look)
+  { name: 'ultra', scale: 1.0, csm: true, size: 4096, casc: 3, transient: 3, smokeCast: false, vfx: 'high' }, // only the top tier pays for 4096; cascades capped at 3
 ];
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);

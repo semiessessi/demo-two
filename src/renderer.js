@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { detectDevice } from './device.js';
 
 // Renderer + scene + chase camera + post chain (RenderPass -> UnrealBloom -> OutputPass).
 // OutputPass applies tone mapping + sRGB at the end; intermediate passes work in linear HDR so the
@@ -11,7 +12,9 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 // This demo is fill-rate bound (fullscreen nebula + raymarched volumetrics), so device-pixel-ratio is
 // the single biggest lever: at dpr 2 we shade 4x the fragments. Cap at 1.3 (like demo-1) — ~25% fewer
 // fullscreen fragments than 1.5, ~4x cheaper than 2.0, for a slight, mostly-unnoticed softening.
-const MAX_PR = 1.3;
+// Mobile is even more fill-bound and has weaker GPUs — cap at 1.0 there (no super-sampling at all).
+const { isMobile: IS_MOBILE } = detectDevice();
+const MAX_PR = IS_MOBILE ? 1.0 : 1.3;
 // Firefox on Linux/Mesa runs the MULTISAMPLED resolve/blit of the EffectComposer HDR target through a
 // slow path that tanks even strong GPUs — so on Firefox we drop MSAA (samples 0). We keep the HDR
 // HALF-FLOAT format though: it's not the slow part, and an 8-bit intermediate bands hard on the smooth
@@ -67,8 +70,10 @@ export function createRenderer(container) {
 
   // (resolution, strength, radius, threshold). Threshold ~0.7 so only bright stuff (thrusters,
   // star cores, hot specular) blooms — the hull stays crisp. Strength is driven by the music.
+  // HALF-RES: bloom is a wide blur, so a half-resolution mip chain looks ~identical but pushes ~4x fewer
+  // fragments through the multi-pass blur. composer.setSize resets it to full res, so setSize re-halves it.
   const bloom = new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    new THREE.Vector2(Math.round(window.innerWidth * 0.5), Math.round(window.innerHeight * 0.5)),
     0.7,
     0.5,
     0.72,
@@ -106,6 +111,34 @@ export function createRenderer(container) {
   const _dbv = new THREE.Vector2();
   const drawingBufferSize = () => renderer.getDrawingBufferSize(_dbv);
 
+  // GPU frame-time via a timer query (EXT_disjoint_timer_query_webgl2): measures ACTUAL GPU render time
+  // per frame, INDEPENDENT of vsync, so the quality controller can target a ms budget and see the headroom
+  // the vsync-capped wall clock can't. Small ring (results land a frame or two late). No ext (Safari/iOS)
+  // -> gpuFrameMs() returns 0 and the controller falls back to wall-clock.
+  const gl = renderer.getContext();
+  const timerExt = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  const TQ = timerExt ? [gl.createQuery(), gl.createQuery(), gl.createQuery()] : null;
+  let tqHead = 0, tqTail = 0, tqLen = 0, gpuMs = 0, tqActive = false;
+  const gpuTimerBegin = () => { if (!timerExt || tqLen >= TQ.length) { tqActive = false; return; } gl.beginQuery(timerExt.TIME_ELAPSED_EXT, TQ[tqHead]); tqActive = true; };
+  const gpuTimerEnd = () => { if (!tqActive) return; gl.endQuery(timerExt.TIME_ELAPSED_EXT); tqHead = (tqHead + 1) % TQ.length; tqLen++; tqActive = false; };
+  const gpuTimerPoll = () => {
+    while (tqLen > 0) {
+      const q = TQ[tqTail];
+      if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
+      if (!gl.getParameter(timerExt.GPU_DISJOINT_EXT)) {
+        const ms = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6; // ns -> ms
+        gpuMs = gpuMs > 0 ? gpuMs * 0.85 + ms * 0.15 : ms; // smooth
+      }
+      tqTail = (tqTail + 1) % TQ.length; tqLen--;
+    }
+  };
+  function render() {
+    gpuTimerPoll();
+    gpuTimerBegin();
+    composer.render();
+    gpuTimerEnd();
+  }
+
   function setSize(w, h) {
     curW = w;
     curH = h;
@@ -117,6 +150,7 @@ export function createRenderer(container) {
     // targets render at the wrong resolution after a scale change.
     composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(w, h);
+    bloom.setSize(Math.max(1, Math.round(w * 0.5)), Math.max(1, Math.round(h * 0.5))); // keep bloom half-res (composer.setSize reset it to full)
     const db = renderer.getDrawingBufferSize(new THREE.Vector2());
     depthTarget.setSize(Math.max(1, Math.round(db.x * DEPTH_SCALE)), Math.max(1, Math.round(db.y * DEPTH_SCALE)));
   }
@@ -133,9 +167,10 @@ export function createRenderer(container) {
 
   return {
     renderer, scene, camera, composer, bloom,
-    render: () => composer.render(),
+    render, // GPU-timed composer.render()
     setSize, setRenderScale,
     renderDepthOnly, drawingBufferSize,
     depthTexture: () => depthTarget.depthTexture,
+    gpuFrameMs: () => gpuMs,
   };
 }
