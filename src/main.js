@@ -56,7 +56,11 @@ const ATTRACT = /[?&]attract\b/.test(window.location.search);
 // ?skirmish so the DEFAULT boot is light (no menu, no 6-Hammerhead attract battle built up front) and
 // drops straight into flight — matching the base game's fast load.
 const ROOM = new URLSearchParams(window.location.search).get('room'); // co-op join code -> auto-join as joiner
-const SKIRMISH = ROOM != null || /[?&]skirmish\b/.test(window.location.search); // co-op needs the lobby menu
+// The MENU is the default experience now: build the full menu stack (player systems + cinematic backdrop +
+// pregame + title menu) unless it's the pure ?attract screensaver. No ?skirmish needed — plain / just works.
+const SKIRMISH = !ATTRACT;
+// ?skirmish / ?room jump straight to the Multiplayer pane; otherwise we open on the title menu.
+const STRAIGHT_TO_MP = ROOM != null || /[?&]skirmish\b/.test(window.location.search);
 
 // Sound effects (explosions, weapons, flybys, Chig fire) are ON by default now; ?nosound mutes them all.
 // (?sound is still accepted as a harmless no-op so old links keep working.) The engine synth is the lone
@@ -310,6 +314,7 @@ let waves = null;
 let debug = null;
 let quality = null;
 let attract = null;
+let attractMenu = null; // title-screen menu overlay (logo + New Game / Multiplayer / Controls / Options)
 let net = null; // co-op netplay (null = single-player)
 let runSubmitted = false; // leaderboard: submit a run once when it ends
 
@@ -400,13 +405,14 @@ function applySettings(s) {
   // Phase 2 hook: applyLivery(ship, s.livery, s.skin);
 }
 
-// Enter the pre-game screen (boot, or after MISSION OVER): re-arm the cinematic attract battle as the
-// backdrop (the ship is ally #1), show the console, no player flight. The attract camera runs the view.
-function enterMenu() {
-  applyEnvironment(settings);
+// Arm the cinematic menu battle as the backdrop (the ship is ally #1), no player flight. Run on boot and
+// after a MISSION OVER — NOT on a title<->Multiplayer toggle (those just swap the overlay so the dogfight
+// keeps rolling underneath). gameState stays 'menu' so the loop draws the cinematic frame.
+function armMenuBattle() {
+  applyEnvironment({ ...settings, environment: 'cerberus' }); // the menu showcases Cerberus
   applyLoadout(ship, settings.loadout); // reflect the saved loadout on the menu/preview ship
   if (ship.model) ship.model.visible = true;
-  flight.setEnabled(false);
+  if (flight) flight.setEnabled(false);
   restartWorld(); // clean slate before the backdrop battle re-arms
   if (attract) {
     attract.resume(); // reposition + heal allies, spawn a fresh Chig wave
@@ -414,8 +420,12 @@ function enterMenu() {
     if (combat) combat.setFriendlies(attract.friendlies); // enemy bolts hit the allies, not the player
   }
   if (hud) hud.setVisible(false);
-  if (pregame) pregame.show();
 }
+// In-page overlay swaps (no reload, battle keeps running):
+function showTitle() { if (pregame) pregame.hide(); if (attractMenu) attractMenu.show(); }
+function showMultiplayer() { if (attractMenu) attractMenu.hide(); if (pregame) pregame.show(); }
+// Full menu entry (boot / mission-over): arm the battle, open on the title menu.
+function enterMenu() { armMenuBattle(); showTitle(); }
 // Start (or join) a co-op session from the lobby. role 'host' mints a room code; 'joiner' connects to
 // `code`. Returns the room code (host's own, or the joined one). The match itself begins on LAUNCH
 // (host broadcasts `start`; both peers run coopLaunch).
@@ -477,18 +487,11 @@ function fadeToAndNavigate(url) {
   setTimeout(() => { location.href = url; }, 360);
 }
 
-// Pure ?attract: no player systems (no damage/gameState/waves/flight) and no menu — just apply the saved
-// environment and run the self-contained cinematic battle. (bootFlight/enterMenu both touch player-only
-// systems, so attract must NOT route through them.)
+// Pure ?attract screensaver: cinematic only, no menu, no player systems. (The MENU is the default boot now;
+// see enterMenu/armMenuBattle.)
 function bootAttract() {
   applyEnvironment({ ...settings, environment: 'cerberus' }); // attract showcases the Cerberus black hole by default
   if (attract) { attract.resume(); attract.setVisible(true); }
-  // Title menu over the cinematic: logo + New Game / Multiplayer / Controls / Options (only Multiplayer is live).
-  const menu = createAttractMenu({
-    onMultiplayer: () => fadeToAndNavigate(location.pathname + '?skirmish'),
-    onControls: () => infoEl?.classList.toggle('open'), // same toggle as Tab
-  });
-  menu.show();
 }
 
 async function init() {
@@ -557,14 +560,20 @@ async function init() {
   hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
   targetDisplay = createTargetDisplay(chigKit.template);
   // ?skirmish -> return to the menu after a mission; default -> drop straight back into flight.
-  gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld, onMenu: SKIRMISH ? enterMenu : bootFlight });
-  if (SKIRMISH) pregame = createPregame({
-    settings, onLaunch: launchSkirmish,
-    onChange: (s) => { applyEnvironment(s); applyLoadout(ship, s.loadout); },
-    onHost: () => startCoop('host'),
-    onJoin: (code) => { startCoop('joiner', code); },
-    onBack: () => fadeToAndNavigate(location.pathname + '?attract'), // back to the title screen
-  });
+  gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld, onMenu: enterMenu }); // mission over -> back to the title menu
+  if (SKIRMISH) {
+    pregame = createPregame({
+      settings, onLaunch: launchSkirmish,
+      onChange: (s) => { applyEnvironment(s); applyLoadout(ship, s.loadout); },
+      onHost: () => startCoop('host'),
+      onJoin: (code) => { startCoop('joiner', code); },
+      onBack: showTitle, // in-page: back to the title menu (no reload)
+    });
+    attractMenu = createAttractMenu({
+      onMultiplayer: showMultiplayer, // in-page: swap to the Multiplayer pane (no reload)
+      onControls: () => infoEl?.classList.toggle('open'), // same toggle as Tab
+    });
+  }
   damage.setCallbacks({
     onEject: () => gameState.eject(),
     onDestroyed: () => gameState.destroyed(),
@@ -628,8 +637,8 @@ async function init() {
   refreshMe().then(applyProfile);
   onSessionChange(applyProfile);
 
-  if (SKIRMISH) enterMenu(); // ?skirmish: the pre-game / co-op lobby (flight begins on Launch)
-  else bootAttract();        // default: the title menu over the attract cinematic (Multiplayer -> ?skirmish)
+  if (ATTRACT) bootAttract(); // pure cinematic screensaver (?attract)
+  else { enterMenu(); if (STRAIGHT_TO_MP) showMultiplayer(); } // DEFAULT: title menu (?skirmish/?room jump to the Multiplayer pane)
   if (ROOM && pregame) { startCoop('joiner', ROOM.toUpperCase()); if (pregame.setRoster) pregame.setRoster([], ROOM.toUpperCase()); } // ?room -> auto-join
   startLoop();
   reveal();
