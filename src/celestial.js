@@ -128,7 +128,7 @@ export function createBlackHole() {
     uniforms: {
       uCamPos: { value: new THREE.Vector3() },
       uCenter: { value: new THREE.Vector3() },
-      uDiskN: { value: new THREE.Vector3(0.32, 0.92, 0.18).normalize() }, // tilted disk normal
+      uDiskN: { value: new THREE.Vector3(0.17, 0.91, -0.38).normalize() }, // disk normal ~55° off the view (BH_DIR) -> an OPEN elliptical disk, not the old near-edge-on line
       uRs: { value: Rs },
       uDiskIn: { value: DISK_IN / Rs }, // disk radii in Rs units (shader works in Rs units)
       uDiskOut: { value: DISK_OUT / Rs },
@@ -162,7 +162,7 @@ export function createBlackHole() {
         vec3 col = vec3(0.03, 0.025, 0.06) + vec3(0.22, 0.13, 0.26) * mw; // faint nebula + warm-purple band
         vec3 g = dir * 130.0; vec3 c = floor(g); vec3 f = fract(g) - 0.5;
         float h = fract(sin(dot(c, vec3(12.9, 78.2, 37.7))) * 43758.5);
-        col += vec3(0.85, 0.9, 1.0) * step(0.991, h) * smoothstep(0.16, 0.0, length(f)) * 3.0; // stars
+        col += vec3(0.85, 0.9, 1.0) * step(0.985, h) * smoothstep(0.18, 0.0, length(f)) * 3.6; // stars (denser -> the lensed smear/arcs wrapping the hole actually read)
         return col;
       }
 
@@ -181,6 +181,8 @@ export function createBlackHole() {
         float spk = pow(0.5 + 0.5 * cos(az * 7.0 + warp * 6.2831), 2.2);
         float fil = fbm(vec2(az * 4.0 + 21.0, ang * 4.0));       // break spokes into radial filaments
         float body = spk * mix(0.35, 1.0, fil);
+        float lanes = fbm(vec2(az * 10.0 + 40.0, ang * 8.0));    // fine dust structure
+        body *= mix(0.28, 1.0, smoothstep(0.34, 0.66, lanes));   // carve dark dust lanes through the cloud (Milky-Way-ish)
         // annular radial profile: rises just outside the hole, fades before the quad edge (~0.42 rad)
         float radial = smoothstep(0.02, 0.12, ang) * (1.0 - smoothstep(0.18, 0.42, ang));
         radial *= 0.5 + 0.7 * fbm(vec2(ang * 3.0, az * 1.5));    // large-scale clumping
@@ -195,8 +197,9 @@ export function createBlackHole() {
         float ang = atan(dot(hit, Bv), dot(hit, T));
         float t = clamp((rr - uDiskIn) / (uDiskOut - uDiskIn), 0.0, 1.0); // 0 inner -> 1 outer
         // swirling turbulence (spirals: angle shifts with radius + time)
-        float spin = uTime * 1.6 / (rr * 0.5 + 1.0);
-        float turb = fbm(vec2(ang * 2.5 + rr * 1.4 - spin, rr * 0.9));
+        float spin = uTime * 3.4 / (rr * 0.5 + 1.0); // faster differential orbital shear (inner rings whip round)
+        float turb = fbm(vec2(ang * 2.5 + rr * 1.4 - spin, rr * 0.9 + uTime * 0.12));
+        turb = mix(turb, fbm(vec2(ang * 5.5 - spin * 1.8, rr * 1.9)), 0.4); // finer co-rotating filaments flowing past
         // temperature ramp: blue-white (inner) -> orange -> deep red (outer)
         vec3 hot = vec3(0.75, 0.85, 1.0);
         vec3 mid = vec3(1.0, 0.6, 0.25);
@@ -252,12 +255,14 @@ export function createBlackHole() {
         // shown where the ray was significantly bent (fades to the real scene where it wasn't) + the photon ring.
         // zone confines everything to the rays that passed near the hole -> fades to 0 before the quad edge
         // (no visible square). minr = the ray's closest approach in Rs units.
-        float zone = 1.0 - smoothstep(7.0, 20.0, minr);
+        float zone = 1.0 - smoothstep(9.0, 26.0, minr); // wider -> more lensed/smeared stars wrap right around the hole
         float bend = length(d - rd0);
-        // spoked blue/purple nebula behind the hole (own falloff -> fades before the quad edge, no square)
+        // spoked nebula behind the hole (own falloff -> fades before the quad edge, no square)
         vec3 axis = normalize(uCenter - uCamPos);
         float neb = spokeNebula(d, axis);
-        vec3 bg = vec3(0.34, 0.16, 0.62) * neb * uSpokeBright;   // nebula
+        // more PURPLE, with a violet<->magenta shimmer varying over the cloud (texture, Milky-Way-ish)
+        vec3 nebCol = mix(vec3(0.30, 0.06, 0.62), vec3(0.55, 0.15, 0.80), fbm(vec2(d.x * 6.0 + 3.0, d.y * 6.0 - 2.0)));
+        vec3 bg = nebCol * neb * uSpokeBright;                   // nebula
         bg += backgroundSky(d) * zone;                          // + lensed stars/Milky Way (the distortion)
         acc += bg * (1.0 - alpha);
         alpha = max(alpha, max(neb * 0.85, smoothstep(0.06, 0.55, bend) * zone));
