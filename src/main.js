@@ -57,11 +57,12 @@ const ATTRACT = /[?&]attract\b/.test(window.location.search);
 const ROOM = new URLSearchParams(window.location.search).get('room'); // co-op join code -> auto-join as joiner
 const SKIRMISH = ROOM != null || /[?&]skirmish\b/.test(window.location.search); // co-op needs the lobby menu
 
-// Sound effects (explosions, weapons, flybys) are opt-in for now — they still need work, so they're gated
-// behind ?sound and silent by default. Music (audio.js / track.mp3) is independent of this flag.
-const SOUND = /[?&]sound\b/.test(window.location.search);
-// The engine synth still sounds rough, so it's gated SEPARATELY behind ?engine (needs ?sound too) — off by
-// default even when the rest of the SFX are on.
+// Sound effects (explosions, weapons, flybys, Chig fire) are ON by default now; ?nosound mutes them all.
+// (?sound is still accepted as a harmless no-op so old links keep working.) The engine synth is the lone
+// exception — still rough — so it stays gated behind ?engine below. Music (audio.js / track.mp3) is separate.
+const SOUND = !/[?&]nosound\b/.test(window.location.search);
+// The engine synth still sounds rough, so it's gated SEPARATELY behind ?engine — off by default even though
+// the rest of the SFX are now on.
 const ENGINE_SFX = /[?&]engine\b/.test(window.location.search);
 
 // --- renderer + scene ------------------------------------------------------
@@ -472,7 +473,7 @@ function bootFlight() {
 // environment and run the self-contained cinematic battle. (bootFlight/enterMenu both touch player-only
 // systems, so attract must NOT route through them.)
 function bootAttract() {
-  applyEnvironment(settings);
+  applyEnvironment({ ...settings, environment: 'cerberus' }); // attract showcases the Cerberus black hole by default
   if (attract) { attract.resume(); attract.setVisible(true); }
 }
 
