@@ -181,7 +181,7 @@ export function createBlackHole() {
         az += 0.3 * smoothstep(0.12, 1.0, ang);                  // tips curve toward the same rotational sense
         vec2 pp = vec2(dot(dir, ux), dot(dir, vx));              // CONTINUOUS tangential coords -> the NOISE has no atan2 seam (the old fbm(az) tore here)
         float warp = fbm(pp * 1.7 + 5.0);
-        float spk = pow(0.5 + 0.5 * cos(az * 22.0 + warp * 6.2831), 0.2); // VERY fat arms (low exponent); they touch/overlap, which is fine; cos() periodic -> seamless
+        float spk = mix(0.4, 1.0, pow(0.5 + 0.5 * cos(az * 22.0 + warp * 6.2831), 0.1)); // very wide overlapping arms + a 0.4 floor -> no dark gaps between them
         float fil = fbm(pp * 5.0 + 21.0);                        // radial filaments (seamless)
         float body = spk * mix(0.48, 1.0, fil);                  // higher floor -> fuller, padded arms
         float lanes = fbm(pp * 11.0 + 40.0);                     // fine dust lanes (seamless)
@@ -197,12 +197,15 @@ export function createBlackHole() {
         // basis in the disk plane
         vec3 T = normalize(cross(N, vec3(0.0, 0.0, 1.0) + N.zxy * 0.001));
         vec3 Bv = cross(N, T);
-        float ang = atan(dot(hit, Bv), dot(hit, T));
         float t = clamp((rr - uDiskIn) / (uDiskOut - uDiskIn), 0.0, 1.0); // 0 inner -> 1 outer
-        // swirling turbulence (spirals: angle shifts with radius + time)
-        float spin = uTime * 3.4 / (rr * 0.5 + 1.0); // faster differential orbital shear (inner rings whip round)
-        float turb = fbm(vec2(ang * 2.5 + rr * 1.4 - spin, rr * 0.9 + uTime * 0.12));
-        turb = mix(turb, fbm(vec2(ang * 5.5 - spin * 1.8, rr * 1.9)), 0.4); // finer co-rotating filaments flowing past
+        // swirling turbulence from the CONTINUOUS in-plane position (NOT the atan2 azimuth, which tore a radial
+        // seam across the disk): rotate the position by a radius-dependent spin -> differential spiral shear, seamless.
+        float spin = uTime * 3.4 / (rr * 0.5 + 1.0); // inner rings whip round faster
+        vec2 dp = vec2(dot(hit, T), dot(hit, Bv));
+        float cs = cos(spin), sn = sin(spin);
+        vec2 dpr = vec2(cs * dp.x - sn * dp.y, sn * dp.x + cs * dp.y);
+        float turb = fbm(dpr * 0.9 + vec2(uTime * 0.05, 3.0));
+        turb = mix(turb, fbm(dpr * 1.8 + 11.0), 0.4); // finer co-rotating filaments
         // temperature ramp: blue-white (inner) -> orange -> deep red (outer)
         vec3 hot = vec3(0.95, 0.55, 1.0);   // hot inner -> violet-white
         vec3 mid = vec3(1.0, 0.32, 0.42);   // red-magenta
@@ -263,12 +266,11 @@ export function createBlackHole() {
         // (no visible square). minr = the ray's closest approach in Rs units.
         float zone = 1.0 - smoothstep(11.0, 36.0, minr); // lensed/smeared stars wrap around the hole (extended farther out)
         float bend = length(d - rd0);
-        vec3 dn = normalize(rd0 + (d - rd0) * 1.6); // exaggerate the lensing deflection so the nebula visibly warps around the hole
-        float neb = spokeNebula(dn, axis);
+        float neb = spokeNebula(d, axis); // sampled along the bent ray = lensed (over-bending it darkened a ring near the hole)
         // more PURPLE, with a violet<->magenta shimmer varying over the cloud (texture, Milky-Way-ish)
         vec3 nebCol = mix(vec3(0.30, 0.06, 0.62), vec3(0.55, 0.15, 0.80), fbm(vec2(d.x * 6.0 + 3.0, d.y * 6.0 - 2.0)));
         vec3 bg = nebCol * neb * uSpokeBright;                   // nebula
-        bg += backgroundSky(d) * zone;                          // + lensed stars/Milky Way (the distortion)
+        bg += backgroundSky(d) * zone * (1.0 + 4.0 * smoothstep(0.05, 0.5, bend)); // lensed stars, brightened where the bend is strong -> visible distorted arcs (fills the dark ring)
         acc += bg * (1.0 - alpha);
         alpha = max(alpha, max(neb * 0.85, smoothstep(0.06, 0.55, bend) * zone));
         // photon ring / lensed arcs — ANIMATED: bright spots orbit the ring + a gentle pulse, so it shimmers
@@ -280,18 +282,18 @@ export function createBlackHole() {
         ring = max(ring, 0.0);
         acc += vec3(1.0, 0.92, 0.78) * ring * 0.9;
         alpha = max(alpha, ring * 0.9 * zone);
-        // a few strongly-LENSED star arcs just outside the hole — tangential bright streaks = the warping signature
+        // MANY strongly-LENSED star arcs hugging the hole — tangential bright streaks = the warping signature
         float arcs = 0.0;
-        if (minr < 14.0) for (int k = 0; k < 5; k++) { // arcs only exist hugging the hole -> skip over the wider cone
+        if (minr < 16.0) for (int k = 0; k < 9; k++) {
           float fk = float(k);
-          float r0 = 1.7 + fk * 1.3;                                    // each arc at a different impact-parameter radius (Rs)
-          float az0 = fk * 1.2566 + sin(uTime * 0.08 + fk * 2.1) * 0.6; // azimuth, slowly drifting
+          float r0 = 1.6 + fk * 0.85;                                   // staggered impact-parameter radii (Rs)
+          float az0 = fk * 1.4 + sin(uTime * 0.08 + fk * 2.1) * 0.7;    // azimuth, slowly drifting
           float da = azr - az0; da = atan(sin(da), cos(da));            // wrap-safe azimuthal offset
-          float rg = exp(-pow((minr - r0) * 4.5, 2.0));                 // thin tangential ring at r0
-          float ag = exp(-pow(da * 2.2, 2.0));                          // localized in azimuth -> an arc, not a full ring
+          float rg = exp(-pow((minr - r0) * 4.0, 2.0));                 // thin tangential ring at r0
+          float ag = exp(-pow(da * 2.0, 2.0));                          // localized in azimuth -> an arc, not a full ring
           arcs += rg * ag;
         }
-        acc += mix(vec3(0.82, 0.9, 1.0), nebCol * 2.4, 0.6) * arcs * 1.8 * zone; // lensed into arcs in the SAME nebula purple (+ star white)
+        acc += mix(vec3(0.92, 0.96, 1.0), nebCol * 2.0, 0.3) * arcs * 3.2 * zone; // bright bluish-white distorted STAR arcs
         alpha = max(alpha, clamp(arcs, 0.0, 1.0) * zone);
         if (alpha < 0.004) discard;                  // nothing here -> let the real scene show through
         gl_FragColor = vec4(acc, clamp(alpha, 0.0, 1.0));
@@ -446,7 +448,7 @@ export function createRingedPlanet(renderer, sunDir) {
 
   // faint grey fresnel limb
   const atmoMat = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color(0xb8b4ac) }, uSunDir: { value: SUN.clone() }, uPower: { value: 3.2 }, uStrength: { value: 0.7 } },
+    uniforms: { uColor: { value: new THREE.Color(0xb8b4ac) }, uSunDir: { value: SUN.clone() }, uPower: { value: 3.2 }, uStrength: { value: 1.4 } },
     vertexShader: /* glsl */`varying vec3 vN; varying vec3 vWorld; void main(){ vec4 wp=modelMatrix*vec4(position,1.0); vWorld=wp.xyz; vN=normalize(mat3(modelMatrix)*normal); gl_Position=projectionMatrix*viewMatrix*wp; }`,
     fragmentShader: /* glsl */`uniform vec3 uColor; uniform vec3 uSunDir; uniform float uPower, uStrength; varying vec3 vN; varying vec3 vWorld;
       void main(){ vec3 V=normalize(cameraPosition-vWorld); float f=pow(1.0-max(dot(normalize(vN),V),0.0),uPower);
