@@ -36,10 +36,10 @@ export const RCS_PORTS = [
   { name: 'Wingtip fwd R', pos: [3.4, 0, -0.05], dir: [0, 0, -1] },
   // Wing pitch/roll jets (mirrored): up + down faces in the middle-front of each wing. Off-centre in X,
   // so they mostly command roll (like the ailerons), with some pitch. Rough starts — place in the editor.
-  { name: 'Wing up L', pos: [-2.0, 0.15, 0.3], dir: [0, 1, 0] },
-  { name: 'Wing up R', pos: [2.0, 0.15, 0.3], dir: [0, 1, 0] },
-  { name: 'Wing down L', pos: [-2.0, 0.05, 0.3], dir: [0, -1, 0] },
-  { name: 'Wing down R', pos: [2.0, 0.05, 0.3], dir: [0, -1, 0] },
+  { name: 'Wing up L', pos: [-1.65, 0.35, 0.55], dir: [0, 1, 0] },
+  { name: 'Wing up R', pos: [1.65, 0.35, 0.55], dir: [0, 1, 0] },
+  { name: 'Wing down L', pos: [-1.65, 0.3, 0.55], dir: [0, -1, 0] },
+  { name: 'Wing down R', pos: [1.65, 0.3, 0.55], dir: [0, -1, 0] },
 ];
 
 export function createRcs(scene, ship, ports = RCS_PORTS) {
