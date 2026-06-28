@@ -44,7 +44,7 @@ const CHANNELS = [
   { key: 'music', label: 'Music' },
 ];
 
-export function createOptions({ settings, onChange, onBack, invertPitch } = {}) {
+export function createOptions({ settings, onChange, onBack, onInvert, invertPitch } = {}) {
   injectStyle();
   const wrap = document.createElement('div');
   wrap.id = 'options-menu';
@@ -94,6 +94,18 @@ export function createOptions({ settings, onChange, onBack, invertPitch } = {}) 
     row.appendChild(lab); row.appendChild(cb);
     panel.appendChild(row);
   }
+
+  // Invert pitch separately for keyboard (W/S) and the gamepad stick.
+  const invertRow = (label, getCur, setCur) => {
+    const row = document.createElement('div'); row.className = 'om-row';
+    const lab = document.createElement('label'); lab.textContent = label; lab.style.flex = '1';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!getCur();
+    cb.style.cssText = 'flex:0 0 auto; width:18px; height:18px; accent-color:#9ec7ff; cursor:pointer';
+    cb.addEventListener('change', () => setCur(cb.checked));
+    row.appendChild(lab); row.appendChild(cb); panel.appendChild(row);
+  };
+  invertRow('Invert Keys', () => settings.invertKeys, (v) => { settings.invertKeys = v; saveSettings(settings); if (onInvert) onInvert(settings); });
+  invertRow('Invert Stick', () => settings.invertStick, (v) => { settings.invertStick = v; saveSettings(settings); if (onInvert) onInvert(settings); });
 
   const note = document.createElement('div');
   note.className = 'om-note';

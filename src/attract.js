@@ -191,12 +191,13 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
   // (great-circle, always smooth) while the position dollies. Shots CUT cleanly on change. Follows allies
   // AND Chigs up close, shoots down a Hammerhead's line of fire, and cuts to explosion fly-bys on kills.
   let shot = 'orbit', shotT = 0, shotDur = 6, subject = null, killTarget = null, killCd = 0, orbitAng = 0, snap = true, camInit = false, killLinger = 0;
+  let killRoll = 0, killSideSign = 1; // per-killcam random roll + side so the explosion cam isn't framed the same every time
   const MIN_SHOT = 3.0; // don't re-cut a battle shot before this even if the subject dies (kills the choppiness)
   const _eye = new THREE.Vector3(), _look = new THREE.Vector3(), _up = new THREE.Vector3();
   const _f = new THREE.Vector3(), _u = new THREE.Vector3(), _side = new THREE.Vector3();
   const _mid = new THREE.Vector3(), _bc = new THREE.Vector3();
   const _killPos = new THREE.Vector3(), _killVel = new THREE.Vector3(); // frozen so the kill-cam linger survives prune()
-  const _qFrame = new THREE.Quaternion(), _frameAx = new THREE.Vector3(0, 1, 0);
+  const _qFrame = new THREE.Quaternion(), _frameAx = new THREE.Vector3(0, 1, 0), _qRoll = new THREE.Quaternion();
   let menuFraming = true, frameSide = 1; // rule-of-thirds: push the action onto a third so the centred menu doesn't cover it (flips per shot)
   // Yaw the target orientation ~1/6 of the horizontal FOV so the subject sits on a third (clear of the menu).
   function applyFraming() {
@@ -339,7 +340,8 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     // opportunistic explosion fly-by: cut to a dramatic dying Chig (rate-limited so it isn't too cutty)
     if (shot !== 'killcam' && killCd <= 0) {
       const dc = dyingChig();
-      if (dc) { shot = 'killcam'; killTarget = dc; shotT = 0; snap = true; killCd = 8 + Math.random() * 4; killLinger = 0; _killPos.copy(dc.pos); _killVel.copy(dc.vel); } // ~8-12s between explosion cuts (was 4 — too cutty)
+      if (dc) { shot = 'killcam'; killTarget = dc; shotT = 0; snap = true; killCd = 8 + Math.random() * 4; killLinger = 0; _killPos.copy(dc.pos); _killVel.copy(dc.vel);
+        killRoll = (Math.random() - 0.5) * 1.2; killSideSign = Math.random() < 0.5 ? 1 : -1; frameSide = Math.random() < 0.5 ? 1 : -1; } // randomise roll/side/third so the kill-cam varies
     }
     shotT += dt;
     if (shot === 'killcam') {
@@ -356,9 +358,10 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
 
     _up.copy(UP);
     if (shot === 'killcam') { // close, side-on, on the tumbling/exploding Chig (frozen pos survives prune())
-      _side.copy(_killVel).cross(UP); if (_side.lengthSq() < 1e-4) _side.set(1, 0, 0); _side.normalize();
+      _side.copy(_killVel).cross(UP); if (_side.lengthSq() < 1e-4) _side.set(1, 0, 0); _side.normalize().multiplyScalar(killSideSign);
       _eye.copy(_killPos).addScaledVector(_side, 20).addScaledVector(UP, 8);
       _look.copy(_killPos);
+      _f.copy(_look).sub(_eye).normalize(); _qRoll.setFromAxisAngle(_f, killRoll); _up.applyQuaternion(_qRoll); // random roll around the view axis
     } else if (shot === 'chase' && subject && subject.alive) {
       _f.set(0, 0, -1).applyQuaternion(subject.quat); _u.set(0, 1, 0).applyQuaternion(subject.quat);
       _eye.copy(subject.pos).addScaledVector(_f, -14).addScaledVector(_u, 5.5);

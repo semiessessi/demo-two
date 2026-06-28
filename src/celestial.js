@@ -179,13 +179,13 @@ export function createBlackHole() {
         float az = atan(dot(t, vx), dot(t, ux));                 // azimuth around the axis
         // irregular radial spokes: cosine lobes whose phase is warped by noise (continuous around az)
         float warp = fbm(vec2(cos(az) * 1.7 + 5.0, sin(az) * 1.7 + 9.0));
-        float spk = pow(0.5 + 0.5 * cos(az * 7.0 + warp * 6.2831), 2.2);
+        float spk = pow(0.5 + 0.5 * cos(az * 11.0 + warp * 6.2831), 2.2);
         float fil = fbm(vec2(az * 4.0 + 21.0, ang * 4.0));       // break spokes into radial filaments
         float body = spk * mix(0.35, 1.0, fil);
         float lanes = fbm(vec2(az * 10.0 + 40.0, ang * 8.0));    // fine dust structure
         body *= mix(0.28, 1.0, smoothstep(0.34, 0.66, lanes));   // carve dark dust lanes through the cloud (Milky-Way-ish)
         // annular radial profile: rises just outside the hole, fades before the quad edge (~0.42 rad)
-        float radial = smoothstep(0.02, 0.12, ang) * (1.0 - smoothstep(0.18, 0.42, ang));
+        float radial = smoothstep(0.02, 0.12, ang) * (1.0 - smoothstep(0.30, 0.66, ang));
         radial *= 0.5 + 0.7 * fbm(vec2(ang * 3.0, az * 1.5));    // large-scale clumping
         return clamp(body * radial, 0.0, 1.0);
       }
@@ -225,6 +225,7 @@ export function createBlackHole() {
         vec3 rd0 = d;                                // original (un-bent) direction
         vec3 axis = normalize(uCenter - uCamPos);    // direction to the hole
         if (dot(rd0, axis) < 0.45) discard;          // SKY PASS: only the cone toward the hole renders; elsewhere the real scene shows -> no billboard edge
+        p += d * max(0.0, -dot(p, d) - 45.0);        // skip empty outer space: begin the fine march ~45 Rs out, so the step budget stays fixed as the hole moves farther
         vec3 angm = cross(p, d); float h2 = dot(angm, angm); // ~conserved (geodesic)
         vec3 acc = vec3(0.0); float alpha = 0.0; bool captured = false;
         float minr = 1e9;
@@ -258,7 +259,7 @@ export function createBlackHole() {
         // shown where the ray was significantly bent (fades to the real scene where it wasn't) + the photon ring.
         // zone confines everything to the rays that passed near the hole -> fades to 0 before the quad edge
         // (no visible square). minr = the ray's closest approach in Rs units.
-        float zone = 1.0 - smoothstep(9.0, 26.0, minr); // lensed/smeared stars wrap around the hole
+        float zone = 1.0 - smoothstep(11.0, 36.0, minr); // lensed/smeared stars wrap around the hole (extended farther out)
         float bend = length(d - rd0);
         float neb = spokeNebula(d, axis);
         // more PURPLE, with a violet<->magenta shimmer varying over the cloud (texture, Milky-Way-ish)
@@ -276,6 +277,19 @@ export function createBlackHole() {
         ring = max(ring, 0.0);
         acc += vec3(1.0, 0.92, 0.78) * ring * 0.9;
         alpha = max(alpha, ring * 0.9 * zone);
+        // a few strongly-LENSED star arcs just outside the hole — tangential bright streaks = the warping signature
+        float arcs = 0.0;
+        for (int k = 0; k < 5; k++) {
+          float fk = float(k);
+          float r0 = 1.7 + fk * 1.3;                                    // each arc at a different impact-parameter radius (Rs)
+          float az0 = fk * 1.2566 + sin(uTime * 0.08 + fk * 2.1) * 0.6; // azimuth, slowly drifting
+          float da = azr - az0; da = atan(sin(da), cos(da));            // wrap-safe azimuthal offset
+          float rg = exp(-pow((minr - r0) * 4.5, 2.0));                 // thin tangential ring at r0
+          float ag = exp(-pow(da * 2.2, 2.0));                          // localized in azimuth -> an arc, not a full ring
+          arcs += rg * ag;
+        }
+        acc += vec3(0.82, 0.9, 1.0) * arcs * 1.8 * zone;                // bluish-white lensed stars, bent into arcs
+        alpha = max(alpha, clamp(arcs, 0.0, 1.0) * zone);
         if (alpha < 0.004) discard;                  // nothing here -> let the real scene show through
         gl_FragColor = vec4(acc, clamp(alpha, 0.0, 1.0));
       }`,

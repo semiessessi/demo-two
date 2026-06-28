@@ -19,6 +19,8 @@ export const DEFAULTS = {
   // Audio mix (0..1). master scales everything; the rest are per-channel. (voice = future comms/callouts.)
   // master/effects default to 1.0 so the tuned SFX loudness is unchanged at 100%.
   volume: { master: 1.0, effects: 1.0, voice: 0.9, music: 0.7 },
+  invertKeys: false, // invert pitch on the keyboard (W/S)
+  invertStick: false, // invert pitch on the gamepad stick
 };
 
 // Difficulty presets -> drive the existing data knobs in waves.js + enemies.js (params).
