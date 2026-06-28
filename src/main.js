@@ -473,7 +473,7 @@ function bootFlight() {
 // environment and run the self-contained cinematic battle. (bootFlight/enterMenu both touch player-only
 // systems, so attract must NOT route through them.)
 function bootAttract() {
-  applyEnvironment(settings);
+  applyEnvironment({ ...settings, environment: 'cerberus' }); // attract showcases the Cerberus black hole by default
   if (attract) { attract.resume(); attract.setVisible(true); }
 }
 
