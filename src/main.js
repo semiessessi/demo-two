@@ -100,6 +100,28 @@ try {
   throw e;
 }
 const { renderer, scene, camera, composer, bloom, render, setRenderScale, renderDepthOnly, drawingBufferSize, depthTexture, gpuFrameMs } = _renderApi;
+
+// On-screen diagnostics: a black screen on a phone/tablet gives no console to read, so surface the actual
+// failure. On mobile (or anywhere with ?diag) we catch uncaught errors, promise rejections, and WebGL
+// context loss and paint them over the canvas — turning "it's just black" into a reportable message.
+const DIAG = detectDevice().isMobile || /[?&]diag\b/.test(window.location.search);
+if (DIAG) {
+  let shownErr = false;
+  const showError = (title, detail) => {
+    if (shownErr) return; // first error is the useful one; don't bury it under cascades
+    shownErr = true;
+    const el = document.createElement('div');
+    el.style.cssText =
+      'position:fixed;left:0;right:0;bottom:0;z-index:10000;max-height:55vh;overflow:auto;padding:14px 16px;' +
+      'background:rgba(40,10,12,0.92);color:#ffd6cc;border-top:1px solid rgba(255,120,90,0.5);' +
+      'font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word';
+    el.textContent = '⚠ ' + title + '\n' + (detail || '');
+    document.body.appendChild(el);
+  };
+  window.addEventListener('error', (e) => showError(e.message || 'Script error', `${e.filename || ''}:${e.lineno || ''}:${e.colno || ''}\n${(e.error && e.error.stack) || ''}`));
+  window.addEventListener('unhandledrejection', (e) => showError('Unhandled promise rejection', String((e.reason && (e.reason.stack || e.reason.message)) || e.reason || '')));
+  renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); showError('WebGL context lost', 'The GPU dropped the rendering context — usually out of memory on mobile, or a driver fault under load. Reloading may help; a lighter environment (try ?nobodies or ?nobloom) uses less.'); });
+}
 // Smoke occlusion: an opaque depth pre-pass lets the smoke raymarch skip puffs hidden behind ships.
 // On by default; ?noocclude disables it (escape hatch).
 const OCCLUDE = !/[?&]noocclude\b/.test(window.location.search);
@@ -774,7 +796,7 @@ function startLoop() {
     const dt = Math.min(clock.getDelta(), 0.1);
     if (DEBUG && debug && debug.frame(dt)) return; // debug viewer modes own the frame
     if (ATTRACT) { attractFrame(dt); return; } // standalone ?attract: a leaner, player-less frame
-    if (attract && gameState.mode === 'menu') { attractFrame(dt); return; } // cinematic battle behind the menu
+    if (attract && gameState.mode === 'menu') { touchControls.setVisible(false); attractFrame(dt); return; } // cinematic battle behind the menu (hide touch controls)
 
     input.poll(); // keyboard + gamepad + touch -> shared signals (read by flight + cannon)
     const flying = gameState.mode === 'flying';
