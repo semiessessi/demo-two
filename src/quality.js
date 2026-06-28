@@ -62,6 +62,11 @@ const RELEASE = 1.2;                    // pressure gain UNDER budget -> falls s
 const DOWN_PRESS = 0.85;                // tier steps DOWN when pressure stays pinned this high (cheap levers exhausted)
 const UP_PRESS = 0.30;                  // tier steps UP when pressure stays this low (real structural headroom)
 const AUTO_MAX = TIERS.length - 2;      // auto climbs only to 'high' (2048); 'ultra' (4096) is manual-only — stay lean
+// TEMP SAFETY: auto STRUCTURAL tier changes (render-scale resize + CSM rebuild) were oscillating in heavy
+// scenes (Tartarus cloud planet, Cerberus black hole) and FLASHING BLACK every couple seconds. Until the
+// budget/hysteresis is verified live, the structural auto-stepping is OFF — the tier holds at its start
+// value and ONLY the cheap per-frame lever (volumetric raymarch steps) adapts. Manual tier pins still work.
+const STRUCTURAL_AUTO = false;
 
 export function createQuality({ lighting, vfx, debris, setRenderScale, gpuFrameMs, startTier } = {}) {
   let current = startTier != null ? clamp(startTier, 0, TIERS.length - 1) : deviceStartTier();
@@ -103,9 +108,9 @@ export function createQuality({ lighting, vfx, debris, setRenderScale, gpuFrameM
     if (err > DEAD_MS) pressure += ATTACK * (err - DEAD_MS) * dt;       // over budget -> rise fast
     else if (err < -DEAD_MS) pressure += RELEASE * (err + DEAD_MS) * dt; // under budget -> fall slow
     pressure = clamp(pressure, 0, 1);
-    if (vfx && vfx.setLoad) vfx.setLoad(pressure); // the per-frame cheap lever
+    if (vfx && vfx.setLoad) vfx.setLoad(pressure); // the per-frame cheap lever (smooth — never flashes)
 
-    if (manual) return;
+    if (manual || !STRUCTURAL_AUTO) return; // structural auto-stepping disabled (see STRUCTURAL_AUTO note)
     acc += dt;
     if (acc < TICK) return;
     acc = 0;
