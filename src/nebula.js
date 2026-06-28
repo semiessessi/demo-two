@@ -81,6 +81,16 @@ void main() {
   col *= 1.0 + uPulse * 0.5; // music breath
   col *= uBrightness;        // overall dimmer (user: ~10%)
 
+  // Fine-grained richness: small red/orange BRIGHT knots + BLACK dark voids INSIDE the nebula clouds,
+  // at ~4-8x the Milky Way detail frequency (small, not blobby). One high-freq field — its peaks read as
+  // bright emission knots, its troughs as dark dust voids. Gated by density so they stay in the clouds.
+  float fineN = fbmDetail(dir * 55.0 + 3.0);
+  float inClouds = smoothstep(0.12, 0.6, density);
+  float knots = smoothstep(0.66, 0.84, fineN) * inClouds; // bright red/orange emission
+  float voids = smoothstep(0.30, 0.14, fineN) * inClouds; // dark dust
+  col += vec3(1.0, 0.45, 0.12) * knots * 0.35;
+  col *= 1.0 - 0.8 * voids;
+
   // Milky Way on the REAL galactic plane (perpendicular to uMwPole), with body + wispy high-freq
   // filaments and a thin central dust rift (Great Rift) — tuned to read as a textured band, not a blob.
   float mw = exp(-pow(galLat * 4.0, 2.0));        // band envelope (broad -> bulk)
