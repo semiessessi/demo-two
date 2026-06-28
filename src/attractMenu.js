@@ -40,7 +40,7 @@ function injectStyle() {
   #attract-menu .am-btn:disabled { opacity: 0.32; cursor: default; }
   #attract-menu .am-legal {
     position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
-    width: min(760px, 92vw); text-align: center;
+    width: min(570px, 70vw); text-align: center;
     font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
     font-size: 10.5px; line-height: 1.5; color: #565d70; pointer-events: none;
   }
