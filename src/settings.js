@@ -44,8 +44,8 @@ export const ENVIRONMENT = {
   },
   cerberus: {
     label: 'Cerberus', body: 'blackhole', sunMult: 2,
-    // richer nebulosity around the hole (so the lensed nebula reads through the lens)
-    nebula: { uColorA: 0x07040f, uColorB: 0x2a1a55, uColorC: 0x7a2a40, uBrightness: 0.12, uSaturation: 0.5, uMilkyWay: 0.12 },
+    // richer nebulosity around the hole; blue (uColorB) + red (uColorC) brightness +30%
+    nebula: { uColorA: 0x07040f, uColorB: 0x37226e, uColorC: 0x9f3753, uBrightness: 0.12, uSaturation: 0.5, uMilkyWay: 0.12 },
     sun: { disc: 220, glow: 520, halo: 0, color: 0xeef0ff, glowAlpha: 0.4, haloAlpha: 0.0, white: true, light: 0x9fc0ff },
   },
   tartarus: {

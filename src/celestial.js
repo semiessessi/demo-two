@@ -135,6 +135,7 @@ export function createBlackHole() {
       uTime: { value: 0 },
       uSteps: { value: 150 },
       uMwNormal: { value: new THREE.Vector3(0.9101, 0.4020, -0.1002).normalize() }, // galactic pole (lensed Milky Way)
+      uSpokeBright: { value: 0.9 }, // brightness of the spoked blue/purple nebula behind the hole
     },
     transparent: true,
     depthWrite: false,
@@ -146,7 +147,7 @@ export function createBlackHole() {
       precision highp float;
       varying vec3 vWorld;
       uniform vec3 uCamPos, uCenter, uDiskN, uMwNormal;
-      uniform float uRs, uDiskIn, uDiskOut, uTime;
+      uniform float uRs, uDiskIn, uDiskOut, uTime, uSpokeBright;
       uniform int uSteps;
 
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -163,6 +164,27 @@ export function createBlackHole() {
         float h = fract(sin(dot(c, vec3(12.9, 78.2, 37.7))) * 43758.5);
         col += vec3(0.85, 0.9, 1.0) * step(0.991, h) * smoothstep(0.16, 0.0, length(f)) * 3.0; // stars
         return col;
+      }
+
+      // Spoked blue/purple nebula radiating from BEHIND the hole. Sampled with the LENSED direction so it
+      // warps around the hole; its own radial falloff fades it out before the quad edge (no square).
+      float spokeNebula(vec3 dir, vec3 axis){
+        float ca = clamp(dot(dir, axis), -1.0, 1.0);
+        float ang = acos(ca);                                    // 0 at the hole, grows outward
+        vec3 t = dir - axis * ca;                                // tangential component
+        vec3 up = abs(axis.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+        vec3 ux = normalize(cross(axis, up));
+        vec3 vx = cross(axis, ux);
+        float az = atan(dot(t, vx), dot(t, ux));                 // azimuth around the axis
+        // irregular radial spokes: cosine lobes whose phase is warped by noise (continuous around az)
+        float warp = fbm(vec2(cos(az) * 1.7 + 5.0, sin(az) * 1.7 + 9.0));
+        float spk = pow(0.5 + 0.5 * cos(az * 7.0 + warp * 6.2831), 2.2);
+        float fil = fbm(vec2(az * 4.0 + 21.0, ang * 4.0));       // break spokes into radial filaments
+        float body = spk * mix(0.35, 1.0, fil);
+        // annular radial profile: rises just outside the hole, fades before the quad edge (~0.42 rad)
+        float radial = smoothstep(0.02, 0.12, ang) * (1.0 - smoothstep(0.18, 0.42, ang));
+        radial *= 0.5 + 0.7 * fbm(vec2(ang * 3.0, az * 1.5));    // large-scale clumping
+        return clamp(body * radial, 0.0, 1.0);
       }
 
       // disk emission at a hit point (in Rs units, disk-plane radius rr), with temperature + turbulence + doppler
@@ -232,14 +254,18 @@ export function createBlackHole() {
         // (no visible square). minr = the ray's closest approach in Rs units.
         float zone = 1.0 - smoothstep(7.0, 20.0, minr);
         float bend = length(d - rd0);
-        acc += backgroundSky(d) * (1.0 - alpha);
-        alpha = max(alpha, smoothstep(0.06, 0.55, bend));
+        // spoked blue/purple nebula behind the hole (own falloff -> fades before the quad edge, no square)
+        vec3 axis = normalize(uCenter - uCamPos);
+        float neb = spokeNebula(d, axis);
+        vec3 bg = vec3(0.34, 0.16, 0.62) * neb * uSpokeBright;   // nebula
+        bg += backgroundSky(d) * zone;                          // + lensed stars/Milky Way (the distortion)
+        acc += bg * (1.0 - alpha);
+        alpha = max(alpha, max(neb * 0.85, smoothstep(0.06, 0.55, bend) * zone));
         float ring = exp(-pow((minr - 1.5) * 6.0, 2.0));
         acc += vec3(1.0, 0.92, 0.78) * ring * 0.9;
-        alpha = max(alpha, ring * 0.9);
-        alpha *= zone;
-        if (alpha < 0.004) discard;                  // beyond the lensing zone -> let the real scene show through
-        gl_FragColor = vec4(acc * zone, clamp(alpha, 0.0, 1.0));
+        alpha = max(alpha, ring * 0.9 * zone);
+        if (alpha < 0.004) discard;                  // nothing here -> let the real scene show through
+        gl_FragColor = vec4(acc, clamp(alpha, 0.0, 1.0));
       }`,
   });
 
