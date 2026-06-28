@@ -12,7 +12,7 @@ import { createRcs } from './rcs.js';
 const UP = new THREE.Vector3(0, 1, 0);
 const ZERO = new THREE.Vector3();
 
-export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting, showRcs }) {
+export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting }) {
   const allies = [];
 
   // STRETCH: a convex Hammerhead debris pool so a downed ally's hull can fracture (same path the player's
@@ -51,9 +51,9 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     allies.push(makeAlly(pv, align, ship.engineMaterials, thr));
   }
 
-  // ?attract&thrusters: give each ally its own maneuvering (RCS) jets — they fire from the ally's actual
-  // rotation each frame (pitch/roll as it banks), exactly like the player's.
-  const allyRcs = showRcs ? allies.map((a) => createRcs(scene, { pivot: a.pivot })) : null;
+  // each ally gets its own maneuvering (RCS) jets — they fire from the ally's actual rotation each frame
+  // (pitch/roll/yaw as it banks) + deceleration, exactly like the player's.
+  const allyRcs = allies.map((a) => createRcs(scene, { pivot: a.pivot }));
 
   // focus = allies' centroid; the Chig formation default-target + the player-like object for lighting.
   const focus = { pos: new THREE.Vector3(), quat: allies[0].quat, vel: ZERO };

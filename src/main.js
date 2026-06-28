@@ -36,9 +36,6 @@ const DEBUG =
   ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) ||
   /[?&]debug\b/.test(window.location.search);
 
-// Maneuvering-thruster (RCS) exhaust is WIP — only fire the jets when ?thrusters is in the URL.
-const THRUSTERS = /[?&]thrusters\b/.test(window.location.search);
-
 // Attract mode: a self-running cinematic AI-vs-AI dogfight (no player). On ?attract we build the attract
 // orchestrator instead of the player flight/cannon/HUD/gameState and run a separate, leaner render frame.
 const ATTRACT = /[?&]attract\b/.test(window.location.search);
@@ -246,7 +243,7 @@ async function init() {
   });
   if (ATTRACT) {
     // attract mode: build the cinematic AI-vs-AI dogfight instead of the player combat stack.
-    attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting, showRcs: THRUSTERS });
+    attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting });
     combat.setFriendlies(attract.friendlies); // enemy bolts route to whichever ally ship they hit
   } else {
   damage = createDamageModel(ship);
@@ -382,7 +379,7 @@ function startLoop() {
 
     for (const m of ship.engineMaterials) m.emissiveIntensity = 1.8 + r.thrust * 3.2;
     thrusters.update(r.thrust, dt);
-    if (rcs && THRUSTERS) rcs.update(dt, flying); // WIP: jets only with ?thrusters; fire from actual rotation
+    if (rcs) rcs.update(dt, flying); // maneuvering jets — fire from the ship's actual rotation + deceleration
 
     // keep the backdrop centred on the camera so it sits at infinity (no parallax)
     nebula.mesh.position.copy(camera.position);
