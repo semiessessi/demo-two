@@ -816,6 +816,28 @@ function updateFlybys(dt) {
   }
 }
 
+// Bullet whiz-bys: a synthesized Doppler zip when a bolt passes close to the camera. Detect a near-miss as
+// "got closer, then started receding while still within WHIZ_DIST" — the approach test excludes our own
+// outgoing fire (which only ever recedes), so no team filter is needed. Once per bolt (reset on spawn).
+const WHIZ_DIST = 10;       // a bolt passing within this many units of the camera "whizzes"
+const WHIZ_MIN_SPEED = 40;  // only fast bolts whiz
+function updateWhiz() {
+  if (!projectiles || !SOUND) return;
+  const cp = camera.position;
+  for (const b of projectiles.live) {
+    if (!b.alive) continue;
+    const d = b.pos.distanceTo(cp);
+    const pd = b._whizPrevD === undefined ? d : b._whizPrevD;
+    b._whizPrevD = d;
+    if (d < pd - 0.001) b._whizApproached = true;        // it got closer at some point
+    if (!b._whizzed && b._whizApproached && d > pd && pd < WHIZ_DIST) { // crossed its near-miss closest approach
+      b._whizzed = true;
+      const spd = b.vel ? b.vel.length() : 0;
+      if (spd > WHIZ_MIN_SPEED) sfx.whiz(b.pos, b.vel, 1 - pd / WHIZ_DIST);
+    }
+  }
+}
+
 // Attract mode frame: drive the AI dogfight + cinematic camera, reusing the shared combat/vfx/debris/
 // lighting pipeline but none of the player systems (flight/cannon/HUD/gameState are never created here).
 function attractFrame(dt) {
@@ -838,6 +860,7 @@ function attractFrame(dt) {
   lighting.update(dt, { player: attract.focus, thrust: 0.8, projectiles, enemies: enemyMgr.enemies }); // cascades fit to the camera; dynamic lights around the action
   if (ENGINE_SFX) sfx.engine(0.85); // steady engine hum (allies cruise ~0.85) — ?engine only
   updateFlybys(dt); // Chig whooshes past the cinematic camera
+  updateWhiz();     // bolts zipping past the camera
   if (OCCLUDE) { // smoke occlusion: the furball is the heaviest case, so cull hidden puffs here too
     nebula.mesh.visible = false;
     stars.visible = false;
@@ -938,6 +961,7 @@ function startLoop() {
     if (ENGINE_SFX) sfx.engine(r.thrust); // engine rises with thrust/boost — ?engine only (still rough)
     sfx.gunTick(dt); // gate the cannon fire-loop (gunFiring() is pulsed per shot from the cannon's onFire)
     updateFlybys(dt); // Chig whooshes past the player
+  updateWhiz();     // enemy bolts zipping past the cockpit
     if (rcs) rcs.update(dt, flying); // maneuvering jets — fire from the ship's actual rotation + deceleration
 
     // keep the backdrop centred on the camera so it sits at infinity (no parallax)

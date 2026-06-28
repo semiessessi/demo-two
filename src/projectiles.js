@@ -82,6 +82,7 @@ export function createProjectiles(scene) {
     b.radius = radius;
     b.pos.copy(pos);
     b.vel.copy(vel);
+    b._whizPrevD = undefined; b._whizzed = false; b._whizApproached = false; // reset whiz-by tracking for this reuse
     const u = b.mesh.material.uniforms;
     u.uColor.value.set(color);
     u.uGlow.value = glow;
