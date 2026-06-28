@@ -47,7 +47,9 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
   ship.pivot.add(group); // local frame -> tracks the ship
 
   // Live-tunable jet size + firing gain (user wanted thin/short jets). Editable in the debug editor.
-  const jet = { radius: 0.1, length: 0.5, gain: 2.4, brakeGain: 0.05 };
+  // `gain` now scales angular ACCELERATION (see update) — jets pulse on rate changes, not steady turns.
+  const jet = { radius: 0.1, length: 0.5, gain: 0.38, brakeGain: 0.05 };
+  const RCS_SMOOTH = 14; // low-pass on angular velocity before differentiating (AI micro-corrections are noisy)
 
   const coneGeo = new THREE.ConeGeometry(0.5, 1, 12, 1, true); // apex +Y, open base
   const units = ports.map((p) => {
@@ -67,6 +69,9 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
   const prevQ = new THREE.Quaternion();
   const dq = new THREE.Quaternion();
   const omega = new THREE.Vector3();
+  const omegaLP = new THREE.Vector3(); // lightly-smoothed angular velocity
+  const prevOmegaLP = new THREE.Vector3(); // previous smoothed value, for differentiation
+  const alpha = new THREE.Vector3(); // angular acceleration = the jet command axis
   const tpos = new THREE.Vector3();
   const tq = new THREE.Vector3();
   let havePrev = false;
@@ -96,9 +101,18 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
       const s = Math.sqrt(Math.max(0, 1 - w * w));
       if (s > 1e-5) omega.set(dq.x / s, dq.y / s, dq.z / s).multiplyScalar(angle / dt);
     }
-    const omegaMag = omega.length();
+    // Fire on angular ACCELERATION, not steady angular velocity. In vacuum a constant rotation needs no
+    // torque, so a real attitude jet pulses when a turn STARTS / STOPS / CHANGES, then goes quiet — firing
+    // on velocity instead pegged the pitch jets on for the whole of a sustained banked turn ("the up
+    // thrusters never stop", which the AI does almost constantly). Smooth the noisy AI-jittered angular
+    // velocity, differentiate it for the command axis, and scale firing by its magnitude.
+    omegaLP.lerp(omega, 1 - Math.exp(-RCS_SMOOTH * dt));
+    alpha.copy(omegaLP).sub(prevOmegaLP).multiplyScalar(1 / Math.max(dt, 1e-3));
+    prevOmegaLP.copy(omegaLP);
+    const omegaMag = alpha.length();
     const fireScale = Math.min(1, omegaMag * jet.gain);
-    if (omegaMag > 1e-4) omega.multiplyScalar(1 / omegaMag); // reuse omega as the unit rotation axis
+    omega.copy(alpha);
+    if (omegaMag > 1e-4) omega.multiplyScalar(1 / omegaMag); // command axis = unit angular acceleration
 
     // forward deceleration (units/s²) from the ship's own motion — drives the forward-facing retro jets
     fwdTmp.set(0, 0, -1).applyQuaternion(cq);
