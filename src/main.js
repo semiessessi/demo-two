@@ -797,7 +797,7 @@ function startLoop() {
     if (gameState.mode === 'over' && !runSubmitted) { // record the run for the leaderboard (once)
       runSubmitted = true;
       if (net) net.localDead(); // co-op: peers remove our ship proxy instead of freezing it
-      if (isSignedIn()) submitRun({ wave: (waves && waves.wave) || 0, kills: enemyMgr.kills, deaths: 1, difficulty: settings.difficulty, environment: settings.environment, coop: !!net });
+      if (isSignedIn()) submitRun({ wave: (waves && waves.wave) || 0, kills: net ? net.myKills : enemyMgr.kills, deaths: 1, difficulty: settings.difficulty, environment: settings.environment, coop: !!net });
     }
     hud.update({ waves, enemies: enemyMgr.enemies, player, ejectProgress: gameState.ejectProgress });
     targetDisplay.update(cannon.target, ship.pivot.quaternion, ship.pivot.position, cannon.locked);

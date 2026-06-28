@@ -41,6 +41,7 @@ export function createNetGame(scene, opts) {
   let started = false;
   let sendAcc = 0;
   let seq = 0;
+  let myKills = 0; // co-op: enemies killed by MY shots (for an honest per-player leaderboard)
   const _q = new THREE.Quaternion();
   const _p = new THREE.Vector3();
   const _v = new THREE.Vector3();
@@ -138,9 +139,9 @@ export function createNetGame(scene, opts) {
         break;
       }
       case M.ESPAWN: { for (const en of msg.en || []) { if (!enemyProxies.has(en.h)) { const e = enemyMgr.spawnProxy({ hash: en.h, pos: arrV(en.p), quat: arrQ(en.q) }); enemyProxies.set(en.h, { enemy: e, interp: createInterpolator() }); } } break; }
-      case M.EDEATH: { for (const d of msg.deaths || []) { enemyMgr.killByHash(d.h, d.type); enemyProxies.delete(d.h); } break; }
+      case M.EDEATH: { for (const d of msg.deaths || []) { if (d.by === myId) myKills++; enemyMgr.killByHash(d.h, d.type); enemyProxies.delete(d.h); } break; }
       case M.EFIRE: { for (const f of msg.fires || []) spawnEnemyBolt(f); break; }
-      case M.EHIT: { if (isHost) applyEnemyHit(msg.h, msg.dmg); break; }
+      case M.EHIT: { if (isHost) applyEnemyHit(msg.h, msg.dmg, msg.by); break; }
       // player events: the host relays joiner->joiner so everyone sees them (sender ignores its own id)
       case M.PFIRE: { if (isHost) transport.send(msg); break; } // cosmetic tracer (visual TODO) + relay
       case M.PDEAD: { const r = remotes.get(msg.id); if (r && r.ally.destroy) r.ally.destroy(); if (isHost) transport.send(msg); break; }
@@ -186,19 +187,20 @@ export function createNetGame(scene, opts) {
   }
 
   // --- enemy hp authority (host) ---------------------------------------------------------------------
-  function applyEnemyHit(hash, dmg) {
+  function applyEnemyHit(hash, dmg, by) {
     for (const e of enemyMgr.enemies) {
       if (e.hash === hash && e.alive) {
+        e._lastBy = by; // remember the last damager for kill credit
         e.hp -= dmg;
-        if (e.hp <= 0) { enemyMgr.kill(e); /* edeath emitted in flushHost via death scan */ }
+        if (e.hp <= 0) enemyMgr.kill(e); // edeath (with credit) emitted in hostEnemyEvents
         return;
       }
     }
   }
-  // HOST: enemy-hit callback for combat — applies locally + (deaths broadcast in flushHost).
-  if (isHost && combat.setOnEnemyHit) combat.setOnEnemyHit((e, dmg) => applyEnemyHit(e.hash, dmg));
-  // JOINER: report the hit to the host; the spark is already drawn by combat.
-  if (!isHost && combat.setOnEnemyHit) combat.setOnEnemyHit((e, dmg) => transport.send({ t: M.EHIT, h: e.hash, dmg }));
+  // HOST: enemy-hit callback for combat — applies locally (host's own bolt credits the host).
+  if (isHost && combat.setOnEnemyHit) combat.setOnEnemyHit((e, dmg) => applyEnemyHit(e.hash, dmg, myId));
+  // JOINER: report the hit (+ who shot) to the host; the spark is already drawn by combat.
+  if (!isHost && combat.setOnEnemyHit) combat.setOnEnemyHit((e, dmg) => transport.send({ t: M.EHIT, h: e.hash, dmg, by: myId }));
 
   // HOST: detect spawns/deaths since last tick to emit espawn/edeath.
   const knownHashes = new Set();
@@ -208,7 +210,7 @@ export function createNetGame(scene, opts) {
     for (const e of enemyMgr.enemies) {
       now.add(e.hash);
       if (e.alive && !knownHashes.has(e.hash)) espawn.push({ h: e.hash, kind: 0, p: packV(e.pos), q: packQ(e.obj.quaternion) });
-      if (!e.alive && knownHashes.has(e.hash)) edeath.push({ h: e.hash, type: e.death?.type || 'instant', p: packV(e.pos) });
+      if (!e.alive && knownHashes.has(e.hash)) { edeath.push({ h: e.hash, type: e.death?.type || 'instant', p: packV(e.pos), by: e._lastBy }); if (e._lastBy === myId) myKills++; }
     }
     for (const h of knownHashes) if (!now.has(h)) edeath.push({ h, type: 'instant' }); // pruned before we saw the death
     knownHashes.clear();
@@ -284,6 +286,7 @@ export function createNetGame(scene, opts) {
   function localRespawn() { transport.send({ t: M.PRESPAWN, id: myId }); }
 
   return { myId, isHost, captureLocal, applyRemotes, targetFor, rosterWithSelf, localDead, localRespawn,
+    get myKills() { return myKills; },
     get started() { return started; }, setStarted(v) { started = v; },
     broadcastStart(settings) { if (isHost) transport.send({ t: M.START, settings }); },
     end };
