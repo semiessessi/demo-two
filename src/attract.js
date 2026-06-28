@@ -12,7 +12,7 @@ import { createRcs } from './rcs.js';
 const UP = new THREE.Vector3(0, 1, 0);
 const ZERO = new THREE.Vector3();
 
-export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting }) {
+export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting, rcs }) {
   const allies = [];
 
   // STRETCH: a convex Hammerhead debris pool so a downed ally's hull can fracture (same path the player's
@@ -57,7 +57,9 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
 
   // each ally gets its own maneuvering (RCS) jets — they fire from the ally's actual rotation each frame
   // (pitch/roll/yaw as it banks) + deceleration, exactly like the player's.
-  const allyRcs = allies.map((a) => createRcs(scene, { pivot: a.pivot }));
+  // ally #0 IS the player's own ship -> reuse the player's RCS (when provided by main) instead of building
+  // a second rig on the same pivot (that caused doubled/frozen maneuvering jets after launch).
+  const allyRcs = allies.map((a, i) => (i === 0 && rcs) ? rcs : createRcs(scene, { pivot: a.pivot }));
 
   // --- cinematic intro: the Hammerheads sweep in as a formation, then the Chigs do, THEN the chaos ----
   // Reuse the existing spawn offsets AS the formation shape (ship at origin + each clone's offset).

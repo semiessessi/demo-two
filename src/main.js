@@ -155,11 +155,16 @@ function makeSprite(paint, scale, order, size = 1024) {
 const nebula = createNebula();
 scene.add(nebula.mesh);
 // per-environment background bodies (shown/hidden by applyEnvironment), kept at infinity in the loop
-const jupiter = createJupiter(renderer, sunDir);
-const blackhole = createBlackHole();
-const cloudplanet = createCloudPlanet();
-const habitable = createHabitablePlanet();
-scene.add(jupiter.group, blackhole.group, cloudplanet.group, habitable.group);
+// Background bodies are built LAZILY (only the selected environment's one) — building all four at boot
+// compiled 4+ shaders (incl. the heavy black-hole raymarch) + loaded the 2 MB Jupiter texture up front,
+// which slowed the load badly. ensureBody() creates + caches on first selection.
+let jupiter = null, blackhole = null, cloudplanet = null, habitable = null;
+function ensureBody(kind) {
+  if (kind === 'jupiter' && !jupiter) { jupiter = createJupiter(renderer, sunDir); scene.add(jupiter.group); }
+  else if (kind === 'blackhole' && !blackhole) { blackhole = createBlackHole(); scene.add(blackhole.group); }
+  else if (kind === 'cloudplanet' && !cloudplanet) { cloudplanet = createCloudPlanet(); scene.add(cloudplanet.group); }
+  else if (kind === 'habitable' && !habitable) { habitable = createHabitablePlanet(); scene.add(habitable.group); }
+}
 const JUP_DIR = new THREE.Vector3(0.35, 0.12, -0.93).normalize();
 const BH_DIR = new THREE.Vector3(0.40, 0.18, -0.90).normalize();
 const CLOUD_DIR = new THREE.Vector3(0.30, 0.15, -0.94).normalize();
@@ -171,21 +176,21 @@ function updateBackdropBodies(dt) {
     companionDisc.position.copy(camera.position).addScaledVector(companionDir, 3600);
     companionGlow.position.copy(camera.position).addScaledVector(companionDir, 3650);
   }
-  if (jupiter.group.visible) {
+  if (jupiter && jupiter.group.visible) {
     jupiter.group.position.copy(camera.position).addScaledVector(JUP_DIR, 3400);
     jupiter.update(dt); // spin Jupiter + orbit Io/Ganymede
   }
-  if (cloudplanet.group.visible) {
+  if (cloudplanet && cloudplanet.group.visible) {
     cloudplanet.group.position.copy(camera.position).addScaledVector(CLOUD_DIR, 3300);
     cloudplanet.mat.uniforms.uTime.value += dt; // animate the swirling clouds
     cloudplanet.planet && (cloudplanet.planet.rotation.y += 0.004 * dt);
   }
-  if (habitable.group.visible) {
+  if (habitable && habitable.group.visible) {
     habitable.group.position.copy(camera.position).addScaledVector(IXION_DIR, 2500); // big + close
     habitable.mat.uniforms.uTime.value += dt;
     habitable.planet.rotation.y += 0.005 * dt; // spin under the fixed crescent terminator
   }
-  if (blackhole.group.visible) {
+  if (blackhole && blackhole.group.visible) {
     blackhole.group.position.copy(camera.position).addScaledVector(BH_DIR, 3600);
     blackhole.plane.quaternion.copy(camera.quaternion); // billboard: face the camera
     const u = blackhole.mat.uniforms;
@@ -312,12 +317,14 @@ function applySun(c) {
   sunHalo.scale.setScalar(c.halo || 1); sunHalo.material.opacity = c.haloAlpha != null ? c.haloAlpha : 1;
   sunHalo.visible = (c.halo || 0) > 0 && sunHalo.material.opacity > 0.001;
 }
-// Show the environment's background body (Jupiter / black hole / none).
+// Show the environment's background body (Jupiter / black hole / cloud planet / Ixion / none),
+// building it on first use (lazy) so unused envs cost nothing.
 function applyBody(kind) {
-  jupiter.group.visible = kind === 'jupiter';
-  blackhole.group.visible = kind === 'blackhole';
-  cloudplanet.group.visible = kind === 'cloudplanet';
-  habitable.group.visible = kind === 'habitable';
+  ensureBody(kind);
+  if (jupiter) jupiter.group.visible = kind === 'jupiter';
+  if (blackhole) blackhole.group.visible = kind === 'blackhole';
+  if (cloudplanet) cloudplanet.group.visible = kind === 'cloudplanet';
+  if (habitable) habitable.group.visible = kind === 'habitable';
 }
 function applySettings(s) {
   applyDifficulty(s);
@@ -408,7 +415,7 @@ async function init() {
   });
   if (ATTRACT) {
     // attract mode: build the cinematic AI-vs-AI dogfight instead of the player combat stack.
-    attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting });
+    attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting, rcs });
     combat.setFriendlies(attract.friendlies); // enemy bolts route to whichever ally ship they hit
   } else {
   damage = createDamageModel(ship);
@@ -450,9 +457,9 @@ async function init() {
       gameState.tumble('WING TORN OFF — EJECTED');
     },
   });
-  // Cinematic battle behind the pre-game menu: the player ship is ally #1, plus two clones vs looping
-  // Chigs. enterMenu() shows/re-arms it; launchSkirmish() hides the clones + clears friendlies.
-  attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting });
+  // Cinematic battle behind the pre-game menu: the player ship is ally #1 (reusing the player's own RCS
+  // so there's no doubled jet rig), plus clones vs looping Chigs. enterMenu() shows/re-arms it.
+  attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting, rcs });
   }
 
   if (DEBUG && !ATTRACT) {
