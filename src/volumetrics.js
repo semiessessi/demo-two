@@ -45,6 +45,13 @@ uniform vec3 uLightColor;
 uniform vec3 uAmbient;
 uniform vec4 uBlobs[4];   // xyz = unit offset from centre, w = weight
 uniform int uBlobCount;
+// occlusion pre-pass: opaque scene depth (half-res), used to skip puffs hidden behind ships
+uniform sampler2D uDepthTex;
+uniform vec2 uResolution;
+uniform vec3 uCamFwd;
+uniform float uCamNear;
+uniform float uCamFar;
+uniform float uOcclude;
 
 float hash(vec3 p) {
   p = fract(p * 0.3183099 + 0.1);
@@ -111,6 +118,17 @@ void main() {
   float t1 = -b + sq;
   if (t1 <= t0) discard;
 
+  // occlusion cull: if the puff's FRONT (t0) is behind the opaque scene depth on this ray, the whole
+  // puff is hidden -> skip the expensive march entirely. Depth comes from the half-res opaque pre-pass.
+  if (uOcclude > 0.5) {
+    float sd = texture2D(uDepthTex, gl_FragCoord.xy / uResolution).x;
+    if (sd < 0.999999) { // <1 == something opaque was drawn here
+      float ndc = sd * 2.0 - 1.0;
+      float vz = (2.0 * uCamNear * uCamFar) / (uCamFar + uCamNear - ndc * (uCamFar - uCamNear)); // eye-Z dist
+      if (t0 > vz / max(dot(rd, uCamFwd), 0.2)) discard; // /cos -> distance along THIS ray
+    }
+  }
+
   float steps = clamp(uSteps, 4.0, float(MAX_STEPS));
   float dt = (t1 - t0) / steps;
   float jitter = hash(vec3(gl_FragCoord.xy, uTime));
@@ -173,6 +191,17 @@ export function createVolumetrics(scene, camera, opts = {}) {
   const lightDir = (opts.lightDir ? opts.lightDir.clone() : LIGHT_DIR.clone()).normalize();
   let smokeShadows = false; // tier-gated: smoke casts a soft (dithered) shadow onto the ships
 
+  // Occlusion uniforms are SHARED across every pooled material (one object referenced by all) so the
+  // per-frame camera/depth update touches one set, not 56 materials.
+  const occ = {
+    uDepthTex: { value: null },
+    uResolution: { value: new THREE.Vector2(1, 1) },
+    uCamFwd: { value: new THREE.Vector3(0, 0, -1) },
+    uCamNear: { value: 0.5 },
+    uCamFar: { value: 12000 },
+    uOcclude: { value: 0 },
+  };
+
   // Soft volumetric shadow caster: a packed-depth material that stochastically discards fragments by
   // the puff's coverage, so the icosa proxy throws a noisy, soft blob shadow (PCF smooths the stipple)
   // into the CSM / spot shadow maps. Each pooled mesh gets its own so coverage can be per-puff.
@@ -211,6 +240,12 @@ export function createVolumetrics(scene, camera, opts = {}) {
         uAmbient: { value: COL.ambient.clone() },
         uBlobs: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
         uBlobCount: { value: 0 },
+        uDepthTex: occ.uDepthTex,
+        uResolution: occ.uResolution,
+        uCamFwd: occ.uCamFwd,
+        uCamNear: occ.uCamNear,
+        uCamFar: occ.uCamFar,
+        uOcclude: occ.uOcclude,
       },
       transparent: true,
       depthWrite: false,
@@ -449,12 +484,28 @@ export function createVolumetrics(scene, camera, opts = {}) {
   }
 
   function setQuality(q) { quality = q; }
-  function setDepth(/* tex, w, h */) { /* Phase 3 */ }
+
+  // --- occlusion pre-pass plumbing ---
+  function setOcclusion(depthTex, near, far) {
+    occ.uDepthTex.value = depthTex;
+    if (near != null) occ.uCamNear.value = near;
+    if (far != null) occ.uCamFar.value = far;
+    occ.uOcclude.value = depthTex ? 1 : 0;
+  }
+  function updateOcclusion(cam, w, h) {
+    occ.uCamFwd.value.set(0, 0, -1).applyQuaternion(cam.quaternion);
+    occ.uResolution.value.set(w, h);
+  }
+  // hide/restore all pooled puffs so the depth pre-pass renders only opaque occluders (not the smoke)
+  function setHiddenForDepth(hidden) {
+    for (const s of explPool) s.mesh.visible = hidden ? false : s.alive;
+    for (const s of puffPool) s.mesh.visible = hidden ? false : s.alive;
+  }
   // Tier-gated: enable/disable smoke casting soft shadows onto the ships.
   function setSmokeShadows(on) {
     smokeShadows = !!on;
     if (!smokeShadows) for (const s of puffPool) s.mesh.castShadow = false;
   }
 
-  return { explosion, puff, createTrail, update, setQuality, setDepth, setSmokeShadows, tunable };
+  return { explosion, puff, createTrail, update, setQuality, setOcclusion, updateOcclusion, setHiddenForDepth, setSmokeShadows, tunable };
 }

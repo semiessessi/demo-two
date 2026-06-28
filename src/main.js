@@ -52,7 +52,10 @@ const SOUND = /[?&]sound\b/.test(window.location.search);
 
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
-const { renderer, scene, camera, composer, bloom, render, setRenderScale } = createRenderer(app);
+const { renderer, scene, camera, composer, bloom, render, setRenderScale, renderDepthOnly, drawingBufferSize, depthTexture } = createRenderer(app);
+// Smoke occlusion: an opaque depth pre-pass lets the smoke raymarch skip puffs hidden behind ships.
+// On by default; ?noocclude disables it (escape hatch).
+const OCCLUDE = !/[?&]noocclude\b/.test(window.location.search);
 
 // Lighting: a warm orange "sun" as the main light, a cool rim from the opposite side for separation,
 // and a dim hemisphere fill so shadowed sides aren't pure black.
@@ -405,6 +408,7 @@ async function init() {
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
   if (!ATTRACT) waves = createWaveManager(enemyMgr); // attract owns its own wave loop
   vfx = createVfx(scene, camera, { lightDir: sunDir, onExplosion: (p, s) => sfx.onExplosion(p, s) }); // align smoke self-shadow with the real sun; SFX boom on every explosion
+  if (OCCLUDE) vfx.setOcclusion(depthTexture(), camera.near, camera.far); // feed the smoke the opaque depth
   enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
   debris = createDebris(scene, { template: chigKit.template, material: chigKit.material, vfx });
   enemyMgr.setDebris(debris); // ship-fracture chunks on death
@@ -513,6 +517,17 @@ function attractFrame(dt) {
   starUniforms.uTime.value += dt;
   lighting.update(dt, { player: attract.focus, thrust: 0.8, projectiles, enemies: enemyMgr.enemies }); // cascades fit to the camera; dynamic lights around the action
   sfx.engine(0.85); // steady engine hum (allies cruise ~0.85)
+  if (OCCLUDE) { // smoke occlusion: the furball is the heaviest case, so cull hidden puffs here too
+    nebula.mesh.visible = false;
+    stars.visible = false;
+    vfx.setHiddenForDepth(true);
+    const db = drawingBufferSize();
+    renderDepthOnly(scene, camera);
+    vfx.updateOcclusion(camera, db.x, db.y);
+    nebula.mesh.visible = true;
+    stars.visible = true;
+    vfx.setHiddenForDepth(false);
+  }
   render();
   fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
   quality.update(dt, fps); // auto-scale shadow/VFX tier (6 Hammerheads + 24 Chigs is heavy)
@@ -579,6 +594,19 @@ function startLoop() {
     starUniforms.uTime.value += dt;
 
     lighting.update(dt, { player, thrust: r.thrust, projectiles, enemies: enemyMgr.enemies, cannon }); // fit cascades to the camera (+ dynamic lights, later phases)
+
+    if (OCCLUDE) {
+      // capture opaque depth (nebula/stars/smoke toggled off) so the smoke raymarch can cull hidden puffs
+      nebula.mesh.visible = false;
+      stars.visible = false;
+      vfx.setHiddenForDepth(true);
+      const db = drawingBufferSize();
+      renderDepthOnly(scene, camera);
+      vfx.updateOcclusion(camera, db.x, db.y);
+      nebula.mesh.visible = true;
+      stars.visible = true;
+      vfx.setHiddenForDepth(false);
+    }
 
     render();
 

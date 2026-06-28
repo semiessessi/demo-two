@@ -76,6 +76,36 @@ export function createRenderer(container) {
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
+  // --- Smoke occlusion depth pre-pass ---------------------------------------------------------------
+  // A cheap HALF-RES pass that captures the OPAQUE scene depth (main toggles the nebula/stars/smoke off
+  // for it, and those have depthWrite:false anyway). The smoke raymarch samples this to early-out for
+  // puffs hidden behind ships — a furball stacks many full-screen volumes, most of them occluded. Half
+  // resolution + shadows-off keep the extra pass cheap; the depth is plenty accurate for culling.
+  const DEPTH_SCALE = 0.5;
+  const _db0 = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const depthTex = new THREE.DepthTexture(
+    Math.max(1, Math.round(_db0.x * DEPTH_SCALE)),
+    Math.max(1, Math.round(_db0.y * DEPTH_SCALE)),
+  );
+  depthTex.type = THREE.UnsignedIntType;
+  depthTex.minFilter = depthTex.magFilter = THREE.NearestFilter;
+  const depthTarget = new THREE.WebGLRenderTarget(depthTex.image.width, depthTex.image.height, {
+    depthTexture: depthTex,
+    depthBuffer: true,
+    samples: 0, // single-sample so the depth texture is sampleable in WebGL2
+  });
+  function renderDepthOnly(scn, cam) {
+    const prevShadow = renderer.shadowMap.enabled;
+    renderer.shadowMap.enabled = false; // don't re-render the shadow maps for the depth pass
+    renderer.setRenderTarget(depthTarget);
+    renderer.clear(true, true, false); // depth -> 1.0 (far) where nothing is drawn
+    renderer.render(scn, cam);
+    renderer.setRenderTarget(null);
+    renderer.shadowMap.enabled = prevShadow;
+  }
+  const _dbv = new THREE.Vector2();
+  const drawingBufferSize = () => renderer.getDrawingBufferSize(_dbv);
+
   function setSize(w, h) {
     curW = w;
     curH = h;
@@ -87,6 +117,8 @@ export function createRenderer(container) {
     // targets render at the wrong resolution after a scale change.
     composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(w, h);
+    const db = renderer.getDrawingBufferSize(new THREE.Vector2());
+    depthTarget.setSize(Math.max(1, Math.round(db.x * DEPTH_SCALE)), Math.max(1, Math.round(db.y * DEPTH_SCALE)));
   }
   window.addEventListener('resize', () => setSize(window.innerWidth, window.innerHeight));
 
@@ -99,5 +131,11 @@ export function createRenderer(container) {
     setSize(curW, curH);
   }
 
-  return { renderer, scene, camera, composer, bloom, render: () => composer.render(), setSize, setRenderScale };
+  return {
+    renderer, scene, camera, composer, bloom,
+    render: () => composer.render(),
+    setSize, setRenderScale,
+    renderDepthOnly, drawingBufferSize,
+    depthTexture: () => depthTarget.depthTexture,
+  };
 }
