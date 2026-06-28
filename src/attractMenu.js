@@ -38,6 +38,14 @@ function injectStyle() {
   }
   #attract-menu .am-btn.am-primary { color: #bcd2ff; border-color: rgba(150, 180, 255, 0.3); }
   #attract-menu .am-btn:disabled { opacity: 0.32; cursor: default; }
+  #attract-menu .am-legal {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    width: min(760px, 92vw); text-align: center;
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 10.5px; line-height: 1.5; color: #565d70; pointer-events: none;
+  }
+  #attract-menu .am-legal a { color: #7a86a0; text-decoration: none; pointer-events: auto; }
+  #attract-menu .am-legal a:hover { text-decoration: underline; }
   `;
   const el = document.createElement('style');
   el.id = 'attract-menu-css';
@@ -56,7 +64,8 @@ export function createAttractMenu({ onMultiplayer, onControls } = {}) {
       <button class="am-btn am-primary" data-act="mp">Multiplayer</button>
       <button class="am-btn" data-act="ctrl">Controls</button>
       <button class="am-btn" data-act="opt" disabled>Options</button>
-    </div>`;
+    </div>
+    <div class="am-legal">This is a non-commercial, fan-made project created out of appreciation for the television series <em>Space: Above and Beyond</em>. It is not affiliated with, endorsed by, or sponsored by The Walt Disney Company, 20th Century Studios, or the show's creators. All trademarks, characters, and related intellectual property belong to their respective owners. No copyright or trademark infringement is intended, and no money is made from this project. If the rights holders object to this work, it will be removed promptly upon request.<br><a href="/privacy-policy/" target="_blank" rel="noopener">Privacy</a> &middot; <a href="/terms-of-service/" target="_blank" rel="noopener">Terms</a></div>`;
   wrap.querySelector('[data-act="mp"]').addEventListener('click', () => { if (onMultiplayer) onMultiplayer(); });
   wrap.querySelector('[data-act="ctrl"]').addEventListener('click', () => { if (onControls) onControls(); });
   document.body.appendChild(wrap);

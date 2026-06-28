@@ -15,6 +15,7 @@ import { createSfx } from './sfx.js';
 import { creditsHtml } from './credits.js';
 import { createReactive } from './reactive.js';
 import { createInput } from './input.js';
+import { createTouchControls } from './touch.js';
 import { createProjectiles } from './projectiles.js';
 import { createPlayerCannon } from './weapons.js';
 import { createEnemyManager } from './enemies.js';
@@ -71,8 +72,33 @@ const SOUND = !/[?&]nosound\b/.test(window.location.search);
 const ENGINE_SFX = /[?&]engine\b/.test(window.location.search);
 
 // --- renderer + scene ------------------------------------------------------
+// Full-screen fallback notice for browsers that can't run the demo (no WebGL2). Inline-styled so it
+// doesn't depend on any app CSS having loaded, and a function declaration so it's hoisted above its use.
+function showUnsupported(container, msg) {
+  const el = document.createElement('div');
+  el.style.cssText =
+    'position:fixed;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;' +
+    'text-align:center;padding:24px;background:#030308;color:#8a93a6;z-index:9999;' +
+    'font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.5';
+  el.innerHTML =
+    '<div style="font-size:20px;font-weight:700;color:#bcd2ff">SA-43: Hammerhead</div>' +
+    '<div>' + msg + '</div>' +
+    '<div style="opacity:.7;font-size:13px">Try the latest Chrome, Edge, Firefox, or Safari on a desktop, phone, or tablet.</div>';
+  (container || document.body).appendChild(el);
+}
+
 const app = document.getElementById('app');
-const { renderer, scene, camera, composer, bloom, render, setRenderScale, renderDepthOnly, drawingBufferSize, depthTexture, gpuFrameMs } = createRenderer(app);
+// WebGL2 is required (HDR half-float targets, depth textures, the raymarch shaders). Locked-down / old
+// browsers (some console + TV browsers) lack it and three throws on context creation — catch that and
+// show a readable message instead of a blank black screen, then stop booting.
+let _renderApi;
+try {
+  _renderApi = createRenderer(app);
+} catch (e) {
+  showUnsupported(app, 'This demo needs a WebGL2-capable browser.');
+  throw e;
+}
+const { renderer, scene, camera, composer, bloom, render, setRenderScale, renderDepthOnly, drawingBufferSize, depthTexture, gpuFrameMs } = _renderApi;
 // Smoke occlusion: an opaque depth pre-pass lets the smoke raymarch skip puffs hidden behind ships.
 // On by default; ?noocclude disables it (escape hatch).
 const OCCLUDE = !/[?&]noocclude\b/.test(window.location.search);
@@ -266,7 +292,8 @@ const starUniforms = {
 const reactive = createReactive();
 const audio = createAudioManager();
 const sfx = createSfx({ getContext: audio.ensureContext, camera, enabled: SOUND }); // shares audio's AudioContext; opt-in via ?sound
-const input = createInput();
+const touchControls = createTouchControls(); // on-screen flight controls (touch devices only; no-op stub otherwise)
+const input = createInput(touchControls.read);
 
 // combat systems (created once the ship is loaded)
 let projectiles = null;
@@ -735,8 +762,9 @@ function startLoop() {
     if (ATTRACT) { attractFrame(dt); return; } // standalone ?attract: a leaner, player-less frame
     if (attract && gameState.mode === 'menu') { attractFrame(dt); return; } // cinematic battle behind the menu
 
-    input.poll(); // keyboard + gamepad -> shared signals (read by flight + cannon)
+    input.poll(); // keyboard + gamepad + touch -> shared signals (read by flight + cannon)
     const flying = gameState.mode === 'flying';
+    touchControls.setVisible(flying); // show the on-screen stick/buttons only while actually flying
     let res = { throttle: 0, speed: 0, boosting: false };
     if (flying) {
       flight.setSpeedScale(damage.speedScale()); // engine damage cuts top speed
@@ -892,6 +920,10 @@ function firstGesture() {
 }
 window.addEventListener('pointerdown', firstGesture);
 window.addEventListener('keydown', firstGesture, { once: false });
+// Controller-only devices (Xbox/console browsers, a tablet with just a BT pad) never fire pointer/key —
+// treat plugging in / waking a gamepad as the first gesture so audio still unlocks. (Flight already reads
+// the pad every frame via input.poll's getGamepads, so the stick/triggers drive the ship on those too.)
+window.addEventListener('gamepadconnected', firstGesture);
 
 // Reveal the "click for sound" prompt only if there is actually a track to play.
 audio.ready.then((ok) => {

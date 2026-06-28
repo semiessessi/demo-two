@@ -269,6 +269,12 @@ export function createBlackHole() {
         float ring = exp(-pow((minr - 1.5) * 6.0, 2.0));
         acc += vec3(1.0, 0.92, 0.78) * ring * 0.9;
         alpha = max(alpha, ring * 0.9 * zone);
+        // HARD-CUT GUARD: fade the WHOLE billboard to nothing just inside the quad edge, so the disk /
+        // nebula / lensing are never sliced by the square as the hole drifts toward the screen edge.
+        // (rd0 = the unbent screen ray; angScreen = its angle from the hole centre across the quad; the
+        // quad's nearest edge is ~0.456 rad, so we're fully transparent by 0.448 — a clean radial vignette.)
+        float angScreen = acos(clamp(dot(rd0, axis), -1.0, 1.0));
+        alpha *= 1.0 - smoothstep(0.40, 0.448, angScreen);
         if (alpha < 0.004) discard;                  // nothing here -> let the real scene show through
         gl_FragColor = vec4(acc, clamp(alpha, 0.0, 1.0));
       }`,
