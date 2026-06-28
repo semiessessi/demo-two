@@ -620,7 +620,7 @@ function fadeToAndNavigate(url) {
 // see enterMenu/armMenuBattle.)
 function bootAttract() {
   applyEnvironment({ ...settings, environment: 'cerberus' }); // attract showcases the Cerberus black hole by default
-  if (attract) { attract.resume(); attract.setVisible(true); }
+  if (attract) { attract.resume(); attract.setVisible(true); attract.setMenuFraming(false); } // pure screensaver: centred
 }
 
 async function init() {
