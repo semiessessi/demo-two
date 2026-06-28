@@ -120,15 +120,16 @@ export function createBlackHole() {
   group.visible = false;
 
   const Rs = 90; // event-horizon (Schwarzschild) radius in world units
-  const DISK_IN = 2.4 * Rs;
-  const DISK_OUT = 6.5 * Rs;
-  const SIZE = DISK_OUT * 3.0; // billboard half-extent — covers the disk + lensing halo
+  const DISK_IN = 2.2 * Rs;
+  const DISK_OUT = 9.0 * Rs; // wider accretion disk
+  const SKY_R = 5000; // sky-pass sphere radius (centred on the camera). The raymarch is direction-only, so
+  // this is just where the fragments live; rendering on a sphere = no billboard quad edge.
 
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       uCamPos: { value: new THREE.Vector3() },
       uCenter: { value: new THREE.Vector3() },
-      uDiskN: { value: new THREE.Vector3(0.17, 0.91, -0.38).normalize() }, // disk normal ~55° off the view (BH_DIR) -> an OPEN elliptical disk, not the old near-edge-on line
+      uDiskN: { value: new THREE.Vector3(0.26, 0.96, -0.11).normalize() }, // disk normal ~68° off the view (BH_DIR) — halfway between edge-on (old) and the open tilt, so it's clearly a disk
       uRs: { value: Rs },
       uDiskIn: { value: DISK_IN / Rs }, // disk radii in Rs units (shader works in Rs units)
       uDiskOut: { value: DISK_OUT / Rs },
@@ -139,7 +140,7 @@ export function createBlackHole() {
     },
     transparent: true,
     depthWrite: false,
-    side: THREE.DoubleSide,
+    side: THREE.BackSide, // rendered on the inside of a sky sphere centred on the camera
     vertexShader: /* glsl */`
       varying vec3 vWorld;
       void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
@@ -201,9 +202,9 @@ export function createBlackHole() {
         float turb = fbm(vec2(ang * 2.5 + rr * 1.4 - spin, rr * 0.9 + uTime * 0.12));
         turb = mix(turb, fbm(vec2(ang * 5.5 - spin * 1.8, rr * 1.9)), 0.4); // finer co-rotating filaments flowing past
         // temperature ramp: blue-white (inner) -> orange -> deep red (outer)
-        vec3 hot = vec3(0.75, 0.85, 1.0);
-        vec3 mid = vec3(1.0, 0.6, 0.25);
-        vec3 cool = vec3(0.5, 0.08, 0.02);
+        vec3 hot = vec3(0.95, 0.55, 1.0);   // hot inner -> violet-white
+        vec3 mid = vec3(1.0, 0.32, 0.42);   // red-magenta
+        vec3 cool = vec3(0.62, 0.05, 0.24); // deep red-purple outer
         vec3 col = mix(mix(hot, mid, smoothstep(0.0, 0.45, t)), cool, smoothstep(0.45, 1.0, t));
         float bright = (1.7 - 1.2 * t) * (0.55 + 0.9 * turb);
         // relativistic doppler beaming: prograde orbital velocity vs view
@@ -222,6 +223,8 @@ export function createBlackHole() {
         vec3 p = (uCamPos - uCenter) / uRs;          // ray start, Rs units
         vec3 d = normalize(vWorld - uCamPos);        // view ray
         vec3 rd0 = d;                                // original (un-bent) direction
+        vec3 axis = normalize(uCenter - uCamPos);    // direction to the hole
+        if (dot(rd0, axis) < 0.45) discard;          // SKY PASS: only the cone toward the hole renders; elsewhere the real scene shows -> no billboard edge
         vec3 angm = cross(p, d); float h2 = dot(angm, angm); // ~conserved (geodesic)
         vec3 acc = vec3(0.0); float alpha = 0.0; bool captured = false;
         float minr = 1e9;
@@ -255,10 +258,8 @@ export function createBlackHole() {
         // shown where the ray was significantly bent (fades to the real scene where it wasn't) + the photon ring.
         // zone confines everything to the rays that passed near the hole -> fades to 0 before the quad edge
         // (no visible square). minr = the ray's closest approach in Rs units.
-        float zone = 1.0 - smoothstep(9.0, 26.0, minr); // wider -> more lensed/smeared stars wrap right around the hole
+        float zone = 1.0 - smoothstep(9.0, 26.0, minr); // lensed/smeared stars wrap around the hole
         float bend = length(d - rd0);
-        // spoked nebula behind the hole (own falloff -> fades before the quad edge, no square)
-        vec3 axis = normalize(uCenter - uCamPos);
         float neb = spokeNebula(d, axis);
         // more PURPLE, with a violet<->magenta shimmer varying over the cloud (texture, Milky-Way-ish)
         vec3 nebCol = mix(vec3(0.30, 0.06, 0.62), vec3(0.55, 0.15, 0.80), fbm(vec2(d.x * 6.0 + 3.0, d.y * 6.0 - 2.0)));
@@ -266,22 +267,23 @@ export function createBlackHole() {
         bg += backgroundSky(d) * zone;                          // + lensed stars/Milky Way (the distortion)
         acc += bg * (1.0 - alpha);
         alpha = max(alpha, max(neb * 0.85, smoothstep(0.06, 0.55, bend) * zone));
+        // photon ring / lensed arcs — ANIMATED: bright spots orbit the ring + a gentle pulse, so it shimmers
+        vec3 upr = abs(axis.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+        vec3 uxr = normalize(cross(axis, upr)); vec3 vxr = cross(axis, uxr);
+        float azr = atan(dot(d, vxr), dot(d, uxr));
         float ring = exp(-pow((minr - 1.5) * 6.0, 2.0));
+        ring *= 0.5 + 0.6 * (0.5 + 0.5 * sin(azr * 3.0 - uTime * 2.0)) + 0.16 * sin(uTime * 1.3); // orbiting hot-spots + pulse
+        ring = max(ring, 0.0);
         acc += vec3(1.0, 0.92, 0.78) * ring * 0.9;
         alpha = max(alpha, ring * 0.9 * zone);
-        // HARD-CUT GUARD: fade the WHOLE billboard to nothing just inside the quad edge, so the disk /
-        // nebula / lensing are never sliced by the square as the hole drifts toward the screen edge.
-        // (rd0 = the unbent screen ray; angScreen = its angle from the hole centre across the quad; the
-        // quad's nearest edge is ~0.456 rad, so we're fully transparent by 0.448 — a clean radial vignette.)
-        float angScreen = acos(clamp(dot(rd0, axis), -1.0, 1.0));
-        alpha *= 1.0 - smoothstep(0.40, 0.448, angScreen);
         if (alpha < 0.004) discard;                  // nothing here -> let the real scene show through
         gl_FragColor = vec4(acc, clamp(alpha, 0.0, 1.0));
       }`,
   });
 
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(SIZE * 2.0, SIZE * 2.0), mat);
+  const plane = new THREE.Mesh(new THREE.SphereGeometry(SKY_R, 48, 32), mat); // sky-pass sphere (centred on the camera)
   plane.renderOrder = -2;
+  plane.frustumCulled = false; // centred on the camera -> always in view, never cull
   group.add(plane);
   return { group, mat, plane, radius: DISK_OUT };
 }
