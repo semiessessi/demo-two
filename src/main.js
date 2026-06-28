@@ -76,7 +76,7 @@ const sunDiscWarm = sun.material.map;
 const sunDiscWhite = makeCanvasTex(sunGradientWhite);
 
 function makeCanvasTex(paint) {
-  const s = 256;
+  const s = 512; // higher-res so the radial gradient doesn't band
   const cv = document.createElement('canvas');
   cv.width = cv.height = s;
   const ctx = cv.getContext('2d');
@@ -84,6 +84,14 @@ function makeCanvasTex(paint) {
   paint(g);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, s, s);
+  // dither: per-pixel noise breaks up the 8-bit concentric colour banding in the sun glow
+  const img = ctx.getImageData(0, 0, s, s);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const n = (Math.random() - 0.5) * 6;
+    d[i] += n; d[i + 1] += n; d[i + 2] += n;
+  }
+  ctx.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;

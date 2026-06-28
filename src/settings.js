@@ -30,8 +30,9 @@ export const DIFFICULTY = {
 export const ENVIRONMENT = {
   groombridge34: {
     label: 'Groombridge 34', body: 'none', sunMult: 7, // close binary -> full, warm sunlight
-    nebula: { uColorA: 0x04050f, uColorB: 0x223080, uColorC: 0xd8401f, uBrightness: 0.10, uSaturation: 0.32, uMilkyWay: 0.08 },
-    sun: { disc: 560, glow: 2900, halo: 7600, color: 0xffffff, glowAlpha: 1.0, haloAlpha: 1.0 }, // white tint = original baked look
+    nebula: { uColorA: 0x04050f, uColorB: 0x223080, uColorC: 0xd8401f, uBrightness: 0.10, uSaturation: 0.32, uMilkyWay: 0.11 },
+    // big warm sun: a wide glow + halo fill the sky to justify the strong orange specular on the hull
+    sun: { disc: 560, glow: 5000, halo: 14000, color: 0xffffff, glowAlpha: 1.0, haloAlpha: 1.0 },
   },
   jupiterTrojans: {
     label: 'Jupiter Trojans', body: 'jupiter', sunMult: 1, // ~5 AU from Sol -> much dimmer scene light
