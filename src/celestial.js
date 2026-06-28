@@ -313,21 +313,34 @@ export function createCloudPlanet() {
                    mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z); }
       float fbm(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.04; a*=0.5; } return v; }
       float fbm3(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<3;i++){ v+=a*noise(p); p*=2.04; a*=0.5; } return v; }
+      // 8 overlapping VORTICES: each rotates the sample around its OWN radial axis (a cylinder perpendicular
+      // to the surface, i.e. around the normal there), strongest at its centre and fading out by a gaussian,
+      // with a per-swirl strength / tightness / time-spin. Pure 3D -> it runs through both sides, no facing
+      // to worry about. Deforming the SAMPLE position (not the colour) is what curls the noise into storms.
+      vec3 swirl(vec3 p){
+        for(int i=0;i<8;i++){
+          float fi=float(i);
+          float y=1.0-(fi+0.5)/8.0*2.0; float rr=sqrt(max(0.0,1.0-y*y)); float th=fi*2.39996323;
+          vec3 c=vec3(rr*cos(th), y, rr*sin(th));                 // Fibonacci-sphere centre (its normal = c)
+          float h=fract(sin(fi*127.1)*43758.5453);
+          float str=mix(1.3,2.7,h)*(h>0.5?1.0:-1.0);              // variable twist + direction
+          float tight=mix(2.5,6.5,fract(h*7.0));                  // how localised the vortex is
+          float spin=mix(0.04,0.18,fract(h*13.0))*(fract(h*3.0)>0.5?1.0:-1.0);
+          float d=distance(p,c); float fall=exp(-d*d*tight);
+          float ang=(str+uTime*spin)*fall;
+          float s=sin(ang), co=cos(ang);
+          p = p*co + cross(c,p)*s + c*dot(c,p)*(1.0-co);          // Rodrigues rotation about axis c
+        }
+        return p;
+      }
       void main(){
-        vec3 q = vP;
-        float lat = q.y;
-        // zonal flow: rotate sampling by latitude + time (faster at the equator)
-        float ang = uTime * 0.04 * (0.6 + 0.8 * (1.0 - abs(lat)));
-        float ca = cos(ang), sa = sin(ang);
-        vec3 r = vec3(ca*q.x - sa*q.z, q.y, sa*q.x + ca*q.z);
-        // domain-warp the sampling -> turbulent curls / storm SWORLS
-        vec3 w = vec3(fbm3(r * 2.4 + uTime * 0.015), fbm3(r * 2.4 + 19.0), fbm3(r * 2.4 + 41.0)) - 0.5;
-        float clouds = fbm(r * 5.5 + w * 2.6 + vec3(0.0, lat * 4.0, 0.0)); // main cloud structure
-        float detail = fbm3(r * 13.0 + w * 3.5);                          // fine high-freq detail
-        clouds = clouds * 0.68 + detail * 0.32;
-        float bands = 0.5 + 0.5 * sin(lat * 18.0 + w.x * 6.0);            // wavy zonal banding
-        clouds = clamp(clouds * 0.78 + bands * 0.22, 0.0, 1.0);
-        // 3-tone: deep cyan shadow -> cyan -> white tops (more depth + richness)
+        vec3 q = swirl(vP);                                       // 8 vortices deform the sample direction
+        // turbulent domain-warp on top of the swirls for fine curl
+        vec3 w = vec3(fbm3(q*2.4 + uTime*0.02), fbm3(q*2.4 + 19.0), fbm3(q*2.4 + 41.0)) - 0.5;
+        float clouds = fbm(q*5.5 + w*2.6);                        // main cloud structure
+        float detail = fbm3(q*13.0 + w*3.5);                      // fine high-freq detail
+        clouds = clamp(clouds*0.72 + detail*0.28, 0.0, 1.0);
+        // 3-tone: deep cyan shadow -> cyan -> white tops
         vec3 trough = vec3(0.08, 0.28, 0.44);
         vec3 deep   = vec3(0.20, 0.56, 0.72);
         vec3 pale   = vec3(0.95, 0.99, 1.0);
