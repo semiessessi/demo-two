@@ -10,57 +10,58 @@ shown (e.g. `house.checkin.mp3`). Reload the game and it just plays — no code 
 - The **subtitle text + timing** live in `src/campaign/m1-shakedown.js` (the `lines` map). Match the text
   below; small ad-libs are fine (the game keys off the filename, not the words).
 
-**Mission + twist:** Command expects a Chig build-up massing at Groombridge 34. The flight forms up and runs
-three recon marks — and finds **the system completely empty**. The build-up was here and *pulled out*. That's
-worse than finding it: if they're not here, they're hitting somewhere undefended. The flight burns for home.
-**Tone: tense recon → growing unease at the emptiness → urgency to get the warning home.** No combat.
+**Mission:** Your first sortie — a recon sweep through the Groombridge gate. Command is nervous the Chigs
+might be staging here, so the flight forms up, runs three nav marks, and finds **the system completely
+empty — nothing here at all.** No build-up, no contact; the recon's whole job is to confirm it's clear, and
+it is. Log it and head home. **Tone: a quiet, uneventful first run — wry relief, a little anticlimax, with
+House's dry "don't get used to it" hinting they won't all be this easy.** No combat.
 
 ---
 
 ## HOUSE — squadron CO  (files `house.*`)
 British woman, Royal Navy/Marines, seconded to the carrier. Dry, composed, understated — command voice
-without shouting. Believes there's no such thing as luck, only odds you didn't read. Starts businesslike;
-the empty system visibly unsettles her by the end, but she stays controlled — and decisive about getting home.
+without shouting. Believes there's no such thing as luck, only odds you didn't read. Businesslike throughout;
+the empty system is a non-event to her — she logs it clear and sends you home, with a dry warning that it
+won't always be this quiet.
 
 | File | Line | ~len |
 |---|---|---|
-| `house.checkin.mp3` | "Longshot flight, House. Command's flagged a Chig build-up at Groombridge — your job is to confirm it. Form on Hardway, weapons cold. Eyes open." | 7s |
-| `house.recon1.mp3` | "First mark logged. ...Nothing. Scope's stone cold — no reactors, no traffic. Keep going." | 6s |
-| `house.recon3.mp3` | "Last mark. Staging grids are stripped — they were here, and they've pulled out. That's the whole system. Nothing left to find." | 7.5s |
-| `house.rtb.mp3` | "If they're not here, they're hitting somewhere that is. Get this home now, Longshot — burn for the carrier. House out." | 7s |
+| `house.checkin.mp3` | "Longshot flight, House. We're through the Groombridge gate — recon sweep. Command thinks the Chigs might be staging here; we go and find out. Form on Hardway, weapons cold." | 7.5s |
+| `house.recon1.mp3` | "First mark... clear. Nothing on the scope — no reactors, no traffic, nothing at all." | 5.5s |
+| `house.recon3.mp3` | "Last mark's clear too. Whole system's a ghost — no build-up, no Chigs, nothing. That's our recon: there's nothing here." | 7.5s |
+| `house.rtb.mp3` | "Good. Log it clear and take it home, Longshot. A quiet one — don't get used to them. House out." | 6s |
 
 ## HARDWAY — your flight lead  (files `hardway.*`)
 By-the-book grinder, the steady moral centre. Calm, patient — talks you through forming up like an instructor.
-"Let's go count Chigs" is a light line that the empty system will make ironic.
 
 | File | Line | ~len |
 |---|---|---|
 | `hardway.formup.mp3` | "Comeout — your slot's the blue box. Slide in nice and easy and hold it. Stay off the gas." | 5.5s |
-| `hardway.in.mp3` | "Good, you're in the pocket. Flight, pushing up. Let's go count Chigs." | 4.5s |
+| `hardway.in.mp3` | "Good, you're in the pocket. Flight, pushing up. Let's see what's out here." | 4.5s |
 
 ## BOXCARS — hotshot wingman  (files `boxcars.*`)
-Cocky glory-hound — here the swagger curdles into unease as his scope stays empty. A bit thrown.
+Cocky glory-hound, itching for a fight — here he's just let down/bored that there's nothing to shoot.
 
 | File | Line | ~len |
 |---|---|---|
-| `boxcars.empty.mp3` | "Boss, I've got a whole lotta empty out here. Where is everybody?" | 4.5s |
+| `boxcars.empty.mp3` | "Boss, there's nothing out here. Where's this build-up they dragged us out for?" | 4.5s |
 
 ## SNAKE-EYES — wingman  (files `snakeeyes.*`)
-The unlucky one who never quite dies — a weary fatalist. Dry, flat, deadpan. He's the one who names the dread.
+The unlucky one who never quite dies — a weary fatalist. Dry, flat, deadpan. An empty sky suits him fine.
 
 | File | Line | ~len |
 |---|---|---|
-| `snakeeyes.quiet.mp3` | "Don't like it. A build-up doesn't just pack up and vanish." | 4s |
+| `snakeeyes.quiet.mp3` | "Empty suits me fine. Nobody out here to roll snake-eyes on me." | 4s |
 
 ---
 
 ## Order the player hears them
-1. `house.checkin` — confirm a suspected build-up; form on Hardway
+1. `house.checkin` — through the gate; recon sweep; form on Hardway
 2. `hardway.formup` — slot into the blue box
-3. `hardway.in` — you're formed up; "let's go count Chigs"  *(after you reach the slot)*
-4. `house.recon1` — first mark: nothing, scope's cold
-5. `boxcars.empty` → 6. `snakeeyes.quiet` — the unsettling emptiness (back-to-back)
-7. `house.recon3` — they were here and pulled out; nothing left
-8. `house.rtb` — burn for home (mission ends at the carrier)
+3. `hardway.in` — you're formed up; "let's see what's out here"  *(after you reach the slot)*
+4. `house.recon1` — first mark: clear, nothing on the scope
+5. `boxcars.empty` → 6. `snakeeyes.quiet` — nothing out here (back-to-back)
+7. `house.recon3` — all clear; the recon's job was to find nothing, and it did
+8. `house.rtb` — log it clear and head home (mission ends at the carrier)
 
 The **player ("Comeout") has no lines** in M1 — you're the silent new arrival.

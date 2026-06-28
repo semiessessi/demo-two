@@ -19,10 +19,10 @@ export const m1 = {
   music: { track: null, duck: 0.35 },
 
   briefing: {
-    location: 'GROOMBRIDGE 34 · RECON',
+    location: 'GROOMBRIDGE 34 · RECON SWEEP',
     body: [
-      'Groombridge 34 has gone silent — no traffic, no chatter. Command thinks the Chigs are massing here for a push, and they need eyes on it.',
-      'Form up on the flight, run the three recon marks, and bring the data home. Weapons stay cold: if they spot us, the whole system lights up. We look, we leave.',
+      'Your first sortie: a recon sweep on the far side of the Groombridge gate. Command is nervous the Chigs are staging here for a push and wants eyes on it.',
+      'Form up on the flight, run the three nav marks, and report what is out there. Weapons stay cold — this is look-and-leave, not a fight.',
     ],
     objectives: ['Form up on the flight', 'Recon the three nav points', 'Return to the carrier'],
   },
@@ -65,17 +65,17 @@ export const m1 = {
     { id: 'b_home', when: { or: [ { waypoint: 'HOME', radius: 110 }, { after: 'b_r3', delay: 220 } ] },
       do: [ { comms: 'house.rtb' }, { objective: { id: 'rtb', state: 'complete' } } ] },
     { id: 'b_end', when: { commsDone: 'house.rtb' },
-      do: [ { complete: { title: 'RECON COMPLETE', sub: 'The build-up is gone. Now Command has to work out where it went.' } } ] },
+      do: [ { complete: { title: 'RECON COMPLETE', sub: 'Groombridge is clear — no build-up, no contact. A quiet first run. They will not all be.' } } ] },
   ],
 
   lines: {
-    'house.checkin':  { speaker: 'house',     text: "Longshot flight, House. Command's flagged a Chig build-up at Groombridge — your job is to confirm it. Form on Hardway, weapons cold. Eyes open.", dur: 7.0 },
+    'house.checkin':  { speaker: 'house',     text: "Longshot flight, House. We're through the Groombridge gate — recon sweep. Command thinks the Chigs might be staging here; we go and find out. Form on Hardway, weapons cold.", dur: 7.5 },
     'hardway.formup': { speaker: 'hardway',   text: "Comeout — your slot's the blue box. Slide in nice and easy and hold it. Stay off the gas.", dur: 5.5 },
-    'hardway.in':     { speaker: 'hardway',   text: "Good, you're in the pocket. Flight, pushing up. Let's go count Chigs.", dur: 4.5 },
-    'house.recon1':   { speaker: 'house',     text: "First mark logged. ...Nothing. Scope's stone cold — no reactors, no traffic. Keep going.", dur: 6.0 },
-    'boxcars.empty':  { speaker: 'boxcars',   text: "Boss, I've got a whole lotta empty out here. Where is everybody?", dur: 4.5 },
-    'snakeeyes.quiet':{ speaker: 'snakeeyes', text: "Don't like it. A build-up doesn't just pack up and vanish.", dur: 4.0 },
-    'house.recon3':   { speaker: 'house',     text: "Last mark. Staging grids are stripped — they were here, and they've pulled out. That's the whole system. Nothing left to find.", dur: 7.5 },
-    'house.rtb':      { speaker: 'house',     text: "If they're not here, they're hitting somewhere that is. Get this home now, Longshot — burn for the carrier. House out.", dur: 7.0 },
+    'hardway.in':     { speaker: 'hardway',   text: "Good, you're in the pocket. Flight, pushing up. Let's see what's out here.", dur: 4.5 },
+    'house.recon1':   { speaker: 'house',     text: "First mark... clear. Nothing on the scope — no reactors, no traffic, nothing at all.", dur: 5.5 },
+    'boxcars.empty':  { speaker: 'boxcars',   text: "Boss, there's nothing out here. Where's this build-up they dragged us out for?", dur: 4.5 },
+    'snakeeyes.quiet':{ speaker: 'snakeeyes', text: "Empty suits me fine. Nobody out here to roll snake-eyes on me.", dur: 4.0 },
+    'house.recon3':   { speaker: 'house',     text: "Last mark's clear too. Whole system's a ghost — no build-up, no Chigs, nothing. That's our recon: there's nothing here.", dur: 7.5 },
+    'house.rtb':      { speaker: 'house',     text: "Good. Log it clear and take it home, Longshot. A quiet one — don't get used to them. House out.", dur: 6.0 },
   },
 };
