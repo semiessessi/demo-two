@@ -181,7 +181,7 @@ export function createBlackHole() {
         az += 0.3 * smoothstep(0.12, 1.0, ang);                  // tips curve toward the same rotational sense
         vec2 pp = vec2(dot(dir, ux), dot(dir, vx));              // CONTINUOUS tangential coords -> the NOISE has no atan2 seam (the old fbm(az) tore here)
         float warp = fbm(pp * 1.7 + 5.0);
-        float spk = pow(0.5 + 0.5 * cos(az * 22.0 + warp * 6.2831), 0.5); // fat arms; cos() is periodic -> seamless across +/-pi
+        float spk = pow(0.5 + 0.5 * cos(az * 22.0 + warp * 6.2831), 0.2); // VERY fat arms (low exponent); they touch/overlap, which is fine; cos() periodic -> seamless
         float fil = fbm(pp * 5.0 + 21.0);                        // radial filaments (seamless)
         float body = spk * mix(0.48, 1.0, fil);                  // higher floor -> fuller, padded arms
         float lanes = fbm(pp * 11.0 + 40.0);                     // fine dust lanes (seamless)
