@@ -10,6 +10,8 @@ import { loadChig, layoutChigGlows, chigThruster } from './enemyShip.js';
 import { createThrusters } from './thruster.js';
 import { createFlight } from './flight.js';
 import { createAudioManager } from './audio.js';
+import { createSfx } from './sfx.js';
+import { creditsHtml } from './credits.js';
 import { createReactive } from './reactive.js';
 import { createInput } from './input.js';
 import { createProjectiles } from './projectiles.js';
@@ -125,6 +127,7 @@ const starUniforms = {
 
 const reactive = createReactive();
 const audio = createAudioManager();
+const sfx = createSfx({ getContext: audio.ensureContext, camera }); // shares audio's AudioContext (one gesture unlocks both)
 const input = createInput();
 
 // combat systems (created once the ship is loaded)
@@ -218,7 +221,7 @@ async function init() {
     cannon = createPlayerCannon(scene, ship, projectiles, {
       getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
       canFire: () => !damage || damage.canFire(), // gun subsystem destroyed -> cannon offline
-      onFire: (pos) => lighting.muzzleFlash(pos), // real muzzle-flash light pulse
+      onFire: (pos) => { lighting.muzzleFlash(pos); sfx.weaponFire(pos); }, // muzzle-flash light pulse + (silent until /sfx/cannon.mp3 exists) weapon shot
     });
   }
 
@@ -228,7 +231,7 @@ async function init() {
   lighting.registerTree(chigKit.template);
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
   if (!ATTRACT) waves = createWaveManager(enemyMgr); // attract owns its own wave loop
-  vfx = createVfx(scene, camera, { lightDir: sunDir }); // align smoke self-shadow with the real sun
+  vfx = createVfx(scene, camera, { lightDir: sunDir, onExplosion: (p, s) => sfx.onExplosion(p, s) }); // align smoke self-shadow with the real sun; SFX boom on every explosion
   enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
   debris = createDebris(scene, { template: chigKit.template, material: chigKit.material, vfx });
   enemyMgr.setDebris(debris); // ship-fracture chunks on death
@@ -328,6 +331,7 @@ function attractFrame(dt) {
   nebula.uniforms.uTime.value += dt;
   starUniforms.uTime.value += dt;
   lighting.update(dt, { player: attract.focus, thrust: 0.8, projectiles, enemies: enemyMgr.enemies }); // cascades fit to the camera; dynamic lights around the action
+  sfx.engine(0.85); // steady engine hum (allies cruise ~0.85)
   render();
   fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
   quality.update(dt, fps); // auto-scale shadow/VFX tier (6 Hammerheads + 24 Chigs is heavy)
@@ -379,6 +383,7 @@ function startLoop() {
 
     for (const m of ship.engineMaterials) m.emissiveIntensity = 1.8 + r.thrust * 3.2;
     thrusters.update(r.thrust, dt);
+    sfx.engine(r.thrust); // engine hum rises with thrust/boost
     if (rcs) rcs.update(dt, flying); // maneuvering jets — fire from the ship's actual rotation + deceleration
 
     // keep the backdrop centred on the camera so it sits at infinity (no parallax)
@@ -409,6 +414,11 @@ const statsEl = document.getElementById('stats');
 const playBtn = document.getElementById('playToggle');
 const muteBtn = document.getElementById('muteToggle');
 const volEl = document.getElementById('volume');
+
+// Asset attribution — rendered from the single source of truth in credits.js (a dedicated About screen
+// can reuse the same data later).
+const creditsEl = document.getElementById('credits');
+if (creditsEl) creditsEl.innerHTML = creditsHtml();
 
 let revealed = false;
 function reveal() {
@@ -454,7 +464,9 @@ let gestured = false;
 function firstGesture() {
   if (gestured) return;
   gestured = true;
+  audio.ensureContext(); // build the shared ctx even when there's no music track...
   audio.resumeContext();
+  sfx.unlock(); // ...so SFX can decode + play off it too (one gesture unlocks both)
   if (audio.isAvailable !== false) audio.play().then(setPlayIcon);
   startEl?.classList.add('hidden');
 }

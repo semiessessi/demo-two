@@ -54,8 +54,16 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
   hullMat.vertexColors = false;
   hullMat.flatShading = true;
   hullMat.side = THREE.DoubleSide;
+  // De-sparkle the fragments: the clone inherited the Chig's metalness/envMap + rim shader, which on tiny
+  // fast-tumbling chunks read as constant glitter. Drop the specular hard and the cyan rim (the live Chig
+  // keeps both — this is a separate cloned material). Darken a touch more on top of the Chig's 30% colour.
+  hullMat.metalness = 0.12;
+  hullMat.roughness = 0.85;
+  hullMat.envMapIntensity = 0.15;
+  hullMat.onBeforeCompile = () => {}; // strip the inherited Fresnel-rim injection (no flicker on debris)
+  if (hullMat.color) hullMat.color.multiplyScalar(0.7);
   hullMat.needsUpdate = true;
-  const interiorMat = new THREE.MeshStandardMaterial({ color: 0x1d1916, emissive: 0xff5a1e, emissiveIntensity: 0, metalness: 0.6, roughness: 0.6, flatShading: true, side: THREE.DoubleSide });
+  const interiorMat = new THREE.MeshStandardMaterial({ color: 0x1d1916, emissive: 0xff5a1e, emissiveIntensity: 0, metalness: 0.2, roughness: 0.8, flatShading: true, side: THREE.DoubleSide });
   const mats = [hullMat, interiorMat];
 
   const variations = []; // each: [rootNode, ...] of a fracture tree
@@ -138,9 +146,15 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
     // every chunk's mover.vel point at the same vector, so they all moved with one shared velocity ("they
     // all move together"). Now: a modest outward burst + jitter (so they actually scatter) + half the
     // wreck's momentum carried over.
-    const vel = _dir.clone().multiplyScalar((6 + Math.random() * 14) * scale); // 6..20 outward
+    // Per-chunk explosion-speed factor 10%..80% of the old burst — most chunks now move slower (some barely),
+    // so the slow ones hang in front of the blast sprites and occlude them (reads cooler than every piece
+    // flying clear instantly). Jitter scales with the same factor, else the old ±8 would keep "slow" chunks
+    // drifting at ~8 anyway. Inherited wreck momentum (below) stays full so the whole cloud still drifts.
+    const f = 0.1 + Math.random() * 0.7;
+    const vel = _dir.clone().multiplyScalar((6 + Math.random() * 14) * scale * f); // outward burst, dialled back
     if (baseVel) vel.addScaledVector(baseVel, 0.5); // inherit HALF the wreck's velocity
-    vel.x += (Math.random() - 0.5) * 8; vel.y += (Math.random() - 0.5) * 8; vel.z += (Math.random() - 0.5) * 8;
+    const j = 8 * f;
+    vel.x += (Math.random() - 0.5) * j; vel.y += (Math.random() - 0.5) * j; vel.z += (Math.random() - 0.5) * j;
     const mover = {
       mesh, vel,
       ang: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8),

@@ -193,6 +193,7 @@ export function createVfx(scene, camera, opts = {}) {
     if (quality === 'low') spriteExplosion(pos, scale);
     else vol.explosion(pos, scale);
     firework(pos, scale);
+    if (opts.onExplosion) opts.onExplosion(pos, scale); // single SFX hook — every death path routes through here
   }
 
   const emberVel = new THREE.Vector3();
