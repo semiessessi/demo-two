@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createAlly } from '../ally.js';
 import { createThrusters } from '../thruster.js';
 import { createRcs } from '../rcs.js';
-import { M, STATE_HZ, createInterpolator, packV, packQ } from './protocol.js';
+import { M, STATE_HZ, LOBBY_MAX, createInterpolator, packV, packQ } from './protocol.js';
 
 // Co-op netplay glue (modeled on attract.js's remote-ship recipe). Two roles share this module:
 //   HOST   — authoritative for the Chig AI + waves. Runs enemyMgr/waves locally; each tick broadcasts a
@@ -71,6 +71,21 @@ export function createNetGame(scene, opts) {
     if (r.ally.destroy) r.ally.destroy(); else scene.remove(r.ally.pivot);
     remotes.delete(id);
   }
+  // Reconcile our remote-ship proxies to a full roster (everyone, including self). Used by joiners on
+  // WELCOME + ROSTER so a late joiner builds proxies for all the others (not just the host).
+  function syncRoster(list) {
+    const ids = new Set();
+    for (const p of list || []) {
+      if (p.id === myId) continue;
+      ids.add(p.id);
+      if (!remotes.has(p.id)) makeRemoteShip(p.id, p.name, p.livery);
+    }
+    for (const id of [...remotes.keys()]) if (!ids.has(id)) dropRemoteShip(id); // someone left
+    roster.length = 0;
+    for (const p of list || []) if (p.id !== myId) roster.push(p);
+    if (opts.onRoster) opts.onRoster(rosterWithSelf());
+  }
+  const wireRoster = () => rosterWithSelf().map((p) => ({ id: p.id, name: p.name, livery: p.livery }));
 
   // --- transport wiring ------------------------------------------------------------------------------
   transport.onConnected(() => {
@@ -81,28 +96,28 @@ export function createNetGame(scene, opts) {
     }
   });
 
-  transport.onMessage((msg) => {
+  transport.onMessage((msg, conn) => {
     if (!msg || !msg.t) return;
     switch (msg.t) {
       case M.HELLO: { // host: a joiner announced itself
         if (!isHost) return;
+        if (roster.length >= LOBBY_MAX - 1 && !roster.find((p) => p.id === msg.id)) { transport.sendTo(conn, { t: M.FULL }); break; } // lobby full
+        if (conn) conn._d2id = msg.id; // tag the connection so we can clean up on its leave
         if (!roster.find((p) => p.id === msg.id)) roster.push({ id: msg.id, name: msg.name, livery: msg.livery });
         makeRemoteShip(msg.id, msg.name, msg.livery);
-        transport.send({ t: M.WELCOME, yourId: msg.id, hostId: myId, host: { name: myName, livery: myLivery },
-          roster: roster.map((p) => ({ id: p.id, name: p.name, livery: p.livery })),
+        transport.sendTo(conn, { t: M.WELCOME, yourId: msg.id, roster: wireRoster(), // targeted to the new joiner
           settings: opts.getSettings ? opts.getSettings() : null, started });
+        transport.send({ t: M.ROSTER, players: wireRoster() }); // tell everyone the roster grew
         if (opts.onRoster) opts.onRoster(rosterWithSelf());
         break;
       }
-      case M.WELCOME: { // joiner: learn the host + roster, build remote proxies
-        makeRemoteShip(msg.hostId, msg.host?.name || 'Host', msg.host?.livery);
-        roster.length = 0;
-        for (const p of msg.roster || []) if (p.id !== myId) { roster.push(p); if (!remotes.has(p.id)) makeRemoteShip(p.id, p.name, p.livery); }
+      case M.WELCOME: { // joiner: learn the full roster, build a proxy per other player
+        syncRoster(msg.roster);
         if (msg.settings && opts.onSettings) opts.onSettings(msg.settings);
         if (msg.started && opts.onStart) opts.onStart(msg.settings);
-        if (opts.onRoster) opts.onRoster(rosterWithSelf());
         break;
       }
+      case M.ROSTER: { syncRoster(msg.players); break; } // a player joined/left -> reconcile proxies
       case M.START: { if (!isHost && opts.onStart) opts.onStart(msg.settings); break; }
       case M.STATE: { // peer ship transform
         latestShip.set(msg.id, msg);
@@ -126,15 +141,27 @@ export function createNetGame(scene, opts) {
       case M.EDEATH: { for (const d of msg.deaths || []) { enemyMgr.killByHash(d.h, d.type); enemyProxies.delete(d.h); } break; }
       case M.EFIRE: { for (const f of msg.fires || []) spawnEnemyBolt(f); break; }
       case M.EHIT: { if (isHost) applyEnemyHit(msg.h, msg.dmg); break; }
-      case M.PFIRE: { /* cosmetic remote tracer — visual only, handled via firing flag for now */ break; }
-      case M.PDEAD: { const r = remotes.get(msg.id); if (r && r.ally.destroy) r.ally.destroy(); break; }
-      case M.PRESPAWN: { const r = remotes.get(msg.id); if (r && r.ally.patch) r.ally.patch(); break; }
-      case M.LEAVE: case M.FULL: { if (opts.onLeave) opts.onLeave(msg); break; }
+      // player events: the host relays joiner->joiner so everyone sees them (sender ignores its own id)
+      case M.PFIRE: { if (isHost) transport.send(msg); break; } // cosmetic tracer (visual TODO) + relay
+      case M.PDEAD: { const r = remotes.get(msg.id); if (r && r.ally.destroy) r.ally.destroy(); if (isHost) transport.send(msg); break; }
+      case M.PRESPAWN: { const r = remotes.get(msg.id); if (r && r.ally.patch) r.ally.patch(); if (isHost) transport.send(msg); break; }
+      case M.LEAVE: { dropRemoteShip(msg.id); const i = roster.findIndex((p) => p.id === msg.id); if (i >= 0) roster.splice(i, 1); if (opts.onRoster) opts.onRoster(rosterWithSelf()); break; }
+      case M.FULL: { if (opts.onLeave) opts.onLeave(msg); break; }
       default: break;
     }
   });
 
   transport.onDisconnected(() => { if (opts.onDisconnect) opts.onDisconnect(); });
+  // host: a joiner's connection closed -> drop its ship, prune the roster, tell the rest
+  if (transport.onPeerLeft) transport.onPeerLeft((conn) => {
+    const id = conn && conn._d2id;
+    if (!id) return;
+    const i = roster.findIndex((p) => p.id === id); if (i >= 0) roster.splice(i, 1);
+    dropRemoteShip(id);
+    transport.send({ t: M.LEAVE, id });
+    transport.send({ t: M.ROSTER, players: wireRoster() });
+    if (opts.onRoster) opts.onRoster(rosterWithSelf());
+  });
 
   function rosterWithSelf() { return [{ id: myId, name: myName, livery: myLivery, self: true }, ...roster]; }
   function arrV(a) { return new THREE.Vector3(a[0], a[1], a[2]); }

@@ -34,7 +34,9 @@ export function createPeerTransport({ role, code }) {
   const msgHandlers = [];
   const connectedHandlers = [];
   const disconnectedHandlers = [];
-  let conn = null;
+  const peerLeftHandlers = [];   // host only: a joiner's data channel closed
+  const conns = [];              // open DataConnections (host: many joiners; joiner: the 1 to the host)
+  let pending = null;            // joiner: the in-flight connect attempt (supersede stale retries)
   let peer = null;
   let myCode = code;
   let started = false;
@@ -52,20 +54,25 @@ export function createPeerTransport({ role, code }) {
 
   function joinerConnect() {
     if (opened || !peer) return;
-    const prev = conn;
-    conn = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: 'json' });
-    wireConn(conn);
-    if (prev && prev !== conn) { try { prev.close(); } catch { /* ignore */ } }
+    const prev = pending;
+    pending = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: 'json' });
+    wireConn(pending);
+    if (prev && prev !== pending) { try { prev.close(); } catch { /* ignore */ } }
   }
 
   function wireConn(c) {
     c.on('open', () => {
       opened = true;
+      if (!conns.includes(c)) conns.push(c);
       if (retryTimer) { clearInterval(retryTimer); retryTimer = null; }
-      for (const h of connectedHandlers) h();
+      for (const h of connectedHandlers) h(c);
     });
-    c.on('data', (d) => { for (const h of msgHandlers) h(d); });
-    c.on('close', () => { if (c === conn) fireDisconnected(); });
+    c.on('data', (d) => { for (const h of msgHandlers) h(d, c); });
+    c.on('close', () => {
+      const i = conns.indexOf(c); if (i >= 0) conns.splice(i, 1);
+      if (role === 'host') { for (const h of peerLeftHandlers) h(c); } // one joiner left; host stays up
+      else fireDisconnected();                                         // joiner: lost the host
+    });
   }
 
   function init() {
@@ -73,7 +80,7 @@ export function createPeerTransport({ role, code }) {
       myCode = code || shortCode();
       peer = new window.Peer(PEER_PREFIX + myCode, PEER_OPTS);
       peer.on('open', (id) => console.log('[d2net] host peer open', id));
-      peer.on('connection', (c) => { console.log('[d2net] host got joiner', c.peer); conn = c; wireConn(c); });
+      peer.on('connection', (c) => { console.log('[d2net] host got joiner', c.peer); wireConn(c); });
     } else {
       peer = new window.Peer(undefined, PEER_OPTS);
       peer.on('open', () => {
@@ -100,11 +107,14 @@ export function createPeerTransport({ role, code }) {
     role,
     get code() { return myCode; },
     get connected() { return opened && !dead; },
-    onMessage(h) { msgHandlers.push(h); },
-    onConnected(h) { connectedHandlers.push(h); },
+    get peerCount() { return conns.length; },
+    onConnected(h) { connectedHandlers.push(h); }, // h(conn)
     onDisconnected(h) { disconnectedHandlers.push(h); },
-    send(msg) { try { conn?.send(msg); } catch { /* channel not open yet */ } },
+    onPeerLeft(h) { peerLeftHandlers.push(h); }, // host only: h(conn)
+    onMessage(h) { msgHandlers.push(h); }, // h(msg, conn)
+    send(msg) { for (const c of conns) { try { c.send(msg); } catch { /* not open */ } } }, // broadcast to all
+    sendTo(conn, msg) { try { conn.send(msg); } catch { /* not open */ } }, // targeted (e.g. WELCOME)
     start() { if (started) return; started = true; init(); },
-    close() { try { conn?.close(); } catch { /* ignore */ } try { peer?.destroy(); } catch { /* ignore */ } },
+    close() { for (const c of conns) { try { c.close(); } catch { /* */ } } try { peer?.destroy(); } catch { /* */ } },
   };
 }
