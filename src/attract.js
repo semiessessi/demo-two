@@ -196,6 +196,15 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
   const _f = new THREE.Vector3(), _u = new THREE.Vector3(), _side = new THREE.Vector3();
   const _mid = new THREE.Vector3(), _bc = new THREE.Vector3();
   const _killPos = new THREE.Vector3(), _killVel = new THREE.Vector3(); // frozen so the kill-cam linger survives prune()
+  const _qFrame = new THREE.Quaternion(), _frameAx = new THREE.Vector3(0, 1, 0);
+  let menuFraming = true, frameSide = 1; // rule-of-thirds: push the action onto a third so the centred menu doesn't cover it (flips per shot)
+  // Yaw the target orientation ~1/6 of the horizontal FOV so the subject sits on a third (clear of the menu).
+  function applyFraming() {
+    if (!menuFraming) return;
+    const hfov = 2.0 * Math.atan(Math.tan(camera.fov * 0.5 * Math.PI / 180.0) * camera.aspect);
+    _qFrame.setFromAxisAngle(_frameAx, (hfov / 6.0) * frameSide);
+    _qTarget.multiply(_qFrame); // yaw around the camera's local up -> shifts the subject sideways on screen
+  }
   const _mLook = new THREE.Matrix4(), _qTarget = new THREE.Quaternion();
 
   function battleCenter(out) {
@@ -277,6 +286,7 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     if (!subject) { s = 'orbit'; subject = engagedAlly(); }
     shot = s; shotT = 0; shotDur = 7 + Math.random() * 4; snap = true; // longer shots (7-11s) — fewer, more deliberate cuts
     orbitAng = Math.random() * Math.PI * 2;
+    frameSide = -frameSide; // alternate which third the action sits on, each cut
   }
 
   // wide establishing orbit as "chaos erupts", slerping out of the intro pose (no jarring cut at handoff)
@@ -315,7 +325,7 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
       _look.copy(A).lerp(_mid, THREE.MathUtils.lerp(0.32, 0.55, p)); // framing drifts toward the incoming Chigs
     }
     _mLook.lookAt(_eye, _look, _up);
-    _qTarget.setFromRotationMatrix(_mLook);
+    _qTarget.setFromRotationMatrix(_mLook); applyFraming();
     if (!camInit) { camera.position.copy(_eye); camera.quaternion.copy(_qTarget); camInit = true; }
     else {
       camera.position.lerp(_eye, 1 - Math.exp(-4.0 * dt));
@@ -377,7 +387,7 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     }
 
     _mLook.lookAt(_eye, _look, _up); // Matrix4.lookAt handles the look||up degenerate case internally
-    _qTarget.setFromRotationMatrix(_mLook);
+    _qTarget.setFromRotationMatrix(_mLook); applyFraming();
     if (snap || !camInit) { camera.position.copy(_eye); camera.quaternion.copy(_qTarget); snap = false; camInit = true; }
     else {
       camera.position.lerp(_eye, 1 - Math.exp(-2.0 * dt));        // floatier dolly within a shot
@@ -441,5 +451,5 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     flyInAllies(0); // place the formation at the runway start
   }
 
-  return { update, focus, targetFor, friendlies, allies, setVisible, resume };
+  return { update, focus, targetFor, friendlies, allies, setVisible, resume, setMenuFraming(on) { menuFraming = on; } };
 }
