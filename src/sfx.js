@@ -11,15 +11,16 @@ import * as THREE from 'three';
 // Each sound is a basename; we try these extensions in order and use the first that's present. That lets
 // the bundled CC0 .wav files work today AND lets you drop in a higher-quality .mp3/.ogg later (it wins).
 const MANIFEST = {
-  explosions: ['/sfx/explosion1', '/sfx/explosion2', '/sfx/explosion3'],
+  explosions: ['/sfx/explosion1', '/sfx/explosion2', '/sfx/explosion3', '/sfx/explosion4', '/sfx/explosion5', '/sfx/explosion6'],
   engine: '/sfx/engine',
   cannon: '/sfx/cannon',
 };
 const EXTS = ['.mp3', '.ogg', '.wav'];
 
 const MAX_VOICES = 12;
-const REF_DIST = 30; // full volume within this range of the camera
-const MAX_DIST = 600; // silent beyond this
+const REF_DIST = 80; // full volume within this range of the camera
+const ROLLOFF = 0.5; // <1 softens the inverse-distance falloff so the whole furball stays audible
+const MAX_DIST = 1400; // gentle fade to silence by here
 const ENGINE_LEVEL = 0.6; // overall engine-hum ceiling — kept low so it sits under the music
 const DEFAULT_MASTER = 0.9;
 
@@ -47,7 +48,17 @@ async function fetchFirst(base) {
   return null;
 }
 
-export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER } = {}) {
+export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, enabled = true } = {}) {
+  // SFX are opt-in for now (gated by ?sound in main.js). When disabled, return an inert stub so no files
+  // are even probed and every call site is a cheap no-op.
+  if (!enabled) {
+    return {
+      ready: Promise.resolve(0),
+      unlock() {}, onExplosion() {}, weaponFire() {}, engine() {}, setMasterGain() {},
+      get isUnlocked() { return false; },
+    };
+  }
+
   let ctx = null;
   let unlocked = false;
   let master = masterGain;
@@ -123,44 +134,44 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER } = 
     }
   }
 
-  function spatialGain(pos, base) {
-    _camPos.copy(camera.position);
-    const d = pos.distanceTo(_camPos);
-    const g = (REF_DIST / Math.max(REF_DIST, d)) * clamp01((MAX_DIST - d) / MAX_DIST);
-    return g * base; // master is applied at the bus, not per-voice
-  }
-
-  function spatialPan(pos) {
-    _camRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
-    _toSrc.copy(pos).sub(camera.position);
-    if (_toSrc.lengthSq() > 1e-6) _toSrc.normalize();
-    return clamp(_camRight.dot(_toSrc), -1, 1) * 0.8;
-  }
-
-  // one-shot voice through optional stereo pan -> bus
+  // one-shot voice: gentle inverse-distance gain + distance muffling (far booms lose their highs and become
+  // rumble) + stereo pan from the camera's right axis -> bus.
   function playOneShot(buffer, pos, base, rateLo, rateRange) {
     if (!ctx || ctx.state !== 'running' || !buffer) return;
     if (voices >= MAX_VOICES) return;
-    const g = spatialGain(pos, base);
+    _camPos.copy(camera.position);
+    const d = pos.distanceTo(_camPos);
+    const inv = d <= REF_DIST ? 1 : REF_DIST / (REF_DIST + ROLLOFF * (d - REF_DIST));
+    const far = clamp01((MAX_DIST - d) / 300); // only ramps down in the last 300u before MAX
+    const g = inv * Math.min(1, far) * base;
     if (g < 0.01) return;
+    _camRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
+    _toSrc.copy(pos).sub(_camPos);
+    if (_toSrc.lengthSq() > 1e-6) _toSrc.normalize();
+    const pan = clamp(_camRight.dot(_toSrc), -1, 1) * 0.8;
+    const fc = 16000 - 15400 * clamp01((d - REF_DIST) / 500); // near = full band, far = muffled ~600 Hz
     const src = ctx.createBufferSource();
     src.buffer = buffer;
     src.playbackRate.value = rateLo + Math.random() * rateRange;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = fc;
     const gn = ctx.createGain();
     gn.gain.value = g;
     const pn = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
-    src.connect(gn);
-    if (pn) { pn.pan.value = spatialPan(pos); gn.connect(pn); pn.connect(busGain); }
+    src.connect(lp).connect(gn);
+    if (pn) { pn.pan.value = pan; gn.connect(pn); pn.connect(busGain); }
     else gn.connect(busGain);
     voices++;
-    src.onended = () => { voices--; try { src.disconnect(); gn.disconnect(); if (pn) pn.disconnect(); } catch (_) {} };
+    src.onended = () => { voices--; try { src.disconnect(); lp.disconnect(); gn.disconnect(); if (pn) pn.disconnect(); } catch (_) {} };
     try { src.start(); } catch (_) { voices--; }
   }
 
   function onExplosion(pos, scale = 1) {
     try {
       if (!expBuffers.length) return;
-      playOneShot(expBuffers[(Math.random() * expBuffers.length) | 0], pos, 0.6 + 0.5 * scale, 0.82, 0.36);
+      // rate biased BELOW 1 (0.72-1.0) -> pitched down -> deeper/longer; 6 source variants for variety
+      playOneShot(expBuffers[(Math.random() * expBuffers.length) | 0], pos, 0.45 + 0.3 * scale, 0.72, 0.28);
     } catch (_) { /* never throw into the render loop */ }
   }
 

@@ -42,6 +42,10 @@ const DEBUG =
 // orchestrator instead of the player flight/cannon/HUD/gameState and run a separate, leaner render frame.
 const ATTRACT = /[?&]attract\b/.test(window.location.search);
 
+// Sound effects (explosions + engine hum) are opt-in for now — they still need work, so they're gated
+// behind ?sound and silent by default. Music (audio.js / track.mp3) is independent of this flag.
+const SOUND = /[?&]sound\b/.test(window.location.search);
+
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
 const { renderer, scene, camera, composer, bloom, render, setRenderScale } = createRenderer(app);
@@ -127,7 +131,7 @@ const starUniforms = {
 
 const reactive = createReactive();
 const audio = createAudioManager();
-const sfx = createSfx({ getContext: audio.ensureContext, camera }); // shares audio's AudioContext (one gesture unlocks both)
+const sfx = createSfx({ getContext: audio.ensureContext, camera, enabled: SOUND }); // shares audio's AudioContext; opt-in via ?sound
 const input = createInput();
 
 // combat systems (created once the ship is loaded)
