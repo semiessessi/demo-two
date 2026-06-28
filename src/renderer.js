@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { detectDevice } from './device.js';
 
 // Renderer + scene + chase camera + post chain (RenderPass -> UnrealBloom -> OutputPass).
@@ -67,6 +68,27 @@ export function createRenderer(container) {
   });
   const composer = new EffectComposer(renderer, renderTarget);
   composer.addPass(new RenderPass(scene, camera));
+
+  // Sanitize the HDR BEFORE bloom. A body shader (black-hole raymarch, etc.) can spit out a NaN/Inf pixel
+  // at certain camera angles; the bloom blur then smears it (Inf × a 0 gaussian weight = NaN) across the
+  // ENTIRE frame and tonemaps to black — the "everything goes black at some angle" bug. Zeroing non-finite
+  // pixels here means the bloom only ever sees finite values, so a bad pixel stays a single (invisible) dot
+  // instead of taking down the whole screen.
+  const sanitize = new ShaderPass({
+    uniforms: { tDiffuse: { value: null } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: /* glsl */`
+      uniform sampler2D tDiffuse; varying vec2 vUv;
+      void main(){
+        vec4 c = texture2D(tDiffuse, vUv);
+        vec3 col = c.rgb;
+        col = mix(col, vec3(0.0), vec3(notEqual(col, col)));          // NaN -> 0 (NaN != NaN)
+        col = mix(col, vec3(0.0), vec3(greaterThan(col, vec3(1e4)))); // +Inf / absurdly bright -> 0
+        col = max(col, vec3(0.0));                                    // -Inf / negatives -> 0
+        gl_FragColor = vec4(col, c.a);
+      }`,
+  });
+  composer.addPass(sanitize);
 
   // (resolution, strength, radius, threshold). Threshold ~0.7 so only bright stuff (thrusters,
   // star cores, hot specular) blooms — the hull stays crisp. Strength is driven by the music.

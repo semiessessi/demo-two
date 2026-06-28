@@ -61,8 +61,11 @@ const ATTACK = 6.0;                     // pressure gain OVER budget  -> rises f
 const RELEASE = 1.2;                    // pressure gain UNDER budget -> falls slow (climb back cautiously)
 const DOWN_PRESS = 0.85;                // tier steps DOWN when pressure stays pinned this high (cheap levers exhausted)
 const UP_PRESS = 0.30;                  // tier steps UP when pressure stays this low (real structural headroom)
-const AUTO_MAX = TIERS.length - 2;      // auto climbs only to 'high' (2048); 'ultra' (4096) is manual-only — stay lean
-const STRUCTURAL_AUTO = false; // structural auto-stepping held off (it was not the cause; left off pending live verification)
+const AUTO_MAX = IS_MOBILE ? 2 : TIERS.length - 2; // desktop auto-climbs to 'high'; mobile only to 'low' (stays lean)
+// Adaptive STRUCTURAL tier (render scale / CSM / shadow budget) is ON for MOBILE only — phones need it to
+// stay smooth. DESKTOP stays pinned at its start tier so there's no render-target-resize / CSM-rebuild hitch
+// on the machine being tuned on. (The earlier black-out was the bloom NaN — now fixed — NOT this controller.)
+const STRUCTURAL_AUTO = IS_MOBILE;
 
 export function createQuality({ lighting, vfx, debris, setRenderScale, gpuFrameMs, startTier } = {}) {
   let current = startTier != null ? clamp(startTier, 0, TIERS.length - 1) : deviceStartTier();
@@ -111,11 +114,11 @@ export function createQuality({ lighting, vfx, debris, setRenderScale, gpuFrameM
     if (acc < TICK) return;
     acc = 0;
     if (cooldownTicks > 0) { cooldownTicks--; return; }
-    if (pressure >= DOWN_PRESS && current > 0) {
+    if (pressure >= DOWN_PRESS && current > 0 && emaWallMs > 19) { // and frame-time confirms a REAL drop (<~52fps)
       downTicks++;
       upTicks = 0;
       if (downTicks >= DOWN_HOLD) { apply(current - 1); downTicks = 0; cooldownTicks = COOLDOWN; }
-    } else if (pressure <= UP_PRESS && current < AUTO_MAX) {
+    } else if (pressure <= UP_PRESS && current < AUTO_MAX && emaWallMs < 14.5) { // and there's REAL headroom (>~69fps)
       upTicks++;
       downTicks = 0;
       if (upTicks >= UP_HOLD) { apply(current + 1); upTicks = 0; cooldownTicks = COOLDOWN; }

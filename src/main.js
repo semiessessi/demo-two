@@ -3,6 +3,7 @@ import GUI from 'lil-gui';
 import { createRenderer } from './renderer.js';
 import { createLighting } from './lighting.js';
 import { createQuality } from './quality.js';
+import { detectDevice } from './device.js';
 import { createNebula } from './nebula.js';
 import { buildStarfield } from './starfield.js';
 import { loadShip } from './ship.js';
@@ -68,6 +69,7 @@ const OCCLUDE = !/[?&]noocclude\b/.test(window.location.search);
 // Diagnostic switch: ?nobodies hides every celestial backdrop body (cloud planet / black hole / Saturn /
 // Jupiter / Ixion) to isolate the "angle-dependent everything-goes-black" bug to a body shader vs the rest.
 const NOBODIES = /[?&]nobodies\b/.test(window.location.search);
+const IS_MOBILE = detectDevice().isMobile; // perf scaling: leaner debris pools (and quality.js adaptive tier) on phones
 
 // Lighting: a warm orange "sun" as the main light, a cool rim from the opposite side for separation,
 // and a dim hemisphere fill so shadowed sides aren't pure black.
@@ -490,7 +492,7 @@ async function init() {
     cannon = createPlayerCannon(scene, ship, projectiles, {
       getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
       canFire: () => !damage || damage.canFire(), // gun subsystem destroyed -> cannon offline
-      onFire: (pos) => { lighting.muzzleFlash(pos); sfx.weaponFire(pos); }, // muzzle-flash light pulse + (silent until /sfx/cannon.mp3 exists) weapon shot
+      onFire: (pos) => { lighting.muzzleFlash(pos); sfx.weaponFire(pos); sfx.gunFiring(); }, // muzzle-flash light pulse + cannon loop sustain (+ optional one-shot if /sfx/cannon.* exists)
     });
   }
 
@@ -498,16 +500,16 @@ async function init() {
   // register the lit hull materials so the cascaded sun shadows fall on them (self + ship-to-ship)
   lighting.registerTree(ship.pivot);
   lighting.registerTree(chigKit.template);
-  enemyMgr = createEnemyManager(scene, chigKit, projectiles);
+  enemyMgr = createEnemyManager(scene, chigKit, projectiles, { onFire: (pos) => sfx.chigShot(pos) });
   if (!ATTRACT) waves = createWaveManager(enemyMgr); // attract owns its own wave loop
   vfx = createVfx(scene, camera, { lightDir: sunDir, onExplosion: (p, s) => sfx.onExplosion(p, s) }); // align smoke self-shadow with the real sun; SFX boom on every explosion
   if (OCCLUDE) vfx.setOcclusion(depthTexture(), camera.near, camera.far); // feed the smoke the opaque depth
   enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
-  debris = createDebris(scene, { template: chigKit.template, material: chigKit.material, vfx });
+  debris = createDebris(scene, { template: chigKit.template, material: chigKit.material, vfx, count: IS_MOBILE ? 24 : 64, cap: IS_MOBILE ? 96 : 240 });
   enemyMgr.setDebris(debris); // ship-fracture chunks on death
   if (!ATTRACT) {
     debrisPlayer = { pos: ship.pivot.position, radius: ship.radius, vel: playerVel };
-    playerDebris = createDebris(scene, { template: ship.pivot, convex: true, vfx, count: 12, cap: 160 }); // player Hammerhead (171k verts/45 meshes) -> convex-hull proxy, shatters when destroyed
+    playerDebris = createDebris(scene, { template: ship.pivot, convex: true, vfx, count: IS_MOBILE ? 6 : 12, cap: IS_MOBILE ? 72 : 160 }); // player Hammerhead (171k verts/45 meshes) -> convex-hull proxy, shatters when destroyed
   }
   quality = createQuality({ lighting, vfx, debris, setRenderScale, gpuFrameMs }); // GPU-ms two-rate autoscaler: per-frame volumetric steps + debounced tier (render scale, CSM, shadow budget, smoke, vfx)
   combat = createCombat(projectiles, enemyMgr, vfx, {
@@ -608,6 +610,27 @@ async function init() {
 const clock = new THREE.Timer(); // THREE.Clock is deprecated -> Timer (update() each frame, then getDelta())
 let fps = 60;
 
+// Chig flyby whoosh: when a Chig sweeps PAST the camera (its distance stops shrinking and starts growing =
+// closest approach, and that closest point was within range while it was moving fast) play one doppler-ish
+// whoosh. Per-enemy _flyPrevD catches the approach→recede turn; _flyCd debounces so one pass = one whoosh.
+const FLYBY_DIST = 32;      // closest approach must come within this many units of the camera
+const FLYBY_MIN_SPEED = 14; // and the Chig must be moving at least this fast (units/s)
+function updateFlybys(dt) {
+  if (!enemyMgr) return;
+  const cp = camera.position;
+  for (const e of enemyMgr.enemies) {
+    if (!e.alive || !e.pos) continue;
+    if (e._flyCd > 0) e._flyCd -= dt;
+    const d = e.pos.distanceTo(cp);
+    const pd = e._flyPrevD === undefined ? d : e._flyPrevD;
+    e._flyPrevD = d;
+    if (d > pd && pd < FLYBY_DIST && !(e._flyCd > 0)) { // just passed closest approach, and it was close
+      const spd = e.vel ? e.vel.length() : 0;
+      if (spd > FLYBY_MIN_SPEED) { sfx.flyby(e.pos, Math.min(1, spd / 110)); e._flyCd = 0.7; }
+    }
+  }
+}
+
 // Attract mode frame: drive the AI dogfight + cinematic camera, reusing the shared combat/vfx/debris/
 // lighting pipeline but none of the player systems (flight/cannon/HUD/gameState are never created here).
 function attractFrame(dt) {
@@ -629,6 +652,7 @@ function attractFrame(dt) {
   starUniforms.uTime.value += dt;
   lighting.update(dt, { player: attract.focus, thrust: 0.8, projectiles, enemies: enemyMgr.enemies }); // cascades fit to the camera; dynamic lights around the action
   sfx.engine(0.85); // steady engine hum (allies cruise ~0.85)
+  updateFlybys(dt); // Chig whooshes past the cinematic camera
   if (OCCLUDE) { // smoke occlusion: the furball is the heaviest case, so cull hidden puffs here too
     nebula.mesh.visible = false;
     stars.visible = false;
@@ -717,6 +741,8 @@ function startLoop() {
     for (const m of ship.engineMaterials) m.emissiveIntensity = 1.8 + r.thrust * 3.2;
     thrusters.update(r.thrust, dt);
     sfx.engine(r.thrust); // engine hum rises with thrust/boost
+    sfx.gunTick(dt); // gate the cannon fire-loop (gunFiring() is pulsed per shot from the cannon's onFire)
+    updateFlybys(dt); // Chig whooshes past the player
     if (rcs) rcs.update(dt, flying); // maneuvering jets — fire from the ship's actual rotation + deceleration
 
     // keep the backdrop centred on the camera so it sits at infinity (no parallax)
