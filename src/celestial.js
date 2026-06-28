@@ -302,7 +302,7 @@ export function createCloudPlanet() {
     const y = 1 - (i + 0.5) / 8 * 2, rr = Math.sqrt(Math.max(0, 1 - y * y)), th = i * 2.39996323;
     centers.push(new THREE.Vector3(rr * Math.cos(th), y, rr * Math.sin(th)));
     const h = rng(i * 17.3 + 1.7);
-    const str = (1.3 + 1.4 * h) * (h > 0.5 ? 1 : -1);
+    const str = (0.3 + 0.5 * h) * (h > 0.5 ? 1 : -1); // much gentler twist (was 1.3-2.7 -> way too extreme)
     const tight = 3.0 + 5.0 * rng(i * 7.1 + 3.3);
     const spin = (0.04 + 0.14 * rng(i * 13.7 + 9.1)) * (rng(i * 3.3 + 5.5) > 0.5 ? 1 : -1);
     swirls.push(new THREE.Vector4(str, tight, spin, 0));
@@ -338,9 +338,12 @@ export function createCloudPlanet() {
       vec3 swirl(vec3 p){
         for(int i=0;i<8;i++){
           vec3 c=uCenters[i]; vec4 sp=uSwirl[i];
-          float d=distance(p,c);
-          float fall=1.0/(1.0+d*d*sp.y); fall*=fall;              // tight localised falloff
-          float ang=(sp.x+uTime*sp.z)*fall;
+          // distance of p from the NORMAL LINE through the planet in direction c (the cylinder radius):
+          float a=dot(p,c);
+          float r=sqrt(max(0.0,1.0-a*a));                         // 0 on the axis line, 1 at c's equator
+          // rotation scales UP then DOWN with that line distance (a tight eyewall ring), per sp.y tightness:
+          float ring=4.0*r*(1.0-r); ring=ring*ring; ring=ring*ring; // tight, SMALL eyewall ring (4th power; no per-pixel pow/exp)
+          float ang=(sp.x+uTime*sp.z)*ring;
           float s=sin(ang), co=cos(ang);
           p = p*co + cross(c,p)*s + c*dot(c,p)*(1.0-co);          // Rodrigues rotation about axis c
         }
@@ -349,10 +352,11 @@ export function createCloudPlanet() {
       void main(){
         vec3 q = swirl(vP);                                       // 8 vortices deform the sample direction
         // turbulent domain-warp on top of the swirls for fine curl
-        vec3 w = vec3(fbm3(q*2.4 + uTime*0.02), fbm3(q*2.4 + 19.0), fbm3(q*2.4 + 41.0)) - 0.5;
-        float clouds = fbm(q*5.5 + w*2.6);                        // main cloud structure
-        float detail = fbm3(q*13.0 + w*3.5);                      // fine high-freq detail
-        clouds = clamp(clouds*0.72 + detail*0.28, 0.0, 1.0);
+        vec3 w = vec3(fbm3(q*3.0 + uTime*0.02), fbm3(q*3.0 + 19.0), fbm3(q*3.0 + 41.0)) - 0.5;
+        float clouds = fbm(q*8.5 + w*2.4);                        // main cloud structure (higher frequency)
+        float detail = fbm3(q*22.0 + w*3.2);                      // finer high-freq detail
+        clouds = clamp(clouds*0.7 + detail*0.3, 0.0, 1.0);
+        clouds = clamp((clouds - 0.5) * 1.5 + 0.5, 0.0, 1.0);     // more contrast
         // 3-tone: deep cyan shadow -> cyan -> white tops
         vec3 trough = vec3(0.08, 0.28, 0.44);
         vec3 deep   = vec3(0.20, 0.56, 0.72);
