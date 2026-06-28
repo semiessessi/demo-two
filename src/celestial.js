@@ -198,23 +198,23 @@ export function createBlackHole() {
         vec2 dp = vec2(dot(hit, T), dot(hit, Bv));
         float cs = cos(spin), sn = sin(spin);
         vec2 dpr = vec2(cs * dp.x - sn * dp.y, sn * dp.x + cs * dp.y);
-        float dang = atan(dpr.y, dpr.x);                         // rotated azimuth -> feeds cos() ONLY (periodic = seamless)
-        float wisp = 0.5 + 0.5 * cos(dang * 6.0 - rr * 0.8);     // smooth spiral wisps (cosine -> soft, no harsh blotches)
-        float turb = wisp * 0.6 + fbm(dpr * 1.5 + 11.0) * 0.4;   // wisps + a little fine detail
+        vec2 wv = vec2(fbm(dpr * 0.6 + 2.0), fbm(dpr * 0.6 + 9.0)) - 0.5; // domain warp -> organic, non-repeating wisps (no obvious pattern, no atan2)
+        float turb = fbm(dpr * 1.0 + wv * 1.8 + vec2(uTime * 0.04, 0.0));
+        turb = 0.45 + 0.55 * turb;                               // compress contrast -> soft + diffuse, not harsh
         // temperature ramp: blue-white (inner) -> orange -> deep red (outer)
-        vec3 hot = vec3(0.95, 0.55, 1.0);   // hot inner -> violet-white
-        vec3 mid = vec3(1.0, 0.32, 0.42);   // red-magenta
-        vec3 cool = vec3(0.62, 0.05, 0.24); // deep red-purple outer
+        vec3 hot = vec3(0.72, 0.86, 1.0);   // cool blue-white (hot inner)
+        vec3 mid = vec3(0.40, 0.52, 0.92);  // cyan-blue
+        vec3 cool = vec3(0.26, 0.18, 0.52); // deep blue-purple outer
         vec3 col = mix(mix(hot, mid, smoothstep(0.0, 0.45, t)), cool, smoothstep(0.45, 1.0, t));
-        float bright = (0.85 - 0.55 * t) * (0.8 + 0.4 * turb); // ~50% dimmer + softer contrast (less blotchy red)
+        float bright = (0.7 - 0.45 * t) * (0.85 + 0.3 * turb); // dim + low-contrast (diffuse, not harsh)
         // relativistic doppler beaming: prograde orbital velocity vs view
         vec3 vel = normalize(cross(N, hit));
         float beta = clamp(0.62 / sqrt(rr), 0.0, 0.72);
         float approach = dot(vel, -normalize(dir));
-        float boost = pow(clamp(1.0 / (1.0 - beta * approach), 0.0, 4.0), 2.6);
+        float boost = pow(clamp(1.0 / (1.0 - beta * approach), 0.0, 2.6), 1.5); // gentler beaming (the bright side was harsh)
         col = mix(col, vec3(0.7, 0.85, 1.0), clamp(approach * beta * 0.7, 0.0, 0.6)); // blueshift toward viewer
         // soft inner/outer rims
-        float rim = smoothstep(0.0, 0.06, t) * smoothstep(1.0, 0.85, t);
+        float rim = smoothstep(0.0, 0.18, t) * smoothstep(1.0, 0.6, t); // wide soft edges -> diffuse, nebulous
         return col * bright * boost * rim;
       }
 
@@ -316,9 +316,9 @@ export function createCloudPlanet() {
     const y = 1 - (i + 0.5) / 8 * 2, rr = Math.sqrt(Math.max(0, 1 - y * y)), th = i * 2.39996323;
     centers.push(new THREE.Vector3(rr * Math.cos(th), y, rr * Math.sin(th)));
     const h = rng(i * 17.3 + 1.7);
-    const str = (0.3 + 0.5 * h) * (h > 0.5 ? 1 : -1); // much gentler twist (was 1.3-2.7 -> way too extreme)
+    const str = (0.07 + 0.15 * h) * (h > 0.5 ? 1 : -1); // very subtle local eddies (was 0.3-0.8 -> too smeary/oily)
     const tight = 3.0 + 5.0 * rng(i * 7.1 + 3.3);
-    const spin = (0.04 + 0.14 * rng(i * 13.7 + 9.1)) * (rng(i * 3.3 + 5.5) > 0.5 ? 1 : -1);
+    const spin = (0.02 + 0.08 * rng(i * 13.7 + 9.1)) * (rng(i * 3.3 + 5.5) > 0.5 ? 1 : -1);
     swirls.push(new THREE.Vector4(str, tight, spin, 0));
   }
   const mat = new THREE.ShaderMaterial({
@@ -364,13 +364,13 @@ export function createCloudPlanet() {
         return p;
       }
       void main(){
-        vec3 q = swirl(vP);                                       // 8 vortices deform the sample direction
-        // turbulent domain-warp on top of the swirls for fine curl
+        vec3 q = swirl(vP);                                       // gentle, localized eddies only (no global smear)
+        // a TINY domain-warp for a touch of life — small, not the oily smear it was (w*2.4 -> w*0.35)
         vec3 w = vec3(fbm3(q*3.0 + uTime*0.02), fbm3(q*3.0 + 19.0), fbm3(q*3.0 + 41.0)) - 0.5;
-        float clouds = fbm(q*8.5 + w*2.4);                        // main cloud structure (higher frequency)
-        float detail = fbm3(q*22.0 + w*3.2);                      // finer high-freq detail
+        float clouds = fbm(q*8.5 + w*0.35);                       // mostly clean 3D noise
+        float detail = fbm3(q*22.0 + w*0.5);                      // fine high-freq detail
         clouds = clamp(clouds*0.7 + detail*0.3, 0.0, 1.0);
-        clouds = clamp((clouds - 0.5) * 1.5 + 0.5, 0.0, 1.0);     // more contrast
+        clouds = clamp((clouds - 0.5) * 1.4 + 0.5, 0.0, 1.0);     // crisp, not smeary
         // 3-tone: deep cyan shadow -> cyan -> white tops
         vec3 trough = vec3(0.08, 0.28, 0.44);
         vec3 deep   = vec3(0.20, 0.56, 0.72);
