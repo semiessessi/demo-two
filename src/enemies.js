@@ -355,10 +355,40 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
       tryFire(e, player, aiming);
     }
 
-    // advance death sequences for dying (alive=false) enemies still tumbling in the scene
+    stepDeaths(dt); // advance death sequences for dying enemies still tumbling in the scene
+  }
+
+  // Advance only the death sequences — the co-op JOINER calls this instead of update(): enemies are
+  // host-authoritative proxies (transforms come from the host's snapshot), so the joiner runs no AI,
+  // but dying Chigs still need their tumble/blast played out locally.
+  function stepDeaths(dt) {
     for (const e of enemies) {
       if (!e.alive && e.death && !e.death.done) advanceDeath(e, dt);
     }
+  }
+
+  // Co-op JOINER: create a render-only enemy proxy (no AI/formation fields). netgame writes its
+  // transform each frame from the host snapshot; combat reports hits to the host rather than killing it.
+  function spawnProxy({ hash, pos, quat }) {
+    const obj = spawnChig(chigKit.template);
+    const e = {
+      obj, hash, proxy: true, alive: true,
+      pos: pos ? pos.clone() : new THREE.Vector3(),
+      vel: new THREE.Vector3(),
+      hp: params.hp, maxHp: params.hp, radius: chigKit.radius,
+      name: 'Chig Fighter',
+    };
+    if (quat) obj.quaternion.copy(quat);
+    obj.position.copy(e.pos);
+    scene.add(obj);
+    enemies.push(e);
+    return e;
+  }
+
+  // Co-op JOINER: the host says enemy <hash> died -> play its death sequence locally.
+  function killByHash(hash, type) {
+    for (const e of enemies) if (e.hash === hash && e.alive) { kill(e, type); return e; }
+    return null;
   }
 
   // A killing blow. Enemy leaves combat immediately (alive=false) but stays in the scene running a
@@ -450,6 +480,9 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   return {
     spawnFormation,
     update,
+    stepDeaths,   // co-op joiner: advance deaths without running AI
+    spawnProxy,   // co-op joiner: render-only host-authoritative enemy
+    killByHash,   // co-op joiner: play a death the host reported
     prune,
     count,
     reset,

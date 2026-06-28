@@ -15,6 +15,9 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
   // attract/co-op: when set, enemy bolts route to whichever of these friendly ships they hit. Each entry is
   // { pos, radius, hit(worldPoint, dmg, segStart) }. When null, the single-player path below is used instead.
   let getFriendlies = opts.getFriendlies || null;
+  // co-op: when set, a player bolt hitting an enemy calls this instead of mutating e.hp/killing —
+  // host applies + may kill + broadcasts; joiner reports the hit. null = single-player (local hp).
+  let onEnemyHit = null;
 
   const seg = new THREE.Vector3();
   const toC = new THREE.Vector3();
@@ -57,10 +60,16 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
           if (!e.alive) continue;
           const rr = e.radius + b.radius;
           if (segDistSq(segStart, b.pos, e.pos) <= rr * rr) {
-            e.hp -= b.damage;
             vfx.spark(b.pos, 0xffd27a);
             projectiles.kill(b);
-            if (e.hp <= 0) enemyMgr.kill(e); // death sequence (instant / spin-out / chained) owns the blast
+            if (onEnemyHit) {
+              // co-op: the host owns enemy hp. Host's cb applies damage + may kill + broadcast; a
+              // joiner's cb just reports the hit (ehit) and shows the spark — never mutates hp/kills.
+              onEnemyHit(e, b.damage, b.pos);
+            } else {
+              e.hp -= b.damage;
+              if (e.hp <= 0) enemyMgr.kill(e); // death sequence (instant / spin-out / chained) owns the blast
+            }
             break;
           }
         }
@@ -112,6 +121,9 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
     },
     setFriendlies(fn) {
       getFriendlies = fn;
+    },
+    setOnEnemyHit(fn) {
+      onEnemyHit = fn;
     },
   };
 }
