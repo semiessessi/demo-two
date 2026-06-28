@@ -225,6 +225,21 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     for (const a of allies) if (a.alive && a.target && a.target.alive) return a.target;
     return null;
   }
+  // a Chig actively PRESSING AN ATTACK — engaging (not still in formation/scatter) and bearing down on an
+  // ally; the one closest to an ally wins (most in-the-action). The camera prefers this over a random Chig.
+  function attackingChig() {
+    let best = null, bd = 220 * 220;
+    for (const e of enemyMgr.enemies) {
+      if (!e.alive || e.mode === 'formation' || e.mode === 'scatter') continue;
+      for (const a of allies) {
+        if (!a.alive) continue;
+        const d = e.pos.distanceToSquared(a.pos);
+        if (d < bd) { bd = d; best = e; }
+      }
+    }
+    return best;
+  }
+  const chigSubject = () => attackingChig() || heroChig(); // prefer an attacking Chig, else any hunted one
   // a Chig mid death with a big blast still coming — the dramatic explosion to fly by. Covers SPIN-OUT
   // (final blast at dur) and CHAINED (biggest blast ~t=0.5); 'instant' has nothing to follow.
   function dyingChig() {
@@ -244,16 +259,18 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
   // framed ship dies early). Falls back to a normal cut if nothing fresh is available.
   function reSubject() {
     const prev = subject;
-    subject = shot === 'chaseChig' ? heroChig() : shot === 'lineOfFire' ? gunningAlly() : engagedAlly();
+    subject = shot === 'chaseChig' ? chigSubject() : shot === 'lineOfFire' ? gunningAlly() : engagedAlly();
     if (!subject || subject === prev) { pickShot(); return; }
     snap = false; // no cut — just follow a new ship of the same kind
   }
 
   function pickShot() {
     const r = Math.random();
-    let s = r < 0.26 ? 'chase' : r < 0.46 ? 'lineOfFire' : r < 0.66 ? 'chaseChig' : r < 0.84 ? 'duel' : 'orbit';
-    if (s === shot && s !== 'orbit') s = 'chase';
-    subject = s === 'chaseChig' ? heroChig() : s === 'lineOfFire' ? gunningAlly() : engagedAlly();
+    // weighted toward FOLLOWING ATTACKING CHIGS (chaseChig now the dominant shot) over the ally/orbit shots
+    let s = r < 0.44 ? 'chaseChig' : r < 0.62 ? 'chase' : r < 0.78 ? 'lineOfFire' : r < 0.92 ? 'duel' : 'orbit';
+    if (s === shot && s !== 'orbit') s = s === 'chaseChig' ? 'chase' : 'chaseChig'; // avoid an immediate repeat
+    subject = s === 'chaseChig' ? chigSubject() : s === 'lineOfFire' ? gunningAlly() : engagedAlly();
+    if (!subject) { s = 'chaseChig'; subject = chigSubject(); }
     if (!subject) { s = 'orbit'; subject = engagedAlly(); }
     shot = s; shotT = 0; shotDur = 7 + Math.random() * 4; snap = true; // longer shots (7-11s) — fewer, more deliberate cuts
     orbitAng = Math.random() * Math.PI * 2;
@@ -309,7 +326,7 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     // opportunistic explosion fly-by: cut to a dramatic dying Chig (rate-limited so it isn't too cutty)
     if (shot !== 'killcam' && killCd <= 0) {
       const dc = dyingChig();
-      if (dc) { shot = 'killcam'; killTarget = dc; shotT = 0; snap = true; killCd = 4; killLinger = 0; _killPos.copy(dc.pos); _killVel.copy(dc.vel); }
+      if (dc) { shot = 'killcam'; killTarget = dc; shotT = 0; snap = true; killCd = 8 + Math.random() * 4; killLinger = 0; _killPos.copy(dc.pos); _killVel.copy(dc.vel); } // ~8-12s between explosion cuts (was 4 — too cutty)
     }
     shotT += dt;
     if (shot === 'killcam') {

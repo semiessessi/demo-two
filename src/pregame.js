@@ -43,7 +43,7 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin }) 
     + 'display:flex;flex-direction:column;gap:18px;box-shadow:0 0 40px rgba(0,0,0,0.5);', root);
 
   el('div', `${FONT}font-size:22px;letter-spacing:0.22em;color:#eaeefc;text-shadow:0 0 16px rgba(120,170,255,0.4);`, panel)
-    .textContent = 'AI SKIRMISH';
+    .textContent = 'MULTIPLAYER';
   el('div', `${FONT}font-size:11px;color:#8a96b4;margin-top:-12px;`, panel)
     .textContent = 'SA-43: Hammerhead · configure & launch';
 

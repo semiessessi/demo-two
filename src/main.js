@@ -33,6 +33,7 @@ import { createPregame } from './pregame.js';
 import { applyLoadout } from './loadout.js';
 import { loadSettings, DIFFICULTY, ENVIRONMENT } from './settings.js';
 import { createAttract } from './attract.js';
+import { createAttractMenu } from './attractMenu.js';
 import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlanet, createRingedPlanet } from './celestial.js';
 import { createPeerTransport } from './net/peer.js';
 import { createNetGame } from './net/netgame.js';
@@ -475,6 +476,9 @@ function bootFlight() {
 function bootAttract() {
   applyEnvironment({ ...settings, environment: 'cerberus' }); // attract showcases the Cerberus black hole by default
   if (attract) { attract.resume(); attract.setVisible(true); }
+  // Title menu over the cinematic: logo + New Game / Multiplayer / Options (only Multiplayer is live for now).
+  const menu = createAttractMenu({ onMultiplayer: () => { location.href = location.pathname + '?skirmish'; } });
+  menu.show();
 }
 
 async function init() {
