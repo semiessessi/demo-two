@@ -188,7 +188,7 @@ function updateBackdropBodies(dt) {
     jupiter.update(dt); // spin Jupiter + orbit Io/Ganymede
   }
   if (cloudplanet && cloudplanet.group.visible) {
-    cloudplanet.group.position.copy(camera.position).addScaledVector(CLOUD_DIR, 3300);
+    cloudplanet.group.position.copy(camera.position).addScaledVector(CLOUD_DIR, 1500); // close -> dominates the sky
     cloudplanet.mat.uniforms.uTime.value += dt; // animate the swirling clouds
     cloudplanet.planet && (cloudplanet.planet.rotation.y += 0.004 * dt);
   }

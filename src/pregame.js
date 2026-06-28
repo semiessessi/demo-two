@@ -19,19 +19,15 @@ const BTN = `${FONT}font-size:12px;cursor:pointer;padding:7px 12px;background:rg
   + 'border:1px solid rgba(150,180,255,0.22);border-radius:8px;transition:all 0.12s;';
 const BTN_ON = 'background:rgba(120,170,255,0.32);border-color:rgba(170,210,255,0.7);color:#fff;box-shadow:0 0 10px rgba(120,170,255,0.3);';
 
-// Weapon mounts: per wing = 1 fuel (inner) + 3 outer (inner/mid/tip). Outer mounts cycle through
-// missile-pair / lr-missile / empty; a long-range missile auto-implies the single targeting laser.
-const MOUNTS = [
-  { id: 'fuelL', label: 'L Fuel', opts: ['fuel', 'empty'] },
-  { id: 'L1', label: 'L Inner', opts: ['missile-pair', 'lr-missile', 'empty'] },
-  { id: 'L2', label: 'L Mid', opts: ['missile-pair', 'lr-missile', 'empty'] },
-  { id: 'L3', label: 'L Tip', opts: ['lr-missile', 'missile-pair', 'empty'] },
-  { id: 'fuelR', label: 'R Fuel', opts: ['fuel', 'empty'] },
-  { id: 'R1', label: 'R Inner', opts: ['missile-pair', 'lr-missile', 'empty'] },
-  { id: 'R2', label: 'R Mid', opts: ['missile-pair', 'lr-missile', 'empty'] },
-  { id: 'R3', label: 'R Tip', opts: ['lr-missile', 'missile-pair', 'empty'] },
+// Weapon mounts are MIRRORED L<->R: one control per station sets BOTH wings. Per wing = 1 fuel (inner)
+// + 3 outer (inner/mid/tip). The tip is the long-range station: an LR missile OR the targeting laser.
+const STATIONS = [
+  { l: 'fuelL', r: 'fuelR', label: 'Fuel', opts: ['fuel', 'empty'] },
+  { l: 'L1', r: 'R1', label: 'Inner', opts: ['missile-pair', 'lr-missile', 'empty'] },
+  { l: 'L2', r: 'R2', label: 'Mid', opts: ['missile-pair', 'lr-missile', 'empty'] },
+  { l: 'L3', r: 'R3', label: 'Tip', opts: ['lr-missile', 'laser', 'missile-pair', 'empty'] },
 ];
-const ORD_LABEL = { fuel: 'Fuel tank', 'missile-pair': 'Missile pair', 'lr-missile': 'LR missile', empty: 'Empty' };
+const ORD_LABEL = { fuel: 'Fuel tank', 'missile-pair': 'Missile pair', 'lr-missile': 'LR missile', laser: 'Laser', empty: 'Empty' };
 
 export function createPregame({ settings, onLaunch, onChange }) {
   const fire = () => { saveSettings(settings); if (onChange) onChange(settings); };
@@ -102,16 +98,17 @@ export function createPregame({ settings, onLaunch, onChange }) {
 
   // ---- Loadout (visual mounts) ----
   const lo = el('div', '', panel);
-  el('div', LABEL, lo).textContent = 'Weapon mounts';
-  MOUNTS.forEach((m) => {
+  el('div', LABEL, lo).textContent = 'Weapon mounts (mirrored L/R)';
+  STATIONS.forEach((m) => {
     const r = el('div', 'display:flex;align-items:center;gap:8px;margin:3px 0;', lo);
     el('span', 'width:66px;font-size:11px;color:#aeb9d4;', r).textContent = m.label;
     const b = el('button', BTN + 'flex:1;text-align:left;', r);
-    const paint = () => { b.textContent = ORD_LABEL[settings.loadout[m.id]] || 'Empty'; };
-    b.onclick = () => { // cycle through this mount's allowed options
-      const cur = settings.loadout[m.id];
-      const i = m.opts.indexOf(cur);
-      settings.loadout[m.id] = m.opts[(i + 1) % m.opts.length];
+    const paint = () => { b.textContent = ORD_LABEL[settings.loadout[m.l]] || 'Empty'; };
+    b.onclick = () => { // cycle this station's options, applied to BOTH wings
+      const i = m.opts.indexOf(settings.loadout[m.l]);
+      const next = m.opts[(i + 1) % m.opts.length];
+      settings.loadout[m.l] = next;
+      settings.loadout[m.r] = next; // mirror to the other wing
       paint(); fire();
     };
     paint();

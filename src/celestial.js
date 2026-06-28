@@ -279,7 +279,7 @@ export function createBlackHole() {
 export function createCloudPlanet() {
   const group = new THREE.Group();
   group.visible = false;
-  const R = 480;
+  const R = 1300; // huge: placed close (~1500 out) so it DOMINATES the sky
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
@@ -299,38 +299,45 @@ export function createCloudPlanet() {
         return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
                    mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z); }
       float fbm(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.04; a*=0.5; } return v; }
+      float fbm3(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<3;i++){ v+=a*noise(p); p*=2.04; a*=0.5; } return v; }
       void main(){
         vec3 q = vP;
-        // banded latitude swirl: rotate sampling by latitude + time (zonal flow), then domain-warp for cloud curls
         float lat = q.y;
+        // zonal flow: rotate sampling by latitude + time (faster at the equator)
         float ang = uTime * 0.04 * (0.6 + 0.8 * (1.0 - abs(lat)));
         float ca = cos(ang), sa = sin(ang);
         vec3 r = vec3(ca*q.x - sa*q.z, q.y, sa*q.x + ca*q.z);
-        float warp = fbm(r * 3.0 + uTime * 0.02);
-        float clouds = fbm(r * 5.0 + vec3(warp * 1.6) + vec3(0.0, lat * 4.0, 0.0));
-        float bands = 0.5 + 0.5 * sin(lat * 16.0 + warp * 3.0); // faint zonal banding
-        clouds = clamp(clouds * 0.8 + bands * 0.2, 0.0, 1.0);
-        vec3 deep = vec3(0.20, 0.55, 0.7);   // cyan
-        vec3 pale = vec3(0.92, 0.98, 1.0);   // white
-        vec3 base = mix(deep, pale, smoothstep(0.35, 0.85, clouds));
+        // domain-warp the sampling -> turbulent curls / storm SWORLS
+        vec3 w = vec3(fbm3(r * 2.4 + uTime * 0.015), fbm3(r * 2.4 + 19.0), fbm3(r * 2.4 + 41.0)) - 0.5;
+        float clouds = fbm(r * 5.5 + w * 2.6 + vec3(0.0, lat * 4.0, 0.0)); // main cloud structure
+        float detail = fbm3(r * 13.0 + w * 3.5);                          // fine high-freq detail
+        clouds = clouds * 0.68 + detail * 0.32;
+        float bands = 0.5 + 0.5 * sin(lat * 18.0 + w.x * 6.0);            // wavy zonal banding
+        clouds = clamp(clouds * 0.78 + bands * 0.22, 0.0, 1.0);
+        // 3-tone: deep cyan shadow -> cyan -> white tops (more depth + richness)
+        vec3 trough = vec3(0.08, 0.28, 0.44);
+        vec3 deep   = vec3(0.20, 0.56, 0.72);
+        vec3 pale   = vec3(0.95, 0.99, 1.0);
+        vec3 base = mix(trough, deep, smoothstep(0.12, 0.42, clouds));
+        base = mix(base, pale, smoothstep(0.46, 0.86, clouds));
         float ndl = max(dot(normalize(vN), normalize(uSunDir)), 0.0);
         float light = uAmbient + (1.0 - uAmbient) * ndl;
         gl_FragColor = vec4(base * light * uExposure, 1.0);
       }`,
   });
-  const planet = new THREE.Mesh(new THREE.SphereGeometry(R, 96, 64), mat);
+  const planet = new THREE.Mesh(new THREE.SphereGeometry(R, 128, 96), mat); // more segments (it fills the sky)
   planet.renderOrder = -3;
 
-  // cyan-white atmosphere limb (same fresnel idea as Jupiter)
+  // cyan-white atmosphere limb (same fresnel idea as Jupiter) — thicker, brighter halo
   const atmoMat = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color(0xbfeaff) }, uSunDir: { value: new THREE.Vector3(-55, 30, -30).normalize() }, uPower: { value: 3.0 }, uStrength: { value: 1.2 } },
+    uniforms: { uColor: { value: new THREE.Color(0xbfeaff) }, uSunDir: { value: new THREE.Vector3(-55, 30, -30).normalize() }, uPower: { value: 2.0 }, uStrength: { value: 2.4 } },
     vertexShader: /* glsl */`varying vec3 vN; varying vec3 vWorld; void main(){ vec4 wp=modelMatrix*vec4(position,1.0); vWorld=wp.xyz; vN=normalize(mat3(modelMatrix)*normal); gl_Position=projectionMatrix*viewMatrix*wp; }`,
     fragmentShader: /* glsl */`uniform vec3 uColor; uniform vec3 uSunDir; uniform float uPower, uStrength; varying vec3 vN; varying vec3 vWorld;
       void main(){ vec3 V=normalize(cameraPosition-vWorld); float f=pow(1.0-max(dot(normalize(vN),V),0.0),uPower);
         float lit=smoothstep(-0.3,0.5,dot(normalize(vN),normalize(uSunDir))); float a=f*uStrength*mix(0.3,1.0,lit); gl_FragColor=vec4(uColor*a,a); }`,
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide,
   });
-  const atmo = new THREE.Mesh(new THREE.SphereGeometry(R * 1.05, 96, 64), atmoMat);
+  const atmo = new THREE.Mesh(new THREE.SphereGeometry(R * 1.11, 128, 96), atmoMat); // thicker shell
   atmo.renderOrder = -2;
 
   group.add(planet, atmo);
