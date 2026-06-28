@@ -227,15 +227,19 @@ export function createBlackHole() {
         }
         if (captured) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; } // shadow occludes the background
         // escaped: composite the gravitationally-LENSED sky (distorted stars + Milky Way) behind the disk,
-        // shown where the ray was significantly bent (fades to the real scene where it wasn't) + the photon ring
+        // shown where the ray was significantly bent (fades to the real scene where it wasn't) + the photon ring.
+        // `zone` confines everything to the rays that passed near the hole -> fades to 0 before the quad edge
+        // (no visible square). minr = the ray's closest approach in Rs units.
+        float zone = 1.0 - smoothstep(7.0, 20.0, minr);
         float bend = length(d - rd0);
         acc += backgroundSky(d) * (1.0 - alpha);
-        alpha = max(alpha, smoothstep(0.03, 0.55, bend));
+        alpha = max(alpha, smoothstep(0.06, 0.55, bend));
         float ring = exp(-pow((minr - 1.5) * 6.0, 2.0));
         acc += vec3(1.0, 0.92, 0.78) * ring * 0.9;
         alpha = max(alpha, ring * 0.9);
-        if (alpha < 0.003) discard;                  // far from the hole -> let the real scene show through
-        gl_FragColor = vec4(acc, clamp(alpha, 0.0, 1.0));
+        alpha *= zone;
+        if (alpha < 0.004) discard;                  // beyond the lensing zone -> let the real scene show through
+        gl_FragColor = vec4(acc * zone, clamp(alpha, 0.0, 1.0));
       }`,
   });
 

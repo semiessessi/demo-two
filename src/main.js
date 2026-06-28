@@ -344,7 +344,7 @@ function enterMenu() {
 function launchSkirmish(s) {
   applySettings(s);
   if (attract) attract.setVisible(false); // the two ally clones leave; ally #1 becomes the player
-  if (combat) combat.setFriendlies(() => []);
+  if (combat) combat.setFriendlies(null); // single-player: enemy bolts hit the PLAYER (not the menu-only allies)
   restartWorld();
   if (pregame) pregame.hide();
   if (hud) hud.setVisible(true);

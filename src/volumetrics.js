@@ -368,15 +368,19 @@ export function createVolumetrics(scene, camera, opts = {}) {
     s.depthMat.userData.cov.value = cov;
     s.mesh.castShadow = smokeShadows && cov > 0.05;
     const distSq = s.mesh.position.distanceToSquared(camera.position);
+    // camera inside / right on top of the puff: it fills the whole screen, so a full-step self-shadowed
+    // raymarch (×many puffs in a smoke cloud) tanks the framerate. When engulfed you can't read fine 3D
+    // detail anyway -> cap steps hard + drop the (expensive) self-shadow. This is the fly-through case.
+    const near = distSq < cur * cur;
     let st = quality === 'low' ? 12 : tunable.puffSteps;
     if (distSq > 140 * 140) st = quality === 'low' ? 9 : 14;
     else if (distSq > 70 * 70) st = quality === 'low' ? 11 : 18;
-    if (k > 0.6) st = Math.max(9, st - 5);
+    if (near) st = quality === 'low' ? 6 : 10;
+    if (k > 0.6) st = Math.max(8, st - 5);
     u.uSteps.value = st;
-    // Self-shadow is the per-step 3-tap fbm march — easily the puff's heaviest cost. Drop it on low tier
-    // and for distant puffs (its 3D thickness cue is illegible far away anyway). Explosions keep it (few,
-    // close, hero) via the uniform's default of 1.
-    u.uSelfShadow.value = (quality === 'low' || distSq > 110 * 110) ? 0 : 1;
+    // Self-shadow is the per-step 3-tap fbm march — easily the puff's heaviest cost. Drop it on low tier,
+    // for distant puffs (illegible far away), and when the camera is inside the puff (invisible from within).
+    u.uSelfShadow.value = (quality === 'low' || near || distSq > 110 * 110) ? 0 : 1;
   }
 
   function retire(s) {
