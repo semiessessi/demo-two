@@ -30,10 +30,10 @@ export const RCS_PORTS = [
   // Forward-firing jets (mirrored): on the canards + wingtips, exhaust out the FRONT (-Z). At their
   // off-centre X they command yaw (opposite the outward jets) and add a retro/attitude flourish. Rough
   // starting spots — drag them in ?debug -> RCS Ports (edit) (mirror on), then log + paste back.
-  { name: 'Canard fwd L', pos: [-1.15, -0.05, -3.2], dir: [0, 0, -1] },
-  { name: 'Canard fwd R', pos: [1.15, -0.05, -3.2], dir: [0, 0, -1] },
-  { name: 'Wingtip fwd L', pos: [-3.45, 0.05, 0.2], dir: [0, 0, -1] },
-  { name: 'Wingtip fwd R', pos: [3.45, 0.05, 0.2], dir: [0, 0, -1] },
+  { name: 'Canard fwd L', pos: [-1.05, -0.05, -3.2], dir: [0, 0, -1] },
+  { name: 'Canard fwd R', pos: [1.05, -0.05, -3.2], dir: [0, 0, -1] },
+  { name: 'Wingtip fwd L', pos: [-3.4, 0, -0.05], dir: [0, 0, -1] },
+  { name: 'Wingtip fwd R', pos: [3.4, 0, -0.05], dir: [0, 0, -1] },
 ];
 
 export function createRcs(scene, ship, ports = RCS_PORTS) {
