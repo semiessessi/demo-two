@@ -609,8 +609,25 @@ function attractFrame(dt) {
   if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
 }
 
+// A background clock: a Web Worker firing ~30 Hz regardless of window focus/visibility, so the co-op
+// sim + netcode keep running when requestAnimationFrame is throttled (hidden/occluded/unfocused window).
+// Falls back to a main-thread interval (which the browser throttles harder, but still beats freezing).
+function startBgClock(tick) {
+  try {
+    const w = new Worker(URL.createObjectURL(new Blob(['setInterval(function(){postMessage(0)},33)'], { type: 'text/javascript' })));
+    w.onmessage = tick;
+  } catch (e) {
+    setInterval(tick, 33);
+  }
+}
+
 function startLoop() {
-  renderer.setAnimationLoop(() => {
+  let lastFrame = 0;
+  // The sim + netcode live in frame(). rAF drives it when visible; the background clock drives it when
+  // rAF is throttled AND co-op is live, so a backgrounded peer (the host especially) keeps simulating
+  // and sending instead of freezing. Single-player is unaffected (the bg clock only fires frame when net).
+  function frame() {
+    lastFrame = performance.now();
     const dt = Math.min(clock.getDelta(), 0.1);
     if (DEBUG && debug && debug.frame(dt)) return; // debug viewer modes own the frame
     if (ATTRACT) { attractFrame(dt); return; } // standalone ?attract: a leaner, player-less frame
@@ -692,7 +709,10 @@ function startLoop() {
     fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
     quality.update(dt, fps); // auto-scale shadow/VFX tier to the framerate (rate-limited)
     if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
-  });
+  }
+  renderer.setAnimationLoop(() => { if (!document.hidden) frame(); });
+  // co-op only: if rAF hasn't run in >40ms (window hidden/throttled), the bg clock keeps frame() going
+  startBgClock(() => { if (net && performance.now() - lastFrame > 40) frame(); });
 }
 
 // --- UI --------------------------------------------------------------------
