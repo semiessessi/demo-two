@@ -31,35 +31,38 @@ export const ENVIRONMENT = {
   groombridge34: {
     label: 'Groombridge 34', body: 'none', sunMult: 7, // close binary -> full, warm sunlight
     nebula: { uColorA: 0x04050f, uColorB: 0x223080, uColorC: 0xd8401f, uBrightness: 0.10, uSaturation: 0.32, uMilkyWay: 0.11 },
-    // big warm sun: a wide glow + halo fill the sky to justify the strong orange specular on the hull
-    sun: { disc: 560, glow: 5000, halo: 14000, color: 0xffffff, glowAlpha: 1.0, haloAlpha: 1.0 },
+    // binary red-dwarf system: a big warm primary (wide glow/halo -> strong orange specular) and a
+    // dim companion 93 AU away on the opposite side of the sky. Light ~90% primary / 10% companion.
+    sun: { disc: 560, glow: 5000, halo: 14000, color: 0xffffff, glowAlpha: 1.0, haloAlpha: 1.0, light: 0xffa860 },
+    companion: { color: 0xe07a44, mult: 0.1, disc: 230, glow: 1500 },
   },
   jupiterTrojans: {
     label: 'Jupiter Trojans', body: 'jupiter', sunMult: 1, // ~5 AU from Sol -> much dimmer scene light
     nebula: { uColorA: 0x03040c, uColorB: 0x14224a, uColorC: 0x6a4a30, uBrightness: 0.05, uSaturation: 0.28, uMilkyWay: 0.11 },
     // Sol seen from ~5 AU: small, white, and producing far less corona/halo glow.
-    sun: { disc: 280, glow: 620, halo: 0, color: 0xffffff, glowAlpha: 0.4, haloAlpha: 0.0, white: true },
+    sun: { disc: 280, glow: 620, halo: 0, color: 0xffffff, glowAlpha: 0.4, haloAlpha: 0.0, white: true, light: 0xfff2da },
   },
   cerberus: {
     label: 'Cerberus', body: 'blackhole', sunMult: 2,
-    nebula: { uColorA: 0x05030a, uColorB: 0x1a1030, uColorC: 0x4a1830, uBrightness: 0.04, uSaturation: 0.40, uMilkyWay: 0.045 },
-    sun: { disc: 220, glow: 520, halo: 0, color: 0xeef0ff, glowAlpha: 0.4, haloAlpha: 0.0, white: true },
+    // richer nebulosity around the hole (so the lensed nebula reads through the lens)
+    nebula: { uColorA: 0x07040f, uColorB: 0x2a1a55, uColorC: 0x7a2a40, uBrightness: 0.12, uSaturation: 0.5, uMilkyWay: 0.12 },
+    sun: { disc: 220, glow: 520, halo: 0, color: 0xeef0ff, glowAlpha: 0.4, haloAlpha: 0.0, white: true, light: 0x9fc0ff },
   },
   tartarus: {
     label: 'Tartarus', body: 'cloudplanet', sunMult: 0.7, // distant white dwarf -> dim
     nebula: { uColorA: 0x05060f, uColorB: 0x182840, uColorC: 0x40342a, uBrightness: 0.05, uSaturation: 0.35, uMilkyWay: 0.10 },
-    sun: { disc: 130, glow: 260, halo: 0, color: 0xffffff, glowAlpha: 0.5, haloAlpha: 0.0, white: true }, // small white-dwarf
+    sun: { disc: 130, glow: 260, halo: 0, color: 0xffffff, glowAlpha: 0.5, haloAlpha: 0.0, white: true, light: 0xdfe8ff }, // small white-dwarf (blue-white)
   },
   achilles: {
     label: 'Achilles System Outer Edge', body: 'none', sunMult: 0.3, // very distant star, barely illuminating
     // deep space: the blue (uColorB) + red (uColorC) background elements at 25%; the Milky Way is the feature
     nebula: { uColorA: 0x04050f, uColorB: 0x080c20, uColorC: 0x361008, uBrightness: 0.05, uSaturation: 0.40, uMilkyWay: 0.13 },
-    sun: { disc: 90, glow: 150, halo: 0, color: 0xffffff, glowAlpha: 0.35, haloAlpha: 0.0, white: true },
+    sun: { disc: 90, glow: 150, halo: 0, color: 0xffffff, glowAlpha: 0.35, haloAlpha: 0.0, white: true, light: 0xcdd6ff },
   },
   ixion: {
     label: 'Ixion', body: 'habitable', sunMult: 5, // inhabited world -> a sun-like star, decent daylight
     nebula: { uColorA: 0x04050f, uColorB: 0x1e2c66, uColorC: 0x8a4a2a, uBrightness: 0.08, uSaturation: 0.34, uMilkyWay: 0.10 },
-    sun: { disc: 480, glow: 2200, halo: 5200, color: 0xfff6e8, glowAlpha: 0.85, haloAlpha: 0.7 }, // warm-white G-type
+    sun: { disc: 480, glow: 2200, halo: 5200, color: 0xfff6e8, glowAlpha: 0.85, haloAlpha: 0.7, light: 0xfff0d8 }, // warm-white G-type
   },
 };
 

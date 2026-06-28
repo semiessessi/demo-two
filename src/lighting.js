@@ -348,6 +348,13 @@ export function createLighting(scene, camera, renderer, opts = {}) {
     if (csm) for (const l of csm.lights) l.intensity = v;
   }
 
+  // Per-environment star colour (the cast sunlight): red-dwarf, yellow-white Sol, blue-white dwarf, etc.
+  function setSunColor(hex) {
+    sunColor.set(hex);
+    plainSun.color.set(hex);
+    if (csm) for (const l of csm.lights) l.color.set(hex);
+  }
+
   // --- debug viewer interplay ----------------------------------------------------------------------
   // The localhost model-viewer builds its own neutral key + shadow rig and needs the flight sun gone.
   // CSM globally patches lights_fragment_begin (guarded by USE_CSM), and registered model materials
@@ -380,6 +387,7 @@ export function createLighting(scene, camera, renderer, opts = {}) {
     onResize,
     setSunShadow,
     setSunIntensity,
+    setSunColor,
     attachThrusters,
     setThrusterParams,
     thrusterParams,

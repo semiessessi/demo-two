@@ -6,7 +6,7 @@ import * as THREE from 'three';
 // tilted accretion disk + photon ring). Lit by the scene's existing sun direction.
 
 // --- Jupiter -----------------------------------------------------------------
-export function createJupiter(renderer) {
+export function createJupiter(renderer, sunDir) {
   const group = new THREE.Group();
   group.visible = false;
 
@@ -15,7 +15,7 @@ export function createJupiter(renderer) {
   tex.colorSpace = THREE.NoColorSpace; // raw ShaderMaterial decodes sRGB manually (pow 2.2) below
   if (renderer) tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 
-  const R = 520; // apparent size; placed ~3400 units out (in front of the stars) -> a big sky planet
+  const R = 180; // smaller (~twice as far + room for the moons' real orbits), placed ~3400 units out
   // Custom-lit so its brightness / terminator / night-side ambient / saturation are independent of the
   // scene's gameplay lighting (otherwise it blows out + the dark side reads too bright). Tunable.
   const planetMat = new THREE.ShaderMaterial({
@@ -80,7 +80,34 @@ export function createJupiter(renderer) {
   atmo.renderOrder = -2;
   group.add(planet, atmo);
 
-  return { group, planet, planetMat, atmoMat, radius: R };
+  // --- Galilean moons (Io, Ganymede): realistic relative sizes + orbit radii (in Jupiter radii) +
+  // period ratio, time-compressed so they're visible. Orbits in Jupiter's ~equatorial plane (low 3.1deg
+  // axial tilt). Circular (mean Kepler). ---
+  const DAY = 22.6; // in-game seconds per Jovian "day" -> Io ~40s, Ganymede ~162s (correct ratio)
+  const moonDefs = [
+    { col: 0xd8b24a, rough: 0.9, rr: 6.03, sz: 0.0260, period: 1.769, ang: 0.6 }, // Io (sulfur)
+    { col: 0x8f8c83, rough: 1.0, rr: 15.3, sz: 0.0377, period: 7.155, ang: 2.4 }, // Ganymede (grey/icy)
+  ];
+  const tilt = 3.13 * Math.PI / 180;
+  const orbU = new THREE.Vector3(1, 0, 0);
+  const orbV = new THREE.Vector3(0, 0, 1).applyAxisAngle(orbU, tilt); // orbital plane, low axial tilt
+  const moons = moonDefs.map((m) => {
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(Math.max(m.sz * R, 1.2), 32, 20),
+      new THREE.MeshStandardMaterial({ color: m.col, roughness: m.rough, metalness: 0 }));
+    mesh.castShadow = mesh.receiveShadow = false;
+    group.add(mesh);
+    return { mesh, rr: m.rr * R, w: (2 * Math.PI) / (m.period * DAY), ang: m.ang };
+  });
+
+  function update(dt) {
+    planet.rotateY(0.02 * dt); // Jupiter's fast spin (bands ~horizontal -> low tilt)
+    for (const mn of moons) {
+      mn.ang += mn.w * dt;
+      mn.mesh.position.copy(orbU).multiplyScalar(Math.cos(mn.ang) * mn.rr).addScaledVector(orbV, Math.sin(mn.ang) * mn.rr);
+    }
+  }
+
+  return { group, planet, planetMat, atmoMat, radius: R, update };
 }
 
 // --- Cerberus black hole (raymarched Schwarzschild lensing) ------------------
@@ -107,6 +134,7 @@ export function createBlackHole() {
       uDiskOut: { value: DISK_OUT / Rs },
       uTime: { value: 0 },
       uSteps: { value: 150 },
+      uMwNormal: { value: new THREE.Vector3(0.9101, 0.4020, -0.1002).normalize() }, // galactic pole (lensed Milky Way)
     },
     transparent: true,
     depthWrite: false,
@@ -117,7 +145,7 @@ export function createBlackHole() {
     fragmentShader: /* glsl */`
       precision highp float;
       varying vec3 vWorld;
-      uniform vec3 uCamPos, uCenter, uDiskN;
+      uniform vec3 uCamPos, uCenter, uDiskN, uMwNormal;
       uniform float uRs, uDiskIn, uDiskOut, uTime;
       uniform int uSteps;
 
@@ -125,6 +153,17 @@ export function createBlackHole() {
       float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
         return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
       float fbm(vec2 p){ float v=0.0, a=0.5; for(int i=0;i<5;i++){ v+=a*vnoise(p); p*=2.03; a*=0.5; } return v; }
+
+      // procedural sky (nebula tint + Milky Way band + sparse stars) sampled in a (lensed) direction
+      vec3 backgroundSky(vec3 dir){
+        float gy = dot(dir, uMwNormal);
+        float mw = exp(-pow(gy * 4.0, 2.0));
+        vec3 col = vec3(0.03, 0.025, 0.06) + vec3(0.22, 0.13, 0.26) * mw; // faint nebula + warm-purple band
+        vec3 g = dir * 130.0; vec3 c = floor(g); vec3 f = fract(g) - 0.5;
+        float h = fract(sin(dot(c, vec3(12.9, 78.2, 37.7))) * 43758.5);
+        col += vec3(0.85, 0.9, 1.0) * step(0.991, h) * smoothstep(0.16, 0.0, length(f)) * 3.0; // stars
+        return col;
+      }
 
       // disk emission at a hit point (in Rs units, disk-plane radius rr), with temperature + turbulence + doppler
       vec3 diskColor(vec3 hit, vec3 N, vec3 dir, float rr){
@@ -157,6 +196,7 @@ export function createBlackHole() {
         vec3 N = normalize(uDiskN);
         vec3 p = (uCamPos - uCenter) / uRs;          // ray start, Rs units
         vec3 d = normalize(vWorld - uCamPos);        // view ray
+        vec3 rd0 = d;                                // original (un-bent) direction
         vec3 angm = cross(p, d); float h2 = dot(angm, angm); // ~conserved (geodesic)
         vec3 acc = vec3(0.0); float alpha = 0.0; bool captured = false;
         float minr = 1e9;
@@ -185,14 +225,16 @@ export function createBlackHole() {
             }
           }
         }
-        // photon ring: rays that grazed the photon sphere (~1.5 Rs) without falling in
-        if (!captured){
-          float ring = exp(-pow((minr - 1.5) * 6.0, 2.0));
-          acc += vec3(1.0, 0.92, 0.78) * ring * 0.9;
-          alpha = max(alpha, ring * 0.9);
-        }
         if (captured) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; } // shadow occludes the background
-        if (alpha < 0.003) discard;                  // empty -> let the real scene show through
+        // escaped: composite the gravitationally-LENSED sky (distorted stars + Milky Way) behind the disk,
+        // shown where the ray was significantly bent (fades to the real scene where it wasn't) + the photon ring
+        float bend = length(d - rd0);
+        acc += backgroundSky(d) * (1.0 - alpha);
+        alpha = max(alpha, smoothstep(0.03, 0.55, bend));
+        float ring = exp(-pow((minr - 1.5) * 6.0, 2.0));
+        acc += vec3(1.0, 0.92, 0.78) * ring * 0.9;
+        alpha = max(alpha, ring * 0.9);
+        if (alpha < 0.003) discard;                  // far from the hole -> let the real scene show through
         gl_FragColor = vec4(acc, clamp(alpha, 0.0, 1.0));
       }`,
   });
@@ -280,42 +322,66 @@ export function createHabitablePlanet() {
       uAmbient: { value: 0.05 },
     },
     vertexShader: /* glsl */`
-      varying vec3 vN; varying vec3 vP;
-      void main(){ vN = normalize(mat3(modelMatrix) * normal); vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      varying vec3 vN; varying vec3 vP; varying vec3 vW;
+      void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz; vN = normalize(mat3(modelMatrix) * normal); vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */`
       precision highp float;
-      varying vec3 vN; varying vec3 vP;
+      varying vec3 vN; varying vec3 vP; varying vec3 vW;
       uniform float uTime, uExposure, uAmbient; uniform vec3 uSunDir;
       float hash(vec3 p){ p = fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
       float noise(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.0-2.0*f);
         return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
                    mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z); }
-      float fbm(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<6;i++){ v+=a*noise(p); p*=2.04; a*=0.5; } return v; }
+      float fbm(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<7;i++){ v+=a*noise(p); p=p*2.05+1.3; a*=0.5; } return v; }
+      // domain-warped continent height field -> natural, ragged coastlines
+      float height(vec3 p){
+        vec3 w = vec3(fbm(p*1.6), fbm(p*1.6+9.2), fbm(p*1.6+21.7));
+        return fbm(p*2.4 + w*0.85);
+      }
       void main(){
         vec3 p = vP;
-        float cont = fbm(p * 2.1);
-        float land = smoothstep(0.46, 0.54, cont);           // 0 ocean -> 1 land
-        float elev = fbm(p * 4.6 + 1.3);
+        float h = height(p);
+        float sea = 0.50;
+        float coast = fwidth(h) + 0.004;
+        float land = smoothstep(sea - coast, sea + coast, h);   // crisp, anti-aliased coastline
+        float elev = clamp((h - sea) / (1.0 - sea), 0.0, 1.0);   // 0 shore -> 1 peak
         float lat = abs(p.y);
-        vec3 ocean = mix(vec3(0.015, 0.07, 0.22), vec3(0.04, 0.22, 0.40), fbm(p * 6.0)); // deep -> shallow
-        vec3 veg = mix(vec3(0.10, 0.30, 0.11), vec3(0.45, 0.40, 0.22), smoothstep(0.40, 0.70, elev)); // green -> arid
-        vec3 land3 = mix(veg, vec3(0.52, 0.47, 0.40), smoothstep(0.72, 0.95, elev)); // bare mountains
-        float ice = smoothstep(0.74, 0.86, lat + cont * 0.08);
+
+        // ocean: depth gradient + a little large-scale variation
+        vec3 ocean = mix(vec3(0.05,0.28,0.45), vec3(0.005,0.04,0.14), smoothstep(sea, sea-0.30, h));
+        // land biomes by aridity (noise), elevation + latitude
+        float arid = fbm(p*4.3 + 31.0);
+        vec3 forest = vec3(0.07,0.24,0.09), grass = vec3(0.28,0.39,0.15), desert = vec3(0.62,0.50,0.29), rock = vec3(0.40,0.36,0.31);
+        vec3 low = mix(forest, mix(grass, desert, smoothstep(0.45,0.72,arid)), smoothstep(0.18,0.55,arid));
+        low = mix(low, vec3(0.34,0.42,0.30), smoothstep(0.82,0.6, lat)); // greener mid-latitudes
+        vec3 land3 = mix(low, rock, smoothstep(0.45,0.82,elev));
+        land3 *= 0.82 + 0.34 * fbm(p*16.0);                      // fine terrain mottling (the "detail")
+        float snow = clamp(smoothstep(0.80,0.92, lat) + smoothstep(0.74,0.97, elev), 0.0, 1.0);
+        land3 = mix(land3, vec3(0.92,0.95,1.0), snow);
         vec3 surf = mix(ocean, land3, land);
-        surf = mix(surf, vec3(0.92, 0.96, 1.0), ice);
-        // drifting clouds
-        float cl = fbm(p * 3.4 + vec3(uTime * 0.012, 0.0, uTime * 0.004));
-        float clouds = smoothstep(0.55, 0.82, cl);
-        surf = mix(surf, vec3(1.0), clouds * 0.65);
-        // lighting + night side
-        float ndl = dot(normalize(vN), normalize(uSunDir));
-        float day = smoothstep(-0.08, 0.28, ndl);
-        float lit = uAmbient + (1.0 - uAmbient) * max(ndl, 0.0);
-        // warm city lights: on land (not ocean/ice/cloud), clustered, only on the night side
-        float pop = smoothstep(0.62, 0.78, fbm(p * 14.0)); // habitation density
-        float cities = land * (1.0 - ice) * (1.0 - clouds) * pop * smoothstep(0.6, 0.85, noise(p * 60.0));
-        vec3 night = vec3(1.0, 0.72, 0.36) * cities * 2.2 * (1.0 - day);
-        gl_FragColor = vec4(surf * lit * uExposure + night, 1.0);
+
+        // lighting
+        vec3 N = normalize(vN), L = normalize(uSunDir), V = normalize(cameraPosition - vW);
+        float ndl = dot(N, L);
+        float day = smoothstep(-0.06, 0.30, ndl);
+        float diff = max(ndl, 0.0);
+        // ocean sun-glint (specular highlight on water only)
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 160.0) * (1.0 - land) * day;
+        vec3 col = surf * (uAmbient + (1.0 - uAmbient) * diff) + vec3(1.0,0.96,0.85) * spec * 2.2;
+
+        // drifting clouds (two scales), lit by the sun + casting a soft darkening on what's below
+        float cl = fbm(p*3.2 + vec3(uTime*0.012,0.0,uTime*0.005)) * 0.65 + fbm(p*7.5 - vec3(0.0,uTime*0.006,0.0)) * 0.35;
+        float clouds = smoothstep(0.52, 0.80, cl);
+        col *= 1.0 - 0.25 * clouds;                              // cloud shadow
+        col = mix(col, vec3(1.0) * (uAmbient + (1.0 - uAmbient) * diff), clouds * 0.85);
+
+        // night-side city lights (clustered on habitable land)
+        float pop = smoothstep(0.58, 0.80, fbm(p*12.0));
+        float cities = land * (1.0 - snow) * (1.0 - clouds) * pop * smoothstep(0.55, 0.82, noise(p*85.0));
+        col += vec3(1.0, 0.72, 0.36) * cities * 2.4 * (1.0 - day);
+
+        gl_FragColor = vec4(col * uExposure, 1.0);
       }`,
   });
   const planet = new THREE.Mesh(new THREE.SphereGeometry(R, 128, 80), mat);

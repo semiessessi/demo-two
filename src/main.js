@@ -75,8 +75,19 @@ scene.add(sun);
 const sunDiscWarm = sun.material.map;
 const sunDiscWhite = makeCanvasTex(sunGradientWhite);
 
+// binary companion star (Groombridge): a dim second disc+glow opposite the primary, + a fill light.
+const companionDisc = makeSprite(sunGradientWhite, 230, -5);
+const companionGlow = makeSprite(glowGradient, 1500, -6);
+companionDisc.visible = companionGlow.visible = false;
+scene.add(companionGlow);
+scene.add(companionDisc);
+const companionDir = sunDir.clone().negate(); // opposite side of the sky from the primary
+const companionLight = new THREE.DirectionalLight(0xffffff, 0);
+companionLight.position.copy(companionDir).multiplyScalar(200);
+scene.add(companionLight);
+
 function makeCanvasTex(paint) {
-  const s = 512; // higher-res so the radial gradient doesn't band
+  const s = 1024; // high-res so the big glow/halo sprites don't band when stretched across the sky
   const cv = document.createElement('canvas');
   cv.width = cv.height = s;
   const ctx = cv.getContext('2d');
@@ -88,12 +99,13 @@ function makeCanvasTex(paint) {
   const img = ctx.getImageData(0, 0, s, s);
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
-    const n = (Math.random() - 0.5) * 6;
+    const n = (Math.random() - 0.5) * 11;
     d[i] += n; d[i + 1] += n; d[i + 2] += n;
   }
   ctx.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
   return tex;
 }
 function sunGradient(g) {
@@ -142,7 +154,7 @@ function makeSprite(paint, scale, order) {
 const nebula = createNebula();
 scene.add(nebula.mesh);
 // per-environment background bodies (shown/hidden by applyEnvironment), kept at infinity in the loop
-const jupiter = createJupiter(renderer);
+const jupiter = createJupiter(renderer, sunDir);
 const blackhole = createBlackHole();
 const cloudplanet = createCloudPlanet();
 const habitable = createHabitablePlanet();
@@ -154,9 +166,13 @@ const CLOUD_DIR = new THREE.Vector3(0.30, 0.15, -0.94).normalize();
 // with the sun ~40deg off to the side (not directly behind).
 const IXION_DIR = new THREE.Vector3(0, 0, -1).addScaledVector(sunDir, 0.6).normalize();
 function updateBackdropBodies(dt) {
+  if (companionDisc.visible) { // keep the binary companion at infinity, opposite the primary
+    companionDisc.position.copy(camera.position).addScaledVector(companionDir, 3600);
+    companionGlow.position.copy(camera.position).addScaledVector(companionDir, 3650);
+  }
   if (jupiter.group.visible) {
     jupiter.group.position.copy(camera.position).addScaledVector(JUP_DIR, 3400);
-    jupiter.planet.rotation.y += 0.006 * dt; // slow spin
+    jupiter.update(dt); // spin Jupiter + orbit Io/Ganymede
   }
   if (cloudplanet.group.visible) {
     cloudplanet.group.position.copy(camera.position).addScaledVector(CLOUD_DIR, 3300);
@@ -266,9 +282,23 @@ function applyEnvironment(s) {
   if (u.uBrightness) u.uBrightness.value = e.nebula.uBrightness;
   if (u.uSaturation) u.uSaturation.value = e.nebula.uSaturation;
   if (u.uMilkyWay) u.uMilkyWay.value = e.nebula.uMilkyWay;
-  lighting.setSunIntensity(e.sunMult != null ? e.sunMult : 7); // 7 close-in, ~1 out at Jupiter's distance
+  lighting.setSunIntensity(e.sunMult != null ? e.sunMult : 7); // intensity matches the star (Sol@5AU dim, etc.)
+  lighting.setSunColor(e.sun.light != null ? e.sun.light : 0xffffff); // cast light colour matches the star type
   applySun(e.sun);
+  applyCompanion(e); // binary second star (Groombridge), else off
   applyBody(e.body);
+}
+// Binary companion star: a dim second disc+glow on the opposite side of the sky + a fill light at its colour.
+function applyCompanion(e) {
+  const c = e.companion;
+  const on = !!c;
+  companionDisc.visible = companionGlow.visible = on;
+  companionLight.intensity = on ? 2.6 * (e.sunMult != null ? e.sunMult : 7) * c.mult : 0;
+  if (on) {
+    companionDisc.scale.setScalar(c.disc); companionGlow.scale.setScalar(c.glow);
+    companionDisc.material.color.setHex(c.color); companionGlow.material.color.setHex(c.color);
+    companionLight.color.setHex(c.color);
+  }
 }
 // Retune the existing sun sprites per environment (size/tint/glow/whiteness) — not the light direction.
 function applySun(c) {
