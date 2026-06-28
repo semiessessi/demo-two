@@ -27,6 +27,7 @@ import { createRcs } from './rcs.js';
 import { createEditor } from './editor.js';
 import { createDebris } from './debris.js';
 import { createPregame } from './pregame.js';
+import { applyLoadout } from './loadout.js';
 import { loadSettings, DIFFICULTY, ENVIRONMENT } from './settings.js';
 import { createAttract } from './attract.js';
 import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlanet } from './celestial.js';
@@ -281,13 +282,15 @@ function applyBody(kind) {
 function applySettings(s) {
   applyDifficulty(s);
   applyEnvironment(s);
-  // Phase 2/3 hooks: applyLivery(ship, s.livery, s.skin); applyLoadout(ship, s.loadout);
+  applyLoadout(ship, s.loadout); // show/hide detachable ordnance (fuel tanks; missiles/laser later)
+  // Phase 2 hook: applyLivery(ship, s.livery, s.skin);
 }
 
 // Enter the pre-game screen (boot, or after MISSION OVER): re-arm the cinematic attract battle as the
 // backdrop (the ship is ally #1), show the console, no player flight. The attract camera runs the view.
 function enterMenu() {
   applyEnvironment(settings);
+  applyLoadout(ship, settings.loadout); // reflect the saved loadout on the menu/preview ship
   if (ship.model) ship.model.visible = true;
   flight.setEnabled(false);
   restartWorld(); // clean slate before the backdrop battle re-arms
@@ -376,7 +379,7 @@ async function init() {
   hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
   targetDisplay = createTargetDisplay(chigKit.template);
   gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld, onMenu: enterMenu });
-  pregame = createPregame({ settings, onLaunch: launchSkirmish, onChange: (s) => applyEnvironment(s) });
+  pregame = createPregame({ settings, onLaunch: launchSkirmish, onChange: (s) => { applyEnvironment(s); applyLoadout(ship, s.loadout); } });
   damage.setCallbacks({
     onEject: () => gameState.eject(),
     onDestroyed: () => gameState.destroyed(),
