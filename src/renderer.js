@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { detectDevice } from './device.js';
 
 // Renderer + scene + chase camera + post chain (RenderPass -> UnrealBloom -> OutputPass).
 // OutputPass applies tone mapping + sRGB at the end; intermediate passes work in linear HDR so the
@@ -11,7 +12,9 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 // This demo is fill-rate bound (fullscreen nebula + raymarched volumetrics), so device-pixel-ratio is
 // the single biggest lever: at dpr 2 we shade 4x the fragments. Cap at 1.3 (like demo-1) — ~25% fewer
 // fullscreen fragments than 1.5, ~4x cheaper than 2.0, for a slight, mostly-unnoticed softening.
-const MAX_PR = 1.3;
+// Mobile is even more fill-bound and has weaker GPUs — cap at 1.0 there (no super-sampling at all).
+const { isMobile: IS_MOBILE } = detectDevice();
+const MAX_PR = IS_MOBILE ? 1.0 : 1.3;
 // Firefox on Linux/Mesa runs the MULTISAMPLED resolve/blit of the EffectComposer HDR target through a
 // slow path that tanks even strong GPUs — so on Firefox we drop MSAA (samples 0). We keep the HDR
 // HALF-FLOAT format though: it's not the slow part, and an 8-bit intermediate bands hard on the smooth
@@ -67,8 +70,10 @@ export function createRenderer(container) {
 
   // (resolution, strength, radius, threshold). Threshold ~0.7 so only bright stuff (thrusters,
   // star cores, hot specular) blooms — the hull stays crisp. Strength is driven by the music.
+  // HALF-RES: bloom is a wide blur, so a half-resolution mip chain looks ~identical but pushes ~4x fewer
+  // fragments through the multi-pass blur. composer.setSize resets it to full res, so setSize re-halves it.
   const bloom = new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    new THREE.Vector2(Math.round(window.innerWidth * 0.5), Math.round(window.innerHeight * 0.5)),
     0.7,
     0.5,
     0.72,
@@ -115,6 +120,7 @@ export function createRenderer(container) {
     // targets render at the wrong resolution after a scale change.
     composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(w, h);
+    bloom.setSize(Math.max(1, Math.round(w * 0.5)), Math.max(1, Math.round(h * 0.5))); // keep bloom half-res (composer.setSize reset it to full)
   }
   window.addEventListener('resize', () => setSize(window.innerWidth, window.innerHeight));
 
