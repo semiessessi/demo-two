@@ -16,6 +16,9 @@ export const DEFAULTS = {
     fuelL: 'empty', L1: 'empty', L2: 'missile-pair', L3: 'lr-missile',
     fuelR: 'empty', R1: 'empty', R2: 'missile-pair', R3: 'lr-missile',
   },
+  // Audio mix (0..1). master scales everything; the rest are per-channel. (voice = future comms/callouts.)
+  // master/effects default to 1.0 so the tuned SFX loudness is unchanged at 100%.
+  volume: { master: 1.0, effects: 1.0, voice: 0.9, music: 0.7 },
 };
 
 // Difficulty presets -> drive the existing data knobs in waves.js + enemies.js (params).
@@ -77,7 +80,7 @@ export function loadSettings() {
     const s = JSON.parse(localStorage.getItem(KEY));
     if (s && typeof s === 'object') {
       // shallow-merge with nested defaults so new fields appear after an update
-      return { ...clone(DEFAULTS), ...s, livery: { ...DEFAULTS.livery, ...(s.livery || {}) }, loadout: { ...DEFAULTS.loadout, ...(s.loadout || {}) } };
+      return { ...clone(DEFAULTS), ...s, livery: { ...DEFAULTS.livery, ...(s.livery || {}) }, loadout: { ...DEFAULTS.loadout, ...(s.loadout || {}) }, volume: { ...DEFAULTS.volume, ...(s.volume || {}) } };
     }
   } catch (e) { /* ignore corrupt/unavailable storage */ }
   return clone(DEFAULTS);

@@ -35,6 +35,7 @@ import { applyLoadout } from './loadout.js';
 import { loadSettings, DIFFICULTY, ENVIRONMENT } from './settings.js';
 import { createAttract } from './attract.js';
 import { createAttractMenu } from './attractMenu.js';
+import { createOptions } from './options.js';
 import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlanet, createRingedPlanet } from './celestial.js';
 import { createPeerTransport } from './net/peer.js';
 import { createNetGame } from './net/netgame.js';
@@ -291,6 +292,7 @@ const starUniforms = {
 const reactive = createReactive();
 const audio = createAudioManager();
 const sfx = createSfx({ getContext: audio.ensureContext, camera, enabled: SOUND }); // shares audio's AudioContext; opt-in via ?sound
+applyVolumes(settings.volume); // apply the saved audio mix (master/effects/music) up front
 const touchControls = createTouchControls(); // on-screen flight controls (touch devices only; no-op stub otherwise)
 const input = createInput(touchControls.read);
 
@@ -341,6 +343,7 @@ let debug = null;
 let quality = null;
 let attract = null;
 let attractMenu = null; // title-screen menu overlay (logo + New Game / Multiplayer / Controls / Options)
+let options = null; // audio-mix options overlay
 let net = null; // co-op netplay (null = single-player)
 let runSubmitted = false; // leaderboard: submit a run once when it ends
 
@@ -448,8 +451,16 @@ function armMenuBattle() {
   if (hud) hud.setVisible(false);
 }
 // In-page overlay swaps (no reload, battle keeps running):
-function showTitle() { if (pregame) pregame.hide(); if (attractMenu) attractMenu.show(); }
-function showMultiplayer() { if (attractMenu) attractMenu.hide(); if (pregame) pregame.show(); }
+function showTitle() { if (pregame) pregame.hide(); if (options) options.hide(); if (attractMenu) attractMenu.show(); }
+function showMultiplayer() { if (attractMenu) attractMenu.hide(); if (options) options.hide(); if (pregame) pregame.show(); }
+function showOptions() { if (attractMenu) attractMenu.hide(); if (pregame) pregame.hide(); if (options) options.show(); }
+// Apply the saved audio mix: master scales everything; effects -> SFX bus, music -> music. (voice reserved.)
+function applyVolumes(v) {
+  if (!v) return;
+  const m = v.master != null ? v.master : 1;
+  if (sfx.setMasterGain) sfx.setMasterGain(m * (v.effects != null ? v.effects : 1));
+  if (audio.setVolume) audio.setVolume(m * (v.music != null ? v.music : 0.7));
+}
 // Full menu entry (boot / mission-over): arm the battle, open on the title menu.
 function enterMenu() { armMenuBattle(); showTitle(); }
 // Start (or join) a co-op session from the lobby. role 'host' mints a room code; 'joiner' connects to
@@ -597,9 +608,11 @@ async function init() {
 
       onBack: showTitle, // in-page: back to the title menu (no reload)
     });
+    options = createOptions({ settings, onChange: applyVolumes, onBack: showTitle });
     attractMenu = createAttractMenu({
       onMultiplayer: showMultiplayer, // in-page: swap to the Multiplayer pane (no reload)
       onControls: () => infoEl?.classList.toggle('open'), // same toggle as Tab
+      onOptions: showOptions, // in-page: the audio-mix options pane
     });
   }
   damage.setCallbacks({
@@ -921,10 +934,12 @@ function firstGesture() {
 }
 window.addEventListener('pointerdown', firstGesture);
 window.addEventListener('keydown', firstGesture, { once: false });
-// Controller-only devices (Xbox/console browsers, a tablet with just a BT pad) never fire pointer/key —
-// treat plugging in / waking a gamepad as the first gesture so audio still unlocks. (Flight already reads
-// the pad every frame via input.poll's getGamepads, so the stick/triggers drive the ship on those too.)
-window.addEventListener('gamepadconnected', firstGesture);
+// Controller-only devices: optimistically TRY to unlock on gamepad connect (some console browsers allow it).
+// gamepadconnected is NOT a user-activation gesture though, so this resume is usually a no-op — and crucially
+// it must NOT run firstGesture(), because that flips `gestured` and would swallow the user's first REAL click,
+// leaving audio permanently silent (the "no sound" regression). So attempt the unlock WITHOUT the flag; a
+// later pointer/key still unlocks for certain.
+window.addEventListener('gamepadconnected', () => { audio.ensureContext(); audio.resumeContext(); sfx.unlock(); });
 
 // Reveal the "click for sound" prompt only if there is actually a track to play.
 audio.ready.then((ok) => {
