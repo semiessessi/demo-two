@@ -198,23 +198,22 @@ export function createBlackHole() {
         vec2 dp = vec2(dot(hit, T), dot(hit, Bv));
         float cs = cos(spin), sn = sin(spin);
         vec2 dpr = vec2(cs * dp.x - sn * dp.y, sn * dp.x + cs * dp.y);
-        vec2 wv = vec2(fbm(dpr * 0.6 + 2.0), fbm(dpr * 0.6 + 9.0)) - 0.5; // domain warp -> organic, non-repeating wisps (no obvious pattern, no atan2)
-        float turb = fbm(dpr * 1.0 + wv * 1.8 + vec2(uTime * 0.04, 0.0));
-        turb = 0.45 + 0.55 * turb;                               // compress contrast -> soft + diffuse, not harsh
+        float turb = fbm(dpr * 0.9 + vec2(uTime * 0.05, 3.0));
+        turb = mix(turb, fbm(dpr * 1.8 + 11.0), 0.4); // finer co-rotating filaments
         // temperature ramp: blue-white (inner) -> orange -> deep red (outer)
-        vec3 hot = vec3(0.72, 0.86, 1.0);   // cool blue-white (hot inner)
-        vec3 mid = vec3(0.40, 0.52, 0.92);  // cyan-blue
-        vec3 cool = vec3(0.26, 0.18, 0.52); // deep blue-purple outer
+        vec3 hot = vec3(0.95, 0.55, 1.0);   // hot inner -> violet-white
+        vec3 mid = vec3(1.0, 0.32, 0.42);   // red-magenta
+        vec3 cool = vec3(0.62, 0.05, 0.24); // deep red-purple outer
         vec3 col = mix(mix(hot, mid, smoothstep(0.0, 0.45, t)), cool, smoothstep(0.45, 1.0, t));
-        float bright = (0.7 - 0.45 * t) * (0.85 + 0.3 * turb); // dim + low-contrast (diffuse, not harsh)
+        float bright = (1.7 - 1.2 * t) * (0.55 + 0.9 * turb);
         // relativistic doppler beaming: prograde orbital velocity vs view
         vec3 vel = normalize(cross(N, hit));
         float beta = clamp(0.62 / sqrt(rr), 0.0, 0.72);
         float approach = dot(vel, -normalize(dir));
-        float boost = pow(clamp(1.0 / (1.0 - beta * approach), 0.0, 2.6), 1.5); // gentler beaming (the bright side was harsh)
+        float boost = pow(clamp(1.0 / (1.0 - beta * approach), 0.0, 4.0), 2.6);
         col = mix(col, vec3(0.7, 0.85, 1.0), clamp(approach * beta * 0.7, 0.0, 0.6)); // blueshift toward viewer
         // soft inner/outer rims
-        float rim = smoothstep(0.0, 0.18, t) * smoothstep(1.0, 0.6, t); // wide soft edges -> diffuse, nebulous
+        float rim = smoothstep(0.0, 0.06, t) * smoothstep(1.0, 0.85, t);
         return col * bright * boost * rim;
       }
 
