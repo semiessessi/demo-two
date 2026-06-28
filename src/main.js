@@ -641,7 +641,10 @@ async function init() {
 
       onBack: showTitle, // in-page: back to the title menu (no reload)
     });
-    options = createOptions({ settings, onChange: applyVolumes, onBack: showTitle });
+    options = createOptions({
+      settings, onChange: applyVolumes, onBack: showTitle,
+      invertPitch: { show: touchControls.active, initial: touchControls.invertPitch, onChange: (on) => touchControls.setInvertPitch(on) },
+    });
     attractMenu = createAttractMenu({
       onMultiplayer: showMultiplayer, // in-page: swap to the Multiplayer pane (no reload)
       onControls: () => infoEl?.classList.toggle('open'), // same toggle as Tab

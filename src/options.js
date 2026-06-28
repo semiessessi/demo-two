@@ -44,7 +44,7 @@ const CHANNELS = [
   { key: 'music', label: 'Music' },
 ];
 
-export function createOptions({ settings, onChange, onBack } = {}) {
+export function createOptions({ settings, onChange, onBack, invertPitch } = {}) {
   injectStyle();
   const wrap = document.createElement('div');
   wrap.id = 'options-menu';
@@ -76,6 +76,22 @@ export function createOptions({ settings, onChange, onBack } = {}) {
       if (onChange) onChange(vol);
     });
     row.appendChild(lab); row.appendChild(range); row.appendChild(val);
+    panel.appendChild(row);
+  }
+
+  // Touch-only: invert the on-screen stick's pitch axis (some players want drag-up = climb). Shown only
+  // when there are touch controls to apply it to.
+  if (invertPitch && invertPitch.show) {
+    const row = document.createElement('div');
+    row.className = 'om-row';
+    const lab = document.createElement('label');
+    lab.textContent = 'Invert Pitch';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!invertPitch.initial;
+    cb.style.cssText = 'flex:0 0 auto; width:18px; height:18px; accent-color:#9ec7ff; cursor:pointer';
+    cb.addEventListener('change', () => { if (invertPitch.onChange) invertPitch.onChange(cb.checked); });
+    row.appendChild(lab); row.appendChild(cb);
     panel.appendChild(row);
   }
 
