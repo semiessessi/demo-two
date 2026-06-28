@@ -264,11 +264,10 @@ function updateBackdropBodies(dt) {
     habitable.planet.rotation.y += 0.005 * dt; // spin under the fixed crescent terminator
   }
   if (blackhole && blackhole.group.visible) {
-    blackhole.group.position.copy(camera.position).addScaledVector(BH_DIR, 3600);
-    blackhole.plane.quaternion.copy(camera.quaternion); // billboard: face the camera
+    blackhole.group.position.copy(camera.position); // sky-pass sphere centred on the camera (no billboard)
     const u = blackhole.mat.uniforms;
     u.uCamPos.value.copy(camera.position);
-    u.uCenter.value.copy(blackhole.group.position);
+    u.uCenter.value.copy(camera.position).addScaledVector(BH_DIR, 3600); // the hole sits in the BH_DIR sky direction
     u.uTime.value += dt;
   }
 }
