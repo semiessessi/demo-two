@@ -89,9 +89,8 @@ void main() {
   float inClouds = smoothstep(0.12, 0.6, density);
   float knots = smoothstep(0.66, 0.84, fineN) * inClouds; // bright red/orange emission
   float voids = smoothstep(0.30, 0.14, fineN) * inClouds; // dark dust
-  // The warm emission knots are a CERBERUS-only flourish (uPatchBright is on only in that environment).
-  if (uPatchBright > 0.001) col += vec3(1.0, 0.45, 0.12) * knots * 0.16;
-  col *= 1.0 - 0.8 * voids;
+  // (Removed the cerberus-only red/orange emission knots — they read as ugly red blobs all over the sky.)
+  col *= 1.0 - 0.8 * voids; // keep the dark dust voids
 
   // Milky Way on the REAL galactic plane (perpendicular to uMwPole), with body + wispy high-freq
   // filaments and a thin central dust rift (Great Rift) — tuned to read as a textured band, not a blob.
