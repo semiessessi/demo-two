@@ -821,7 +821,7 @@ audio.ready.then((ok) => {
     // no MP3 present — make the audio controls clearly inert
     if (playBtn) playBtn.style.opacity = '0.4';
     const label = document.getElementById('label');
-    if (label) label.textContent = 'SA-43 Hammerhead · (drop an MP3 for music)';
+    if (label) label.textContent = 'SA-43: Hammerhead · (drop an MP3 for music)';
   }
 });
 

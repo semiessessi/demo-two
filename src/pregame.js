@@ -42,7 +42,7 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin }) 
   el('div', `${FONT}font-size:22px;letter-spacing:0.22em;color:#eaeefc;text-shadow:0 0 16px rgba(120,170,255,0.4);`, panel)
     .textContent = 'AI SKIRMISH';
   el('div', `${FONT}font-size:11px;color:#8a96b4;margin-top:-12px;`, panel)
-    .textContent = 'SA-43 Hammerhead · configure & launch';
+    .textContent = 'SA-43: Hammerhead · configure & launch';
 
   // ---- a segmented single-choice row ----
   function segmented(title, options, getCur, setCur) {

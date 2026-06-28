@@ -6,7 +6,7 @@ export const CREDITS = [
     kind: 'Models',
     items: [
       {
-        name: 'SA-43 “Hammerhead”',
+        name: 'SA-43: Hammerhead',
         author: 'Hangar.b.productions',
         license: 'CC-BY-4.0',
         url: 'https://sketchfab.com/3d-models/sa-43-hammerhead-2c4579fd8add4d1aa1f8f4d93a7c4996',
