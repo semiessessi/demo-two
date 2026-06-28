@@ -56,9 +56,12 @@ const ATTRACT = /[?&]attract\b/.test(window.location.search);
 const ROOM = new URLSearchParams(window.location.search).get('room'); // co-op join code -> auto-join as joiner
 const SKIRMISH = ROOM != null || /[?&]skirmish\b/.test(window.location.search); // co-op needs the lobby menu
 
-// Sound effects (explosions + engine hum) are opt-in for now — they still need work, so they're gated
+// Sound effects (explosions, weapons, flybys) are opt-in for now — they still need work, so they're gated
 // behind ?sound and silent by default. Music (audio.js / track.mp3) is independent of this flag.
 const SOUND = /[?&]sound\b/.test(window.location.search);
+// The engine synth still sounds rough, so it's gated SEPARATELY behind ?engine (needs ?sound too) — off by
+// default even when the rest of the SFX are on.
+const ENGINE_SFX = /[?&]engine\b/.test(window.location.search);
 
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
@@ -310,10 +313,10 @@ let net = null; // co-op netplay (null = single-player)
 function restartWorld() {
   ship.pivot.position.set(0, 0, 0);
   ship.pivot.quaternion.identity();
-  damage.reset();
+  if (damage) damage.reset();
   enemyMgr.reset();
   projectiles.reset();
-  waves.reset();
+  if (waves) waves.reset();
   if (debris) debris.reset();
   if (playerDebris) playerDebris.reset();
   if (ship.model) ship.model.visible = true; // re-show the hull after a destroyed cutscene
@@ -462,6 +465,13 @@ function bootFlight() {
   if (hud) hud.setVisible(true);
   if (gameState.mode === 'menu') gameState.launch(); // menu -> flying (audio unlocks on first input)
 }
+// Pure ?attract: no player systems (no damage/gameState/waves/flight) and no menu — just apply the saved
+// environment and run the self-contained cinematic battle. (bootFlight/enterMenu both touch player-only
+// systems, so attract must NOT route through them.)
+function bootAttract() {
+  applyEnvironment(settings);
+  if (attract) { attract.resume(); attract.setVisible(true); }
+}
 
 async function init() {
   stars = await buildStarfield(starUniforms);
@@ -600,6 +610,7 @@ async function init() {
   onSessionChange(applyProfile);
 
   if (SKIRMISH) enterMenu(); // open on the AI Skirmish setup screen (flight begins on Launch)
+  else if (ATTRACT) bootAttract(); // pure attract: cinematic AI battle, no player/menu boot
   else bootFlight();         // default: straight into flight with the saved settings (light load, no menu)
   if (ROOM && pregame) { startCoop('joiner', ROOM.toUpperCase()); if (pregame.setRoster) pregame.setRoster([], ROOM.toUpperCase()); } // ?room -> auto-join
   startLoop();
@@ -651,7 +662,7 @@ function attractFrame(dt) {
   nebula.uniforms.uTime.value += dt;
   starUniforms.uTime.value += dt;
   lighting.update(dt, { player: attract.focus, thrust: 0.8, projectiles, enemies: enemyMgr.enemies }); // cascades fit to the camera; dynamic lights around the action
-  sfx.engine(0.85); // steady engine hum (allies cruise ~0.85)
+  if (ENGINE_SFX) sfx.engine(0.85); // steady engine hum (allies cruise ~0.85) — ?engine only
   updateFlybys(dt); // Chig whooshes past the cinematic camera
   if (OCCLUDE) { // smoke occlusion: the furball is the heaviest case, so cull hidden puffs here too
     nebula.mesh.visible = false;
@@ -740,7 +751,7 @@ function startLoop() {
 
     for (const m of ship.engineMaterials) m.emissiveIntensity = 1.8 + r.thrust * 3.2;
     thrusters.update(r.thrust, dt);
-    sfx.engine(r.thrust); // engine hum rises with thrust/boost
+    if (ENGINE_SFX) sfx.engine(r.thrust); // engine rises with thrust/boost — ?engine only (still rough)
     sfx.gunTick(dt); // gate the cannon fire-loop (gunFiring() is pulsed per shot from the cannon's onFire)
     updateFlybys(dt); // Chig whooshes past the player
     if (rcs) rcs.update(dt, flying); // maneuvering jets — fire from the ship's actual rotation + deceleration
