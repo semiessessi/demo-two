@@ -8,6 +8,7 @@
 import { issueSession, readSession } from './auth/session.js';
 import { googleExchange } from './auth/google.js';
 import { facebookExchange } from './auth/facebook.js';
+import * as social from './social.js';
 
 const CORS = {
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
@@ -59,6 +60,25 @@ export default {
         const body = await request.json().catch(() => ({}));
         const p = await patchPlayer(env, s.playerId, body);
         return json({ player: p }, 200, request);
+      }
+      // --- social (M3): friends + invites (all require auth) ---
+      const seg = path.split('/').filter(Boolean);
+      if (path.startsWith('/players/') || path.startsWith('/me/') || path.startsWith('/friend-requests') || path.startsWith('/invite')) {
+        const s = await readSession(request, env);
+        if (!s) return json({ error: 'unauthenticated' }, 401, request);
+        const me = s.playerId;
+        const body = (request.method === 'POST' || request.method === 'PATCH') ? await request.json().catch(() => ({})) : {};
+        const wrap = (res) => json(res, res.error ? (res.status || 400) : 200, request);
+        if (path === '/players/search' && request.method === 'GET') return json({ players: await social.searchPlayers(env, url.searchParams.get('q') || '', me) }, 200, request);
+        if (path === '/me/friends' && request.method === 'GET') return json({ friends: await social.listFriends(env, me) }, 200, request);
+        if (seg[0] === 'me' && seg[1] === 'friends' && seg.length === 3 && request.method === 'DELETE') return wrap(await social.removeFriend(env, me, seg[2]));
+        if (path === '/me/friend-requests' && request.method === 'GET') return json({ requests: await social.listRequests(env, me, url.searchParams.get('dir') || 'in') }, 200, request);
+        if (path === '/friend-requests' && request.method === 'POST') return wrap(await social.sendRequest(env, me, body.addressee_id));
+        if (seg[0] === 'friend-requests' && seg.length === 3 && request.method === 'POST') return wrap(await social.actOnRequest(env, me, seg[1], seg[2]));
+        if (path === '/invite' && request.method === 'POST') return wrap(await social.sendInvite(env, me, body.invitee_id, body.room_code));
+        if (path === '/me/invites' && request.method === 'GET') return json({ invites: await social.listInvites(env, me) }, 200, request);
+        if (seg[0] === 'invite' && seg.length === 3 && request.method === 'POST') return wrap(await social.actOnInvite(env, me, seg[1], seg[2]));
+        if (path === '/me/notifications' && request.method === 'GET') return json(await social.notifications(env, me), 200, request);
       }
       return json({ error: 'not found', path }, 404, request);
     } catch (e) {

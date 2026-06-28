@@ -1,6 +1,7 @@
 import { DIFFICULTY, ENVIRONMENT, saveSettings } from './settings.js';
 import { peerJsWorksHere } from './net/webrtc-detect.js';
 import { getConfig, getPlayer, isSignedIn, signInWithGoogle, signInWithFacebook, signOut, onSessionChange } from './social/auth.js';
+import * as friends from './social/friends.js';
 
 // Pre-game / "AI Skirmish" setup screen — a self-building DOM overlay (same dark glassy style as the
 // HUD). Sections: Markings, Loadout, Environment, Difficulty, and Launch. Edits write through to the
@@ -142,6 +143,7 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin }) 
 
   // ---- Co-op (beta) ----
   let coopStatus = null;
+  let hostCode = null; // set when hosting -> lets Friends "Invite" target this room
   if (peerJsWorksHere() && (onHost || onJoin)) {
     const co = el('div', '', panel);
     el('div', LABEL, co).textContent = 'Co-op (beta)';
@@ -155,9 +157,50 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin }) 
     const joinBtn = el('button', BTN, row);
     joinBtn.textContent = 'Join';
     coopStatus = el('div', `${FONT}font-size:11px;color:#9fb0d0;margin:6px 2px 0;white-space:pre-line;`, co);
-    hostBtn.onclick = () => { if (onHost) { const code = onHost(); coopStatus.textContent = `Hosting — share code: ${code}\nwaiting for players… then LAUNCH`; } };
+    hostBtn.onclick = () => { if (onHost) { hostCode = onHost(); coopStatus.textContent = `Hosting — share code: ${hostCode}\nwaiting for players… then LAUNCH`; renderFriends(); } };
     joinBtn.onclick = () => { const c = codeInp.value.trim().toUpperCase(); if (c && onJoin) { onJoin(c); coopStatus.textContent = `Joining ${c}…\nwait for the host to launch`; } };
   }
+
+  // ---- Friends + invites (signed-in only) ----
+  const fr = el('div', '', panel);
+  const frLabel = el('div', LABEL, fr); frLabel.textContent = 'Friends';
+  const frBody = el('div', '', fr);
+  const addRow = el('div', 'display:flex;gap:6px;margin-top:4px;', fr);
+  const addInp = el('input', `${FONT}flex:1;font-size:12px;padding:6px 8px;text-transform:uppercase;`
+    + 'background:rgba(255,255,255,0.06);border:1px solid rgba(150,180,255,0.2);border-radius:7px;', addRow);
+  addInp.placeholder = 'add by callsign';
+  const addBtn = el('button', BTN, addRow); addBtn.textContent = 'Add';
+  addBtn.onclick = async () => {
+    const q = addInp.value.trim().toUpperCase(); if (q.length < 2) return;
+    const found = await friends.searchPlayers(q);
+    if (found[0]) { await friends.sendRequest(found[0].player_id); addInp.value = ''; renderFriends(); }
+    else { addInp.value = ''; addInp.placeholder = 'no pilot found'; }
+  };
+  function frRow(label, actions) {
+    const r = el('div', 'display:flex;align-items:center;gap:6px;margin:3px 0;', frBody);
+    el('span', `${FONT}flex:1;font-size:12px;color:#cdd6ea;`, r).textContent = label;
+    for (const [txt, fn] of actions) { const b = el('button', BTN + 'padding:4px 8px;', r); b.textContent = txt; b.onclick = fn; }
+  }
+  async function renderFriends() {
+    const on = isSignedIn();
+    fr.style.display = on ? '' : 'none';
+    if (!on) return;
+    frBody.innerHTML = '';
+    const [list, reqs, invs] = await Promise.all([friends.listFriends(), friends.listRequests('in'), friends.listInvites()]);
+    for (const inv of invs) frRow(`✉ ${inv.from_callsign} invited you → ${inv.room_code}`, [['Join', async () => { await friends.actInvite(inv.id, 'accept'); if (onJoin) onJoin(inv.room_code); renderFriends(); }], ['✕', async () => { await friends.actInvite(inv.id, 'decline'); renderFriends(); }]]);
+    for (const rq of reqs) frRow(`${rq.callsign || rq.display_name} wants to be friends`, [['✓', async () => { await friends.actRequest(rq.id, 'accept'); renderFriends(); }], ['✕', async () => { await friends.actRequest(rq.id, 'decline'); renderFriends(); }]]);
+    for (const f of list) {
+      const actions = [];
+      if (hostCode) actions.push(['Invite', async () => { await friends.sendInvite(f.player_id, hostCode); }]);
+      actions.push(['✕', async () => { await friends.removeFriend(f.player_id); renderFriends(); }]);
+      frRow(f.callsign || f.display_name, actions);
+    }
+    if (!list.length && !reqs.length && !invs.length) el('div', `${FONT}font-size:11px;color:#8a96b4;`, frBody).textContent = 'no friends yet — add by callsign';
+  }
+  renderFriends();
+  onSessionChange(() => renderFriends());
+  const frPoll = setInterval(() => { if (isSignedIn() && root.style.display !== 'none') renderFriends(); }, 15000); // surface incoming invites/requests
+  void frPoll;
 
   // ---- Launch ----
   const launch = el('button', `${FONT}font-size:16px;letter-spacing:0.14em;color:#eaeefc;cursor:pointer;`
