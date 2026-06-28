@@ -1,0 +1,14 @@
+{
+  "name": "demo-two-social",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy",
+    "migrate:local": "wrangler d1 migrations apply demo-two-social --local",
+    "migrate:remote": "wrangler d1 migrations apply demo-two-social --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.102.0"
+  }
+}

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SA-43: Hammerhead — sign-in</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: ui-sans-serif, system-ui, sans-serif; background: #030308; color: #cdd6ea;
+           margin: 0; min-height: 100vh; display: grid; place-items: center; }
+    p { opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <p>Signing you in…</p>
+  <script>
+    // OAuth redirect lands here (?code=...&state=...); relay it to the opener window via postMessage,
+    // then close. The opener verifies the state. (Adapted from kemetic/senet/auth/callback.html.)
+    (function () {
+      try {
+        var search = new URLSearchParams(location.search);
+        var state = search.get('state') || '';
+        var openerOrigin = parseOpenerOrigin(state);
+        var targetOrigin = isAllowed(openerOrigin) ? openerOrigin : location.origin;
+        var msg = {
+          type: 'd2-oauth-callback',
+          code: search.get('code'),
+          state: state,
+          error: search.get('error'),
+          error_description: search.get('error_description'),
+        };
+        if (window.opener && !window.opener.closed) window.opener.postMessage(msg, targetOrigin);
+      } catch (e) {
+        console.error('[d2] auth/callback failed:', e);
+      } finally {
+        setTimeout(function () { try { window.close(); } catch (e) {} }, 50);
+      }
+    })();
+
+    function parseOpenerOrigin(state) {
+      if (!state) return null;
+      var dot = state.indexOf('.');
+      if (dot <= 0) return null;
+      try {
+        var b64 = state.slice(0, dot).replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        var bin = atob(b64);
+        for (var i = 0; i < bin.length; i++) { var c = bin.charCodeAt(i); if (c < 0x20 || c > 0x7e) return null; }
+        return bin;
+      } catch (_) { return null; }
+    }
+    function isAllowed(origin) {
+      if (!origin) return false;
+      if (origin === 'https://d2.redmarmosetstudios.com') return true;
+      return /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+    }
+  </script>
+</body>
+</html>

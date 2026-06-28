@@ -36,6 +36,7 @@ import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlane
 import { createPeerTransport } from './net/peer.js';
 import { createNetGame } from './net/netgame.js';
 import { peerJsWorksHere } from './net/webrtc-detect.js';
+import { refreshMe, onSessionChange } from './social/auth.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin. It can also be opted into on the deployed
@@ -585,6 +586,16 @@ async function init() {
   // Pre-warm every material's shader program once now (during the fade-in) so the FIRST explosion /
   // death-debris / muzzle flash doesn't pay a compile stall mid-fight.
   try { renderer.compile(scene, camera); } catch (e) { console.warn('[prewarm] compile skipped', e); }
+
+  // hydrate the signed-in pilot's identity into the livery (used for the co-op `hello` + display)
+  const applyProfile = (p) => {
+    if (!p) return;
+    if (p.callsign) settings.livery.callsign = p.callsign;
+    if (p.squadron) settings.livery.squadron = p.squadron;
+    if (p.livery_color) settings.livery.color = p.livery_color;
+  };
+  refreshMe().then(applyProfile);
+  onSessionChange(applyProfile);
 
   if (SKIRMISH) enterMenu(); // open on the AI Skirmish setup screen (flight begins on Launch)
   else bootFlight();         // default: straight into flight with the saved settings (light load, no menu)

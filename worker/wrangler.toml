@@ -1,0 +1,28 @@
+# demo-two-social — the sign-in / profile / (later) friends+leaderboards backend for SA-43: Hammerhead.
+#
+# Deploy SEPARATELY from the static site, and route it at the API path via a DASHBOARD route:
+#   Cloudflare dashboard -> Workers -> demo-two-social -> Domains & Routes -> Add route:
+#     pattern = d2.redmarmosetstudios.com/api/*   zone = redmarmosetstudios.com
+# Do NOT put that route in [[routes]] here — it would collide with the static-assets worker's Custom
+# Domain. The static worker keeps serving everything except /api/*.
+#
+# Secrets (NOT in this file — set with `wrangler secret put <NAME>` in this dir):
+#   GOOGLE_CLIENT_SECRET, FACEBOOK_CLIENT_SECRET, SESSION_SIGNING_KEY (openssl rand -hex 32)
+#
+# D1: `wrangler d1 create demo-two-social` then paste the database_id below, then
+#     `wrangler d1 migrations apply demo-two-social --remote` (and --local for dev).
+
+name = "demo-two-social"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+workers_dev = true
+
+[vars]
+# public OAuth client identifiers (safe to commit; the secrets are separate)
+GOOGLE_CLIENT_ID = "878982957875-9rgcj8ebv6f75kk5vgm0o49mciltsdvc.apps.googleusercontent.com"
+FACEBOOK_CLIENT_ID = "2358351737984857"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "demo-two-social"
+database_id = "PASTE_AFTER_wrangler_d1_create"

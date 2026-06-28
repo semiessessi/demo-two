@@ -1,5 +1,6 @@
 import { DIFFICULTY, ENVIRONMENT, saveSettings } from './settings.js';
 import { peerJsWorksHere } from './net/webrtc-detect.js';
+import { getConfig, getPlayer, isSignedIn, signInWithGoogle, signInWithFacebook, signOut, onSessionChange } from './social/auth.js';
 
 // Pre-game / "AI Skirmish" setup screen — a self-building DOM overlay (same dark glassy style as the
 // HUD). Sections: Markings, Loadout, Environment, Difficulty, and Launch. Edits write through to the
@@ -43,6 +44,30 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin }) 
     .textContent = 'AI SKIRMISH';
   el('div', `${FONT}font-size:11px;color:#8a96b4;margin-top:-12px;`, panel)
     .textContent = 'SA-43: Hammerhead · configure & launch';
+
+  // ---- Pilot (sign-in) ----
+  const pilot = el('div', '', panel);
+  el('div', LABEL, pilot).textContent = 'Pilot';
+  const pilotBody = el('div', '', pilot);
+  let cfg = {};
+  getConfig().then((c) => { cfg = c || {}; renderPilot(); });
+  function renderPilot() {
+    pilotBody.innerHTML = '';
+    if (isSignedIn()) {
+      const p = getPlayer() || {};
+      const row = el('div', 'display:flex;align-items:center;gap:8px;', pilotBody);
+      el('span', `${FONT}flex:1;font-size:12px;color:#cdd6ea;`, row).textContent = `${p.callsign || p.display_name || 'Pilot'}`;
+      const out = el('button', BTN, row); out.textContent = 'Sign out'; out.onclick = () => signOut();
+    } else {
+      const row = el('div', 'display:flex;gap:6px;', pilotBody);
+      if (cfg.googleClientId) { const g = el('button', BTN + 'flex:1;', row); g.textContent = 'Google'; g.onclick = () => signInWithGoogle().catch((e) => { msg.textContent = e.message; }); }
+      if (cfg.facebookAppId) { const f = el('button', BTN + 'flex:1;', row); f.textContent = 'Facebook'; f.onclick = () => signInWithFacebook().catch((e) => { msg.textContent = e.message; }); }
+      if (!cfg.googleClientId && !cfg.facebookAppId) el('span', `${FONT}font-size:11px;color:#8a96b4;`, row).textContent = 'sign-in offline';
+    }
+  }
+  const msg = el('div', `${FONT}font-size:11px;color:#c98;margin:4px 2px 0;`, pilot);
+  renderPilot();
+  onSessionChange(() => { msg.textContent = ''; renderPilot(); });
 
   // ---- a segmented single-choice row ----
   function segmented(title, options, getCur, setCur) {
