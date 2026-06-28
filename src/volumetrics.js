@@ -343,7 +343,16 @@ export function createVolumetrics(scene, camera, opts = {}) {
     u.uEmissive.value = Math.max(0, 1.25 - age / 0.5); // white-hot core flash, then cools to thick smoke
     u.uSigma.value = tunable.fireSigma;
     u.uTime.value = elapsed;
-    u.uSteps.value = quality === 'low' ? 24 : tunable.explSteps;
+    // distance/occlusion cheapening (like the smoke puffs): a furball spawns many explosions at once, and
+    // a distant or engulfing blast doesn't need full steps + self-shadow. Close "hero" blasts stay full.
+    const distSq = s.mesh.position.distanceToSquared(camera.position);
+    const near = distSq < cur * cur;
+    let st = quality === 'low' ? 24 : tunable.explSteps;
+    if (distSq > 160 * 160) st = quality === 'low' ? 14 : 20;
+    else if (distSq > 80 * 80) st = quality === 'low' ? 18 : 26;
+    if (near) st = quality === 'low' ? 10 : 16;
+    u.uSteps.value = st;
+    u.uSelfShadow.value = (quality === 'low' || near || distSq > 130 * 130) ? 0 : 1;
   }
 
   function stepPuff(s, dt) {
