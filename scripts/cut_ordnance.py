@@ -16,7 +16,7 @@ import bpy, bmesh, sys
 from mathutils.kdtree import KDTree
 
 argv = sys.argv[sys.argv.index('--') + 1:]
-SRC, TANKS, BOMBS, OUT = argv[0], argv[1], argv[2], argv[3]
+SRC, TANKS, BOMBS, MISSILES, OUT = argv[0], argv[1], argv[2], argv[3], argv[4]
 EPS = 1e-3
 
 def log(*a): print('[cut]', *a)
@@ -82,9 +82,9 @@ def process(part, base_name, keep_body_mesh):
     bpy.data.objects.remove(part, do_unlink=True)  # the original isolated import no longer needed
     return cap, body
 
-# tanks -> keep bodies as Tank_L / Tank_R ; bombs -> drop bodies, keep cap plates only
+# tanks + missiles -> keep bodies as Tank_L/R, Missile_L/R ; bombs -> drop bodies, keep cap plates only
 caps = []
-for fbx, prefix, keep in ((TANKS, 'Tank', True), (BOMBS, 'BombStn', False)):
+for fbx, prefix, keep in ((TANKS, 'Tank', True), (BOMBS, 'BombStn', False), (MISSILES, 'Missile', True)):
     before = set(bpy.data.objects.keys())
     parts = import_parts(fbx, before)
     for o in parts:

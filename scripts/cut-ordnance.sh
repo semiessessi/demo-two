@@ -20,6 +20,7 @@ echo "[cut-ordnance] Blender surgery ..."
   "$SRC/SA-43.fbx" \
   "$SRC/hammerhead-1-just-tanks.fbx" \
   "$SRC/hammerhead-1-just-bombs.fbx" \
+  "$SRC/hammerhead-1-just-missiles.fbx" \
   "$TMP"
 
 echo "[cut-ordnance] optimize -> public/hammerhead.glb ..."

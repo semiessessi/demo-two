@@ -40,6 +40,8 @@ export async function loadShip() {
     // detachable ordnance (separated from the hull in scripts/cut_ordnance.py) -> show/hide per loadout
     if (/^tank_l/i.test(o.name)) ordnance.fuelL = o;
     else if (/^tank_r/i.test(o.name)) ordnance.fuelR = o;
+    else if (/^missile_l/i.test(o.name)) ordnance.missileL = o;
+    else if (/^missile_r/i.test(o.name)) ordnance.missileR = o;
 
     // drop the hangar floor and the deployed gear — we're in space
     if (/ground/i.test(mat) || /ground/i.test(o.name)) {
