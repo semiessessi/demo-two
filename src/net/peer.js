@@ -11,6 +11,18 @@ const PEER_PREFIX = 'd2-';
 const JOIN_RETRY_MS = 1200;
 const JOIN_GIVEUP_MS = 30000;
 
+// ICE servers: Google STUN (free, for the common direct/hole-punch case) + a free public TURN relay
+// (OpenRelay) as the fallback when symmetric NAT/firewalls block a direct path — without TURN ~10-20%
+// of cross-internet peers never connect. WebRTC only relays through TURN when it must; direct still wins
+// when possible. Swap in a paid/own TURN (e.g. Cloudflare Realtime) later for reliability at scale.
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+];
+const PEER_OPTS = { config: { iceServers: ICE_SERVERS } };
+
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no O/I/L/0/1 ambiguity
 export function shortCode() {
   let id = '';
@@ -59,11 +71,11 @@ export function createPeerTransport({ role, code }) {
   function init() {
     if (role === 'host') {
       myCode = code || shortCode();
-      peer = new window.Peer(PEER_PREFIX + myCode);
+      peer = new window.Peer(PEER_PREFIX + myCode, PEER_OPTS);
       peer.on('open', (id) => console.log('[d2net] host peer open', id));
       peer.on('connection', (c) => { console.log('[d2net] host got joiner', c.peer); conn = c; wireConn(c); });
     } else {
-      peer = new window.Peer();
+      peer = new window.Peer(undefined, PEER_OPTS);
       peer.on('open', () => {
         giveUpAt = Date.now() + JOIN_GIVEUP_MS;
         joinerConnect();
