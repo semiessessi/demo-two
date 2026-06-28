@@ -66,7 +66,7 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
   const introSlots = allies.map((a) => a.pos.clone());
   let phase = 'introAllies'; // 'introAllies' -> 'introChigs' -> 'battle'
   let phaseT = 0;
-  const TA = 5.0, TC = 4.5; // intro shot durations (s)
+  const TA = 5.0, TC = 6.5; // intro shot durations (s) — longer Chig phase so both formations read before they close
   const introSpeed = 40; // == DEFAULT_TUNE.speed so the handoff to combat AI has no acceleration pop
   const introHeading = new THREE.Vector3(0, 0, -1); // formation sweeps toward -Z (where the camera waits)
   const introCenter = new THREE.Vector3(34, -5, 360); // starts far back + off to one side; arrives near origin
@@ -85,6 +85,9 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
       const a = allies[i]; if (!a.alive) continue;
       const s = introSlots[i];
       a.pos.copy(introCenter).addScaledVector(_ir, s.x).addScaledVector(_iu, s.y).addScaledVector(_ifw, -s.z);
+      // gentle per-ship wobble on the way in (phase off the continuously-advancing runway depth, so no seam)
+      const wob = introCenter.z * 0.07 + i * 1.9;
+      a.pos.addScaledVector(_ir, Math.sin(wob) * 3.0).addScaledVector(_iu, Math.sin(wob * 0.6 + 1.3) * 2.2);
       a.vel.copy(_ifw).multiplyScalar(introSpeed); // primes a.update's steer/orient at the handoff
       a.quat.copy(_iq);
       allyThrusters[i].update(0.9, dt);
@@ -118,11 +121,11 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
   let spawnTimer = 0;
   // `key` is either a formation index (ring spread, used by looping respawns) or an explicit Vector3 bearing
   // (used by the intro to cluster the wave on one side).
-  function spawnOneFormation(key, c) {
+  function spawnOneFormation(key, c, dist) {
     let dir;
     if (key && key.isVector3) dir = key;
-    else { const ang = (key / 6) * Math.PI * 2 + 0.4; dir = new THREE.Vector3(Math.cos(ang), (Math.random() - 0.5) * 0.3, Math.sin(ang)).normalize(); }
-    const pos = c.clone().addScaledVector(dir, 410);
+    else { const ang = (key / 3) * Math.PI * 2 + 0.4; dir = new THREE.Vector3(Math.cos(ang), (Math.random() - 0.5) * 0.3, Math.sin(ang)).normalize(); }
+    const pos = c.clone().addScaledVector(dir, dist || 410);
     const heading = c.clone().sub(pos).normalize();
     enemyMgr.spawnFormation({ pattern: 'vee', count: 4, pos, heading, difficulty });
     vfx.firework(pos, 1.0); // warp-in flash
@@ -131,8 +134,8 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
   function spawnWave(stagger) {
     updateFocus();
     const c = focus.pos.clone();
-    if (stagger) { for (let i = 0; i < 6; i++) spawnQueue.push({ key: i, c }); spawnTimer = 0; }
-    else for (let i = 0; i < 6; i++) spawnOneFormation(i, c);
+    if (stagger) { for (let i = 0; i < 3; i++) spawnQueue.push({ key: i, c, dist: 410 }); spawnTimer = 0; }
+    else for (let i = 0; i < 3; i++) spawnOneFormation(i, c, 410);
   }
   // Intro variant: cluster the whole wave on ONE random bearing (~±35°) so the reveal shot frames them as a
   // single incoming wall, warping in one group at a time.
@@ -140,10 +143,10 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     updateFocus();
     const c = focus.pos.clone();
     const base = Math.random() * Math.PI * 2;
-    for (let i = 0; i < 6; i++) {
-      const off = ((i - 2.5) / 5) * 1.2; // spread ~±0.6 rad around the bearing
+    for (let i = 0; i < 3; i++) {
+      const off = ((i - 1) / 3) * 1.0; // spread ~±0.33 rad around the bearing
       const dir = new THREE.Vector3(Math.cos(base + off), (Math.random() - 0.5) * 0.2, Math.sin(base + off)).normalize();
-      spawnQueue.push({ key: dir, c });
+      spawnQueue.push({ key: dir, c, dist: 1000 }); // warp in FAR -> you see both formations fly in; the fight starts as they close
     }
     spawnTimer = 0;
   }
@@ -153,7 +156,7 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     if (spawnTimer > 0) return;
     spawnTimer = 0.5; // one 4-ship formation every ~0.5s
     const it = spawnQueue.shift();
-    spawnOneFormation(it.key, it.c);
+    spawnOneFormation(it.key, it.c, it.dist);
   }
   function maybeRespawn(dt) {
     processSpawnQueue(dt);
@@ -429,7 +432,13 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     downAlly = false;
     difficulty = 0.4;
     snap = true; // hard-cut the camera back to the action
-    spawnWave();
+    // Restart the cinematic INTRO: the Hammerheads sweep in FIRST, then the Chigs arrive (the intro state
+    // machine spawns them via spawnIntroWave). Do NOT dump a full wave up front — that put Chigs everywhere
+    // shooting from frame one.
+    phase = 'introAllies'; phaseT = 0; camInit = false;
+    introCenter.set(34, -5, 360); // back to the start of the fly-in runway
+    spawnQueue.length = 0; // drop any pending warp-ins
+    flyInAllies(0); // place the formation at the runway start
   }
 
   return { update, focus, targetFor, friendlies, allies, setVisible, resume };
