@@ -54,14 +54,15 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
   hullMat.vertexColors = false;
   hullMat.flatShading = true;
   hullMat.side = THREE.DoubleSide;
-  // De-sparkle the fragments: the clone inherited the Chig's metalness/envMap + rim shader, which on tiny
-  // fast-tumbling chunks read as constant glitter. Drop the specular hard and the cyan rim (the live Chig
-  // keeps both — this is a separate cloned material). Darken a touch more on top of the Chig's 30% colour.
-  hullMat.metalness = 0.12;
-  hullMat.roughness = 0.85;
-  hullMat.envMapIntensity = 0.15;
-  hullMat.onBeforeCompile = () => {}; // strip the inherited Fresnel-rim injection (no flicker on debris)
-  if (hullMat.color) hullMat.color.multiplyScalar(0.7);
+  // Fragments should read as broken CHIG hull — SAME colour + the same cyan Fresnel rim — just a touch less
+  // glittery than the intact ship. The "sparkle" the user saw was the mirror reflections (envMap) glinting
+  // off tiny fast-tumbling facets, not the rim, so only the reflectivity is eased; colour + rim are kept so
+  // the debris stays in the Chig's material family (an earlier pass over-darkened + stripped the rim, which
+  // made the chunks look like generic black rock).
+  hullMat.metalness = 0.38; // Chig 0.45
+  hullMat.roughness = 0.55; // Chig 0.45 — slightly softer highlights
+  hullMat.envMapIntensity = 0.4; // Chig 0.7 — the main glint reducer
+  if (srcMat && srcMat.onBeforeCompile) hullMat.onBeforeCompile = srcMat.onBeforeCompile; // keep the Chig's rim
   hullMat.needsUpdate = true;
   const interiorMat = new THREE.MeshStandardMaterial({ color: 0x1d1916, emissive: 0xff5a1e, emissiveIntensity: 0, metalness: 0.2, roughness: 0.8, flatShading: true, side: THREE.DoubleSide });
   const mats = [hullMat, interiorMat];
