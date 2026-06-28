@@ -23,6 +23,6 @@ GOOGLE_CLIENT_ID = "878982957875-9rgcj8ebv6f75kk5vgm0o49mciltsdvc.apps.googleuse
 FACEBOOK_CLIENT_ID = "2358351737984857"
 
 [[d1_databases]]
-binding = "DB"
+binding = "DB" # worker code uses env.DB (the dashboard suggested demo_two_social; the name is arbitrary)
 database_name = "demo-two-social"
-database_id = "PASTE_AFTER_wrangler_d1_create"
+database_id = "ccb9271c-14a8-4468-a319-c0e0f562920d"
