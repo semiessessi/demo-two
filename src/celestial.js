@@ -172,20 +172,22 @@ export function createBlackHole() {
       float spokeNebula(vec3 dir, vec3 axis){
         float ca = clamp(dot(dir, axis), -1.0, 1.0);
         float ang = acos(ca);                                    // 0 at the hole, grows outward
+        if (ang > 1.18) return 0.0;                              // past the spoke reach -> skip the heavy fbm over the wider cone
         vec3 t = dir - axis * ca;                                // tangential component
         vec3 up = abs(axis.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
         vec3 ux = normalize(cross(axis, up));
         vec3 vx = cross(axis, ux);
         float az = atan(dot(t, vx), dot(t, ux));                 // azimuth around the axis
+        az += 0.3 * smoothstep(0.12, 1.0, ang);                  // spokes curve toward the same rotational sense at their tips
         // irregular radial spokes: cosine lobes whose phase is warped by noise (continuous around az)
         float warp = fbm(vec2(cos(az) * 1.7 + 5.0, sin(az) * 1.7 + 9.0));
-        float spk = pow(0.5 + 0.5 * cos(az * 11.0 + warp * 6.2831), 2.2);
+        float spk = pow(0.5 + 0.5 * cos(az * 22.0 + warp * 6.2831), 0.9); // 2x as many spokes, ~1.5x wider (lower exponent)
         float fil = fbm(vec2(az * 4.0 + 21.0, ang * 4.0));       // break spokes into radial filaments
         float body = spk * mix(0.35, 1.0, fil);
         float lanes = fbm(vec2(az * 10.0 + 40.0, ang * 8.0));    // fine dust structure
         body *= mix(0.28, 1.0, smoothstep(0.34, 0.66, lanes));   // carve dark dust lanes through the cloud (Milky-Way-ish)
         // annular radial profile: rises just outside the hole, fades before the quad edge (~0.42 rad)
-        float radial = smoothstep(0.02, 0.12, ang) * (1.0 - smoothstep(0.30, 0.66, ang));
+        float radial = smoothstep(0.02, 0.12, ang) * (1.0 - smoothstep(0.52, 1.15, ang)); // ~2x longer reach
         radial *= 0.5 + 0.7 * fbm(vec2(ang * 3.0, az * 1.5));    // large-scale clumping
         return clamp(body * radial, 0.0, 1.0);
       }
@@ -224,7 +226,7 @@ export function createBlackHole() {
         vec3 d = normalize(vWorld - uCamPos);        // view ray
         vec3 rd0 = d;                                // original (un-bent) direction
         vec3 axis = normalize(uCenter - uCamPos);    // direction to the hole
-        if (dot(rd0, axis) < 0.45) discard;          // SKY PASS: only the cone toward the hole renders; elsewhere the real scene shows -> no billboard edge
+        if (dot(rd0, axis) < 0.30) discard;          // SKY PASS: wider cone toward the hole (the spokes reach farther now); elsewhere the real scene shows -> no billboard edge
         p += d * max(0.0, -dot(p, d) - 45.0);        // skip empty outer space: begin the fine march ~45 Rs out, so the step budget stays fixed as the hole moves farther
         vec3 angm = cross(p, d); float h2 = dot(angm, angm); // ~conserved (geodesic)
         vec3 acc = vec3(0.0); float alpha = 0.0; bool captured = false;
@@ -279,7 +281,7 @@ export function createBlackHole() {
         alpha = max(alpha, ring * 0.9 * zone);
         // a few strongly-LENSED star arcs just outside the hole — tangential bright streaks = the warping signature
         float arcs = 0.0;
-        for (int k = 0; k < 5; k++) {
+        if (minr < 14.0) for (int k = 0; k < 5; k++) { // arcs only exist hugging the hole -> skip over the wider cone
           float fk = float(k);
           float r0 = 1.7 + fk * 1.3;                                    // each arc at a different impact-parameter radius (Rs)
           float az0 = fk * 1.2566 + sin(uTime * 0.08 + fk * 2.1) * 0.6; // azimuth, slowly drifting
@@ -288,7 +290,7 @@ export function createBlackHole() {
           float ag = exp(-pow(da * 2.2, 2.0));                          // localized in azimuth -> an arc, not a full ring
           arcs += rg * ag;
         }
-        acc += vec3(0.82, 0.9, 1.0) * arcs * 1.8 * zone;                // bluish-white lensed stars, bent into arcs
+        acc += mix(vec3(0.82, 0.9, 1.0), nebCol * 2.4, 0.6) * arcs * 1.8 * zone; // lensed into arcs in the SAME nebula purple (+ star white)
         alpha = max(alpha, clamp(arcs, 0.0, 1.0) * zone);
         if (alpha < 0.004) discard;                  // nothing here -> let the real scene show through
         gl_FragColor = vec4(acc, clamp(alpha, 0.0, 1.0));
