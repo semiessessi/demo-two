@@ -32,7 +32,7 @@ import { createPregame } from './pregame.js';
 import { applyLoadout } from './loadout.js';
 import { loadSettings, DIFFICULTY, ENVIRONMENT } from './settings.js';
 import { createAttract } from './attract.js';
-import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlanet } from './celestial.js';
+import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlanet, createRingedPlanet } from './celestial.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin. It can also be opted into on the deployed
@@ -169,12 +169,13 @@ scene.add(nebula.mesh);
 // Background bodies are built LAZILY (only the selected environment's one) — building all four at boot
 // compiled 4+ shaders (incl. the heavy black-hole raymarch) + loaded the 2 MB Jupiter texture up front,
 // which slowed the load badly. ensureBody() creates + caches on first selection.
-let jupiter = null, blackhole = null, cloudplanet = null, habitable = null;
+let jupiter = null, blackhole = null, cloudplanet = null, habitable = null, saturn = null;
 function ensureBody(kind) {
   if (kind === 'jupiter' && !jupiter) { jupiter = createJupiter(renderer, sunDir); scene.add(jupiter.group); }
   else if (kind === 'blackhole' && !blackhole) { blackhole = createBlackHole(); scene.add(blackhole.group); }
   else if (kind === 'cloudplanet' && !cloudplanet) { cloudplanet = createCloudPlanet(); scene.add(cloudplanet.group); }
   else if (kind === 'habitable' && !habitable) { habitable = createHabitablePlanet(); scene.add(habitable.group); }
+  else if (kind === 'saturn' && !saturn) { saturn = createRingedPlanet(renderer, sunDir); scene.add(saturn.group); }
 }
 // Jupiter Trojans sit at Jupiter's L4/L5 Lagrange point — the Sun, Jupiter and the Trojan camp form an
 // EQUILATERAL triangle, so from here the Sun and Jupiter are exactly 60° apart in the sky. Build JUP_DIR
@@ -187,6 +188,9 @@ const JUP_DIR = (() => {
 })();
 const BH_DIR = new THREE.Vector3(0.40, 0.18, -0.90).normalize();
 const CLOUD_DIR = new THREE.Vector3(0.30, 0.15, -0.94).normalize();
+// Tartarus ringed planet: the OPPOSITE (non-blue) side of the sky from the cyan cloud planet, lit ~side-on
+// by the sun for a dramatic terminator. Tweakable.
+const SATURN_DIR = new THREE.Vector3(-0.52, 0.20, 0.83).normalize();
 // Ixion sits toward the sun (blend of forward + sunDir) so it's strongly back-lit -> a thin crescent,
 // with the sun ~40deg off to the side (not directly behind).
 const IXION_DIR = new THREE.Vector3(0, 0, -1).addScaledVector(sunDir, 0.6).normalize();
@@ -203,6 +207,10 @@ function updateBackdropBodies(dt) {
     cloudplanet.group.position.copy(camera.position).addScaledVector(CLOUD_DIR, 1500); // close -> dominates the sky
     cloudplanet.mat.uniforms.uTime.value += dt; // animate the swirling clouds
     cloudplanet.planet && (cloudplanet.planet.rotation.y += 0.004 * dt);
+  }
+  if (saturn && saturn.group.visible) {
+    saturn.group.position.copy(camera.position).addScaledVector(SATURN_DIR, 3000); // big ringed world on the far side
+    saturn.update(dt); // spin + keep the ring's planet-shadow centre current
   }
   if (habitable && habitable.group.visible) {
     habitable.group.position.copy(camera.position).addScaledVector(IXION_DIR, 2500); // big + close
@@ -319,6 +327,9 @@ function applyEnvironment(s) {
   applySun(e.sun);
   applyCompanion(e); // binary second star (Groombridge), else off
   applyBody(e.body);
+  // optional SECOND background body (Tartarus pairs the cyan cloud planet with a grey ringed planet)
+  ensureBody(e.body2);
+  if (saturn) saturn.group.visible = e.body2 === 'saturn';
 }
 // Binary companion star: a dim second disc+glow on the opposite side of the sky + a fill light at its colour.
 function applyCompanion(e) {

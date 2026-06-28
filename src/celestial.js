@@ -344,6 +344,116 @@ export function createCloudPlanet() {
   return { group, mat, planet, atmoMat, radius: R };
 }
 
+// --- Big grey ringed gas giant (Saturn-like) ---------------------------------
+// A grey banded gas-giant body + a tilted RING built with the stars-clone technique: a flat RingGeometry
+// with radial UVs sampling a 1D ring-density strip (public/saturn-rings.png), a DoubleSide shader that
+// sun-front-lights the rings, warm-transmits through their thin parts on the back face, casts the PLANET'S
+// own shadow across them (ray-sphere), and softens the inner/outer edges. Plus a faint grey fresnel limb.
+export function createRingedPlanet(renderer, sunDir) {
+  const group = new THREE.Group();
+  group.visible = false;
+  const R = 650; // big — a prominent ringed world on the far side of the sky
+  const SUN = (sunDir ? sunDir.clone() : new THREE.Vector3(-55, 30, -30)).normalize();
+
+  // grey banded body (subtle Saturn-like zonal banding, a faint sandy-grey tint), custom-lit like the others
+  const planetMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uSunDir: { value: SUN.clone() }, uExposure: { value: 0.95 }, uAmbient: { value: 0.05 } },
+    vertexShader: /* glsl */`
+      varying vec3 vN; varying vec3 vP;
+      void main(){ vN = normalize(mat3(modelMatrix) * normal); vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */`
+      precision highp float; varying vec3 vN; varying vec3 vP; uniform float uTime, uExposure, uAmbient; uniform vec3 uSunDir;
+      float hash(vec3 p){ p = fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+      float noise(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.0-2.0*f);
+        return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+                   mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z); }
+      float fbm(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.04; a*=0.5; } return v; }
+      void main(){
+        vec3 q = vP; float lat = q.y;
+        float warp = fbm(q*3.0 + uTime*0.01) - 0.5;
+        float bands = 0.5 + 0.5*sin(lat*20.0 + warp*5.0);     // soft zonal banding
+        float mott = fbm(q*7.0 + warp*1.5);
+        vec3 darkB = vec3(0.34,0.33,0.31), lightZ = vec3(0.66,0.64,0.59); // greys, faint warm tint
+        vec3 base = mix(darkB, lightZ, clamp(bands*0.7 + mott*0.35, 0.0, 1.0));
+        base *= 0.9 + 0.2*fbm(q*16.0);                         // fine mottle
+        float ndl = max(dot(normalize(vN), normalize(uSunDir)), 0.0);
+        gl_FragColor = vec4(base * (uAmbient + (1.0-uAmbient)*ndl) * uExposure, 1.0);
+      }`,
+  });
+  const planet = new THREE.Mesh(new THREE.SphereGeometry(R, 96, 64), planetMat);
+  planet.renderOrder = -3;
+
+  // faint grey fresnel limb
+  const atmoMat = new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(0xb8b4ac) }, uSunDir: { value: SUN.clone() }, uPower: { value: 3.2 }, uStrength: { value: 0.7 } },
+    vertexShader: /* glsl */`varying vec3 vN; varying vec3 vWorld; void main(){ vec4 wp=modelMatrix*vec4(position,1.0); vWorld=wp.xyz; vN=normalize(mat3(modelMatrix)*normal); gl_Position=projectionMatrix*viewMatrix*wp; }`,
+    fragmentShader: /* glsl */`uniform vec3 uColor; uniform vec3 uSunDir; uniform float uPower, uStrength; varying vec3 vN; varying vec3 vWorld;
+      void main(){ vec3 V=normalize(cameraPosition-vWorld); float f=pow(1.0-max(dot(normalize(vN),V),0.0),uPower);
+        float lit=smoothstep(-0.3,0.5,dot(normalize(vN),normalize(uSunDir))); float a=f*uStrength*mix(0.25,1.0,lit); gl_FragColor=vec4(uColor*a,a); }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide,
+  });
+  const atmo = new THREE.Mesh(new THREE.SphereGeometry(R * 1.03, 96, 64), atmoMat);
+  atmo.renderOrder = -2;
+  group.add(planet, atmo);
+
+  // --- ring (RingGeometry + radial UV strip + lit/shadowed shader) ---
+  const RING_IN = R * 1.18, RING_OUT = R * 2.30;
+  const ringGeo = new THREE.RingGeometry(RING_IN, RING_OUT, 256, 1);
+  { // radial UV: u = (r-in)/(out-in) so the 1D strip texture spans the ring width
+    const uv = ringGeo.attributes.uv, pos = ringGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), y = pos.getY(i); uv.setXY(i, (Math.sqrt(x*x+y*y) - RING_IN) / (RING_OUT - RING_IN), 0.5); }
+    uv.needsUpdate = true;
+  }
+  const ringMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTex: { value: null }, uHasTex: { value: 0 }, uColor: { value: new THREE.Color(0.80, 0.77, 0.72) }, uOpacity: { value: 0.62 },
+      uSunDir: { value: SUN.clone() }, uPlanetR: { value: R }, uPlanetCenter: { value: new THREE.Vector3() }, uTint: { value: new THREE.Color(0.95, 0.88, 0.74) },
+    },
+    transparent: true, side: THREE.DoubleSide, depthWrite: false,
+    vertexShader: /* glsl */`varying vec2 vUv; varying vec3 vWorldPos; varying vec3 vWorldN;
+      void main(){ vUv=uv; vec4 wp=modelMatrix*vec4(position,1.0); vWorldPos=wp.xyz; vWorldN=normalize(mat3(modelMatrix)*normal); gl_Position=projectionMatrix*viewMatrix*wp; }`,
+    fragmentShader: /* glsl */`precision highp float; varying vec2 vUv; varying vec3 vWorldPos; varying vec3 vWorldN;
+      uniform sampler2D uTex; uniform float uHasTex, uOpacity, uPlanetR; uniform vec3 uColor, uSunDir, uPlanetCenter, uTint;
+      void main(){
+        vec4 tex = uHasTex > 0.5 ? texture2D(uTex, vUv) : vec4(1.0);
+        vec3 baseCol = uColor * (uHasTex > 0.5 ? tex.rgb : vec3(1.0));
+        float dens = uHasTex > 0.5 ? tex.a : 1.0;            // strip alpha = ring density (gaps -> low)
+        float edge = pow(1.0 - abs(2.0*vUv.x - 1.0), 1.0/32.0); // soft inner/outer fade
+        vec3 N = normalize(vWorldN); if (!gl_FrontFacing) N = -N;
+        vec3 L = normalize(uSunDir); float ndl = dot(N, L);
+        vec3 frontLit = step(0.0, ndl) * baseCol;             // sun-facing face: flat lit ring colour
+        vec3 backLit = clamp(-ndl,0.0,1.0) * uTint * (1.0-baseCol) * pow(1.0-dens, 0.6) * edge; // warm transmission
+        vec3 lit = frontLit + backLit;
+        // planet's shadow across the rings: ray from the ring point toward the sun hits the planet sphere?
+        vec3 ro = vWorldPos - uPlanetCenter; float b = dot(ro, L); float c = dot(ro,ro) - uPlanetR*uPlanetR; float disc = b*b - c;
+        float inShadow = (b < 0.0) ? smoothstep(0.0, uPlanetR*uPlanetR*0.06, disc) : 0.0; // soft penumbra
+        lit *= mix(1.0, 0.12, inShadow);
+        lit += baseCol * 0.05;                                // ambient floor so the shadow side isn't pure black
+        gl_FragColor = vec4(lit, dens * uOpacity * edge);
+      }`,
+  });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = -Math.PI / 2 + 0.42; // lay the disc flat, then tilt for a nice ring angle
+  ring.rotation.z = 0.16;
+  ring.renderOrder = -2;
+  group.add(ring);
+
+  // 1D ring-density strip from stars-clone (copied to public/); missing -> solid grey ring (uColor)
+  new THREE.TextureLoader().load('/saturn-rings.png', (t) => {
+    t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    if (renderer) t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    ringMat.uniforms.uTex.value = t; ringMat.uniforms.uHasTex.value = 1;
+  }, undefined, () => {});
+
+  function update(dt) {
+    planetMat.uniforms.uTime.value += dt;
+    planet.rotation.y += 0.006 * dt;
+    ringMat.uniforms.uPlanetCenter.value.copy(group.position); // group is re-centred on the camera each frame
+  }
+
+  return { group, planet, planetMat, atmoMat, ring, ringMat, radius: R, update };
+}
+
 // --- Ixion: an inhabited, Earth-like world (procedural) -----------------------
 // Oceans + continents + ice caps + drifting clouds + warm night-side city lights + a blue atmosphere
 // limb. Day/night terminator from the sun direction (cities glow on the dark side). stars-clone style.

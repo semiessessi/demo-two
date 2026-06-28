@@ -52,7 +52,7 @@ export const ENVIRONMENT = {
     sun: { disc: 220, glow: 520, halo: 0, color: 0xeef0ff, glowAlpha: 0.4, haloAlpha: 0.0, white: true, light: 0x9fc0ff },
   },
   tartarus: {
-    label: 'Tartarus', body: 'cloudplanet', sunMult: 0.7, // distant white dwarf -> dim
+    label: 'Tartarus', body: 'cloudplanet', body2: 'saturn', sunMult: 0.7, // cyan cloud planet + a grey ringed planet on the far side; distant white dwarf -> dim
     nebula: { uColorA: 0x05060f, uColorB: 0x182840, uColorC: 0x40342a, uBrightness: 0.05, uSaturation: 0.35, uMilkyWay: 0.10 },
     sun: { disc: 130, glow: 260, halo: 0, color: 0xffffff, glowAlpha: 0.5, haloAlpha: 0.0, white: true, light: 0xffffff }, // pure white sun (the blue cast is the environment, not the star)
     companion: { color: 0xffffff, mult: 0.6, disc: 120, glow: 600 }, // plain white fill from the opposite side to counter the blue (tweak as we go)
