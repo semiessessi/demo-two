@@ -136,6 +136,7 @@ export function createEditor(gui, { scene, ship, damage, rcs }) {
       pf.add(rcs.jet, 'radius', 0.02, 1, 0.01).name('jet radius ×').onChange(syncPorts);
       pf.add(rcs.jet, 'length', 0.1, 2, 0.05).name('jet length ×').onChange(syncPorts);
       pf.add(rcs.jet, 'gain', 0.2, 8, 0.1).name('jet gain');
+      pf.add(rcs.jet, 'brakeGain', 0, 0.3, 0.005).name('brake gain (fwd jets)');
     }
     rcs.ports.forEach((p) => {
       const f = pf.addFolder(p.name);

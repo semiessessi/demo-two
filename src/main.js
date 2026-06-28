@@ -333,7 +333,8 @@ function attractFrame(dt) {
   lighting.update(dt, { player: attract.focus, thrust: 0.8, projectiles, enemies: enemyMgr.enemies }); // cascades fit to the camera; dynamic lights around the action
   render();
   fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
-  quality.update(dt, fps); // auto-scale shadow/VFX tier (3 Hammerheads + 12 Chigs is heavy)
+  quality.update(dt, fps); // auto-scale shadow/VFX tier (6 Hammerheads + 24 Chigs is heavy)
+  if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
 }
 
 function startLoop() {
@@ -483,8 +484,8 @@ window.addEventListener('keydown', (e) => {
     audio.resumeContext();
     audio.toggle();
     setTimeout(setPlayIcon, 60);
-  } else if (DEBUG && e.code === 'KeyF') {
-    setStats(!statsOn);
+  } else if (e.code === 'KeyF') {
+    setStats(!statsOn); // FPS / frame-time counter — toggle it ANYWHERE (not just ?debug)
   }
 });
 

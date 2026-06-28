@@ -41,7 +41,7 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
   ship.pivot.add(group); // local frame -> tracks the ship
 
   // Live-tunable jet size + firing gain (user wanted thin/short jets). Editable in the debug editor.
-  const jet = { radius: 0.1, length: 0.5, gain: 2.4 };
+  const jet = { radius: 0.1, length: 0.5, gain: 2.4, brakeGain: 0.05 };
 
   const coneGeo = new THREE.ConeGeometry(0.5, 1, 12, 1, true); // apex +Y, open base
   const units = ports.map((p) => {
@@ -65,6 +65,11 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
   const tq = new THREE.Vector3();
   let havePrev = false;
   let t = 0;
+  // forward-motion tracking so the FORWARD-facing jets can also fire on deceleration (retro thrusters)
+  const prevPos = new THREE.Vector3();
+  const dpos = new THREE.Vector3();
+  const fwdTmp = new THREE.Vector3();
+  let havePrevPos = false, prevV = 0, decel = 0;
 
   // Reverse-engineered RCS (no real physics): read how the ship ACTUALLY rotated this frame — the
   // local angular velocity from the quaternion delta — then fire each jet in proportion to how well
@@ -89,6 +94,16 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
     const fireScale = Math.min(1, omegaMag * jet.gain);
     if (omegaMag > 1e-4) omega.multiplyScalar(1 / omegaMag); // reuse omega as the unit rotation axis
 
+    // forward deceleration (units/s²) from the ship's own motion — drives the forward-facing retro jets
+    fwdTmp.set(0, 0, -1).applyQuaternion(cq);
+    if (!havePrevPos) { prevPos.copy(ship.pivot.position); havePrevPos = true; }
+    dpos.copy(ship.pivot.position).sub(prevPos);
+    prevPos.copy(ship.pivot.position);
+    const instV = (enabled && dt > 1e-4) ? dpos.dot(fwdTmp) / dt : prevV;
+    decel += (Math.max(0, (prevV - instV) / Math.max(dt, 1e-3)) - decel) * (1 - Math.exp(-8 * dt));
+    prevV = instV;
+    const brakeFire = Math.min(1, decel * jet.brakeGain);
+
     for (const u of units) {
       dir.set(u.p.dir[0], u.p.dir[1], u.p.dir[2]);
       if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0); else dir.normalize();
@@ -98,6 +113,7 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
         tq.copy(tpos).cross(dir).multiplyScalar(-1); // reaction torque axis = pos × (-exhaustDir)
         if (tq.lengthSq() > 1e-6) cmd = Math.max(0, tq.normalize().dot(omega)) * fireScale;
       }
+      if (u.p.dir[2] < -0.5) cmd = Math.max(cmd, brakeFire); // forward-facing jets ALSO fire on deceleration (retro)
       u.level += (cmd - u.level) * (1 - Math.exp(-20 * dt)); // snappy attack/decay
       const cone = u.cone;
       if (u.level <= 0.02) { cone.visible = false; continue; }
