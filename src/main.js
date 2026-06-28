@@ -597,6 +597,27 @@ async function init() {
 const clock = new THREE.Timer(); // THREE.Clock is deprecated -> Timer (update() each frame, then getDelta())
 let fps = 60;
 
+// Chig flyby whoosh: when a Chig sweeps PAST the camera (its distance stops shrinking and starts growing =
+// closest approach, and that closest point was within range while it was moving fast) play one doppler-ish
+// whoosh. Per-enemy _flyPrevD catches the approach→recede turn; _flyCd debounces so one pass = one whoosh.
+const FLYBY_DIST = 32;      // closest approach must come within this many units of the camera
+const FLYBY_MIN_SPEED = 14; // and the Chig must be moving at least this fast (units/s)
+function updateFlybys(dt) {
+  if (!enemyMgr) return;
+  const cp = camera.position;
+  for (const e of enemyMgr.enemies) {
+    if (!e.alive || !e.pos) continue;
+    if (e._flyCd > 0) e._flyCd -= dt;
+    const d = e.pos.distanceTo(cp);
+    const pd = e._flyPrevD === undefined ? d : e._flyPrevD;
+    e._flyPrevD = d;
+    if (d > pd && pd < FLYBY_DIST && !(e._flyCd > 0)) { // just passed closest approach, and it was close
+      const spd = e.vel ? e.vel.length() : 0;
+      if (spd > FLYBY_MIN_SPEED) { sfx.flyby(e.pos, Math.min(1, spd / 110)); e._flyCd = 0.7; }
+    }
+  }
+}
+
 // Attract mode frame: drive the AI dogfight + cinematic camera, reusing the shared combat/vfx/debris/
 // lighting pipeline but none of the player systems (flight/cannon/HUD/gameState are never created here).
 function attractFrame(dt) {
@@ -618,6 +639,7 @@ function attractFrame(dt) {
   starUniforms.uTime.value += dt;
   lighting.update(dt, { player: attract.focus, thrust: 0.8, projectiles, enemies: enemyMgr.enemies }); // cascades fit to the camera; dynamic lights around the action
   sfx.engine(0.85); // steady engine hum (allies cruise ~0.85)
+  updateFlybys(dt); // Chig whooshes past the cinematic camera
   if (OCCLUDE) { // smoke occlusion: the furball is the heaviest case, so cull hidden puffs here too
     nebula.mesh.visible = false;
     stars.visible = false;
@@ -707,6 +729,7 @@ function startLoop() {
     thrusters.update(r.thrust, dt);
     sfx.engine(r.thrust); // engine hum rises with thrust/boost
     sfx.gunTick(dt); // gate the cannon fire-loop (gunFiring() is pulsed per shot from the cannon's onFire)
+    updateFlybys(dt); // Chig whooshes past the player
     if (rcs) rcs.update(dt, flying); // maneuvering jets — fire from the ship's actual rotation + deceleration
 
     // keep the backdrop centred on the camera so it sits at infinity (no parallax)

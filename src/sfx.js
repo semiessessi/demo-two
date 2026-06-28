@@ -15,6 +15,7 @@ const MANIFEST = {
   engine: '/sfx/engine',
   cannon: '/sfx/cannon',
   gun: '/sfx/gun', // the Hammerhead cannon — a short sample looped + gain-gated while the trigger is down
+  flybys: ['/sfx/chig-flyby-1'], // Chig whoosh past the camera (random-picked; drop chig-flyby-2.. to add variants)
 };
 const EXTS = ['.mp3', '.ogg', '.wav'];
 
@@ -57,7 +58,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
   if (!enabled) {
     return {
       ready: Promise.resolve(0),
-      unlock() {}, onExplosion() {}, weaponFire() {}, engine() {}, gunFiring() {}, gunTick() {}, setMasterGain() {},
+      unlock() {}, onExplosion() {}, flyby() {}, weaponFire() {}, engine() {}, gunFiring() {}, gunTick() {}, setMasterGain() {},
       get isUnlocked() { return false; },
     };
   }
@@ -71,9 +72,11 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
   let rawEngine = null;
   let rawCannon = null;
   let rawGun = null;
+  let rawFlybys = [];
 
   // decoded buffers + graph nodes (built in unlock())
   let expBuffers = [];
+  let flybyBuffers = [];
   let engineBuf = null;
   let cannonBuf = null;
   let busGain = null;
@@ -90,17 +93,19 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
 
   // probe + load everything we ship with; resolves to how many sounds are present
   const ready = (async () => {
-    const [exp, eng, can, gun] = await Promise.all([
+    const [exp, eng, can, gun, fly] = await Promise.all([
       Promise.all(MANIFEST.explosions.map(fetchFirst)),
       fetchFirst(MANIFEST.engine),
       fetchFirst(MANIFEST.cannon),
       fetchFirst(MANIFEST.gun),
+      Promise.all(MANIFEST.flybys.map(fetchFirst)),
     ]);
     rawExplosions = exp.filter(Boolean);
     rawEngine = eng;
     rawCannon = can;
     rawGun = gun;
-    return rawExplosions.length + (rawEngine ? 1 : 0) + (rawCannon ? 1 : 0) + (rawGun ? 1 : 0);
+    rawFlybys = fly.filter(Boolean);
+    return rawExplosions.length + (rawEngine ? 1 : 0) + (rawCannon ? 1 : 0) + (rawGun ? 1 : 0) + rawFlybys.length;
   })();
 
   function decode(ab) {
@@ -134,6 +139,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
 
     await ready;
     expBuffers = (await Promise.all(rawExplosions.map(decode))).filter(Boolean);
+    flybyBuffers = (await Promise.all(rawFlybys.map(decode))).filter(Boolean);
     engineBuf = rawEngine ? await decode(rawEngine) : null;
     cannonBuf = rawCannon ? await decode(rawCannon) : null;
     const gunBuf = rawGun ? await decode(rawGun) : null;
@@ -200,6 +206,16 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     } catch (_) { /* never throw into the render loop */ }
   }
 
+  // A Chig sweeping past the camera. speed01 (0..1) brightens + slightly pitches up the whoosh (doppler-ish).
+  // Spatialised + panned by playOneShot from the Chig's position, so it sweeps across the stereo field.
+  function flyby(pos, speed01 = 0.5) {
+    try {
+      if (!flybyBuffers.length) return;
+      const s = clamp01(speed01);
+      playOneShot(flybyBuffers[(Math.random() * flybyBuffers.length) | 0], pos, 0.6 + 0.5 * s, 0.92 + 0.22 * s, 0.06);
+    } catch (_) {}
+  }
+
   // silent until the user drops a /sfx/cannon.mp3 in — then it just works
   function weaponFire(pos) {
     try {
@@ -248,6 +264,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     ready,
     unlock,
     onExplosion,
+    flyby,
     weaponFire,
     engine,
     gunFiring,
