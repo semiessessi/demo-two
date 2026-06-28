@@ -1,84 +1,81 @@
-// Mission 1 — "Shakedown". The bible's opener: a quiet nav-patrol with NO combat that ends on a distress
-// signal the flight arrives too late to help. It exists to teach the flight model + comms + objectives and
-// to set the tone (House's no-luck creed, the dice motif) before the war turns ugly. This is also the
-// vertical slice that proves the whole campaign pipeline.
+// Mission 1 — "Shakedown" (recon). Groombridge 34 has gone dark and Command suspects the Chigs are
+// massing for a push. The flight runs a silent recon: form up, fly three nav marks, return to the
+// carrier. No combat (weapons cold) — it teaches the flight model, formation-keeping, nav + comms, and
+// sets the tone before the war turns ugly. Also the vertical slice that proves the campaign pipeline.
 //
-// Authoring note: this file is plain data. Beats fire in order when their `when` trigger is met; `do`
-// actions run the effect. VO drops into public/vo/m1-shakedown/<lineId>.<mp3|ogg|wav>; absent = subtitle
-// only. Nav legs OR a generous timeout so a wandering player can never soft-lock the mission.
+// Data only. Beats fire in order when `when` is met; `do` runs the effect. The wingmen fly a moving
+// formation (anchor + slots); the player must line up into `formation.playerSlot` (the blue HUD box) to
+// "form up". VO drops into public/vo/m1-shakedown/<lineId>.<mp3|ogg|wav>; absent = subtitle only.
 
 export const m1 = {
   id: 'm1-shakedown',
   title: 'Shakedown',
   act: 1,
-  requires: null,                 // first mission — always unlocked
-  environment: 'groombridge34',   // key into ENVIRONMENT (settings.js)
-  difficulty: 'veteran',          // no combat in M1, so this is cosmetic here
+  requires: null,
+  environment: 'groombridge34',
+  difficulty: 'veteran',
   loadout: 'default',
-  vo: 'm1-shakedown',             // -> public/vo/m1-shakedown/<lineId>.<ext>
+  vo: 'm1-shakedown',
   music: { track: null, duck: 0.35 },
 
   briefing: {
-    location: 'GROOMBRIDGE 34 · NAV PATROL',
+    location: 'GROOMBRIDGE 34 · RECON',
     body: [
-      'Three days out of the academy and they hand you a milk run. Good — keep it that way.',
-      'Form on the Longshots, fly the patrol arc past the relay buoy, and bring everyone home. House is on the net: do what she says and you might make a habit of surviving.',
+      'Groombridge 34 has gone silent — no traffic, no chatter. Command thinks the Chigs are massing here for a push, and they need eyes on it.',
+      'Form up on the flight, run the three recon marks, and bring the data home. Weapons stay cold: if they spot us, the whole system lights up. We look, we leave.',
     ],
-    objectives: ['Form up on Longshot flight', 'Fly the nav-patrol route', 'Log the relay buoy'],
+    objectives: ['Form up on the flight', 'Recon the three nav points', 'Return to the carrier'],
   },
 
   player: { callsign: 'COMEOUT', start: { pos: [0, 0, 0], heading: [0, 0, -1] } },
+  home: { pos: [0, 0, 160] }, // the carrier you launched from / return to (placeholder cube)
 
-  // Wingmen formate on the player's wing the whole sortie (no combat in M1).
+  // The wingmen hold station on this moving anchor; you must fly into playerSlot to form up.
+  formation: { anchorStart: [0, 6, -55], cruise: 22, arrive: 60, playerSlot: [16, -2, 18] },
   wingmen: [
-    { id: 'hardway',   speaker: 'hardway',   slot: [-14, 1, -10], mode: 'formate', mortal: true },
-    { id: 'boxcars',   speaker: 'boxcars',   slot: [16, 0, 8],    mode: 'formate', mortal: true },
-    { id: 'snakeeyes', speaker: 'snakeeyes', slot: [-18, -1, 12], mode: 'formate', mortal: true },
+    { id: 'hardway',   speaker: 'hardway',   slot: [0, 0, -14] }, // lead, ahead of the anchor
+    { id: 'boxcars',   speaker: 'boxcars',   slot: [-18, 0, 2] },
+    { id: 'snakeeyes', speaker: 'snakeeyes', slot: [18, 3, 9] },
   ],
 
-  // World positions for the patrol arc (player starts at origin facing -Z).
   waypoints: {
-    NAV1:     [0, 40, -900],
-    NAV2:     [620, 10, -1650],
-    DISTRESS: [200, -70, -2350],
+    RECON1: [250, 40, -1000],
+    RECON2: [-350, -30, -1900],
+    RECON3: [450, 70, -2800],
+    HOME: [0, 0, 160],
   },
 
   script: [
-    { id: 'b_checkin', when: { t: 1.5 },
-      do: [ { comms: 'house.checkin' }, { objective: { id: 'formup', state: 'active', label: 'Form up on Longshot flight' } } ] },
+    { id: 'b_open', when: { t: 1.0 },
+      do: [ { comms: 'house.checkin' }, { objective: { id: 'formup', state: 'active', label: 'Form up — slot into the flight' } }, { slot: { show: true } } ] },
     { id: 'b_lead', when: { commsDone: 'house.checkin' },
       do: [ { comms: 'hardway.formup' } ] },
-    { id: 'b_underway', when: { commsDone: 'hardway.formup' },
-      do: [ { objective: { id: 'formup', state: 'complete' } },
-            { objective: { id: 'patrol', state: 'active', label: 'Fly the nav-patrol route' } },
-            { waypoint: { id: 'NAV1' } } ] },
-    { id: 'b_banter', when: { after: 'b_underway', delay: 6 },
-      do: [ { comms: ['boxcars.banter', 'snakeeyes.banter'] } ] },
-    { id: 'b_nav1', when: { or: [ { waypoint: 'NAV1', radius: 220 }, { after: 'b_underway', delay: 80 } ] },
-      do: [ { comms: 'house.nav1' }, { waypoint: { id: 'NAV2' } } ] },
-    { id: 'b_nav2', when: { or: [ { waypoint: 'NAV2', radius: 220 }, { after: 'b_nav1', delay: 80 } ] },
-      do: [ { comms: 'house.distress' },
-            { objective: { id: 'patrol', state: 'complete' } },
-            { objective: { id: 'investigate', state: 'active', label: 'Investigate the distress signal' } },
-            { waypoint: { id: 'DISTRESS' } } ] },
-    { id: 'b_arrive', when: { or: [ { waypoint: 'DISTRESS', radius: 240 }, { after: 'b_nav2', delay: 80 } ] },
-      do: [ { comms: 'hardway.toolate' }, { waypoint: { hide: true } } ] },
-    { id: 'b_climax', when: { commsDone: 'hardway.toolate' },
-      do: [ { comms: 'house.rtb' }, { objective: { id: 'investigate', state: 'complete' } } ] },
+    { id: 'b_formed', when: { formedUp: 44 },
+      do: [ { objective: { id: 'formup', state: 'complete' } }, { comms: 'hardway.in' },
+            { objective: { id: 'recon', state: 'active', label: 'Recon the three nav points' } },
+            { formation: { move: true } }, { waypoint: { id: 'RECON1', label: 'RECON 1' } } ] },
+    { id: 'b_r1', when: { or: [ { waypoint: 'RECON1', radius: 200 }, { after: 'b_formed', delay: 150 } ] },
+      do: [ { comms: 'house.recon1' }, { waypoint: { id: 'RECON2', label: 'RECON 2' } } ] },
+    { id: 'b_r2', when: { or: [ { waypoint: 'RECON2', radius: 200 }, { after: 'b_r1', delay: 150 } ] },
+      do: [ { comms: ['boxcars.contacts', 'snakeeyes.quiet'] }, { waypoint: { id: 'RECON3', label: 'RECON 3' } } ] },
+    { id: 'b_r3', when: { or: [ { waypoint: 'RECON3', radius: 200 }, { after: 'b_r2', delay: 150 } ] },
+      do: [ { comms: 'house.recon3' }, { objective: { id: 'recon', state: 'complete' } },
+            { objective: { id: 'rtb', state: 'active', label: 'Return to the carrier' } },
+            { waypoint: { id: 'HOME', label: 'CARRIER' } } ] },
+    { id: 'b_home', when: { or: [ { waypoint: 'HOME', radius: 110 }, { after: 'b_r3', delay: 220 } ] },
+      do: [ { comms: 'house.rtb' }, { objective: { id: 'rtb', state: 'complete' } } ] },
     { id: 'b_end', when: { commsDone: 'house.rtb' },
-      do: [ { complete: { title: 'PATROL COMPLETE', sub: 'They will not be the last. Return to base.' } } ] },
+      do: [ { complete: { title: 'RECON COMPLETE', sub: 'Intel logged. The build-up is real — and it is big.' } } ] },
   ],
 
-  // Subtitle text + fallback timing. `dur` is the minimum on-screen time + the no-VO duration; real audio
-  // length wins when a file is present.
   lines: {
-    'house.checkin':   { speaker: 'house',     text: "Longshot flight, this is House. Cleared for the nav arc. Comeout — you're the new dice in the cup. Try not to roll low.", dur: 6.0 },
-    'hardway.formup':  { speaker: 'hardway',   text: 'Comeout, Hardway. Tuck in on my wing and fly the arc by the numbers. No heroics out here.', dur: 5.5 },
-    'boxcars.banter':  { speaker: 'boxcars',   text: "Rookie's first patrol. Twenty creds says he white-knuckles the whole arc.", dur: 4.5 },
-    'snakeeyes.banter':{ speaker: 'snakeeyes', text: "No bet. Quiet's how it always starts, Box.", dur: 3.5 },
-    'house.nav1':      { speaker: 'house',     text: 'Mark NAV-1. Come right for the relay buoy, steady as she goes.', dur: 4.5 },
-    'house.distress':  { speaker: 'house',     text: "Flight, House — the buoy's squawking a distress code. Go and look.", dur: 4.5 },
-    'hardway.toolate': { speaker: 'hardway',   text: "...Contact. It's a hauler. Or it was. No squawk. No survivors. We're too late.", dur: 6.0 },
-    'house.rtb':       { speaker: 'house',     text: 'Log it and bring them home, Longshot. No such thing as luck out here — only who got there first. House out.', dur: 6.5 },
+    'house.checkin':  { speaker: 'house',     text: "Longshot flight, House. Recon only — Groombridge's gone dark and Command thinks the Chigs are massing. Form on Hardway's wing, weapons cold. We look, we leave.", dur: 7.5 },
+    'hardway.formup': { speaker: 'hardway',   text: "Comeout — your slot's the blue box. Slide in nice and easy and hold it. Stay off the gas.", dur: 5.5 },
+    'hardway.in':     { speaker: 'hardway',   text: "That's it, you're in the pocket. Flight, pushing up. Eyes on the scopes.", dur: 4.5 },
+    'house.recon1':   { speaker: 'house',     text: 'First mark logged. Reactor bloom out there — something big is warming up.', dur: 5.0 },
+    'boxcars.contacts':{ speaker: 'boxcars',  text: "Boss, my scope's lit — hard contacts all along the far edge. That's a wall of Chigs.", dur: 5.5 },
+    'snakeeyes.quiet':{ speaker: 'snakeeyes', text: 'Always the way. Quiet system, full of teeth.', dur: 3.5 },
+    'house.recon3':   { speaker: 'house',     text: "Third mark. It's a staging yard — they're building for a push. Get it all and get gone. Do not engage.", dur: 6.5 },
+    'house.rtb':      { speaker: 'house',     text: "That's the package. Bring it home, Longshot — we were never here. House out.", dur: 5.5 },
   },
 };

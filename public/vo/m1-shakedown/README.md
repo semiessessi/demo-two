@@ -1,65 +1,64 @@
-# VO recording script — Mission 1: "Shakedown"
+# VO recording script — Mission 1: "Shakedown" (recon)
 
-Record each line below and save it in **this folder** (`public/vo/m1-shakedown/`) as the **exact filename**
+Record each line and save it in **this folder** (`public/vo/m1-shakedown/`) with the **exact filename**
 shown (e.g. `house.checkin.mp3`). Reload the game and it just plays — no code changes needed.
 
-- **Format:** mono, 44.1 or 48 kHz. `.mp3` (small) or `.wav` (lossless) — both work; `.mp3` wins if both exist.
-- **Loudness:** aim ~ -16 LUFS, trim silence off the ends.
-- **Missing a line?** No problem — it shows as a subtitle only until the file exists, so you can record them
-  one at a time and check each in-game.
-- The **subtitle text + on-screen timing** live in `src/campaign/m1-shakedown.js` (the `lines` map). The
-  text here is what the player reads; match it (small ad-libs are fine — gameplay keys off the filename,
-  not the words).
+- **Format:** mono, 44.1 or 48 kHz. `.mp3` (small) or `.wav` (lossless) both work; `.mp3` wins if both exist.
+- **Loudness:** aim ~ -16 LUFS, trim the silence off the ends.
+- **Missing a line?** Fine — it shows as a subtitle only until the file exists, so record them one at a time
+  and check each in-game.
+- The **subtitle text + on-screen timing** live in `src/campaign/m1-shakedown.js` (the `lines` map). Match the
+  text below; small ad-libs are fine (the game keys off the filename, not the words).
 
-Mission tone: a quiet first patrol that turns grim. Starts light/banter, ends on a wreck with no survivors.
-
----
-
-## HOUSE — squadron CO  (file prefix `house.`)
-British woman, Royal Navy/Marines officer seconded to the carrier. Dry, composed, understated — command
-voice without shouting. Her creed: there's no such thing as luck, only odds you didn't read. Gallows wit
-underneath. (Think calm authority that only cracks at the worst moment.)
-
-| File | Line | ~len |
-|---|---|---|
-| `house.checkin.mp3` | "Longshot flight, this is House. Cleared for the nav arc. Comeout — you're the new dice in the cup. Try not to roll low." | 6s |
-| `house.nav1.mp3` | "Mark NAV-1. Come right for the relay buoy, steady as she goes." | 4.5s |
-| `house.distress.mp3` | "Flight, House — the buoy's squawking a distress code. Go and look." | 4.5s |
-| `house.rtb.mp3` | "Log it and bring them home, Longshot. No such thing as luck out here — only who got there first. House out." | 6.5s |
-
-## HARDWAY — your flight lead  (file prefix `hardway.`)
-By-the-book grinder, the moral centre of the squadron. Steady, disciplined, unflappable. Plays it straight.
-The "too late" line should land heavy and quiet — the moment the mission's mood drops.
-
-| File | Line | ~len |
-|---|---|---|
-| `hardway.formup.mp3` | "Comeout, Hardway. Tuck in on my wing and fly the arc by the numbers. No heroics out here." | 5.5s |
-| `hardway.toolate.mp3` | "...Contact. It's a hauler. Or it was. No squawk. No survivors. We're too late." | 6s |
-
-## BOXCARS — hotshot wingman  (file prefix `boxcars.`)
-Cocky glory-hound, always grinning, always gambling. Here he's ribbing the rookie. Light, fast, a little
-too pleased with himself.
-
-| File | Line | ~len |
-|---|---|---|
-| `boxcars.banter.mp3` | "Rookie's first patrol. Twenty creds says he white-knuckles the whole arc." | 4.5s |
-
-## SNAKE-EYES — wingman  (file prefix `snakeeyes.`)
-The unlucky one who somehow never dies — a weary fatalist. Dry, flat, seen-it-all. Deadpan delivery.
-
-| File | Line | ~len |
-|---|---|---|
-| `snakeeyes.banter.mp3` | "No bet. Quiet's how it always starts, Box." | 3.5s |
+**Mission:** a silent recon of Groombridge 34 — Command thinks the Chigs are massing for a push. Form up,
+fly three nav marks, return to the carrier. Weapons cold, no combat. Tone: tense and hushed, not a milk run.
 
 ---
 
-## Order the player hears them (for context)
-1. `house.checkin` — cleared for patrol, ribs the rookie ("Comeout")
-2. `hardway.formup` — your lead tells you to form up
-3. `boxcars.banter` → 4. `snakeeyes.banter` — wingmen bicker (back-to-back)
-5. `house.nav1` — turn for the relay buoy (at NAV-1)
-6. `house.distress` — the buoy is squawking a distress code (at NAV-2)
-7. `hardway.toolate` — you reach the wreck; no survivors
-8. `house.rtb` — log it, come home (mission ends)
+## HOUSE — squadron CO  (files `house.*`)
+British woman, Royal Navy/Marines, seconded to the carrier. Dry, composed, understated — command voice
+without shouting. Believes there's no such thing as luck, only odds you didn't read. This run she's tense
+but controlled; the stakes are real.
+
+| File | Line | ~len |
+|---|---|---|
+| `house.checkin.mp3` | "Longshot flight, House. Recon only — Groombridge's gone dark and Command thinks the Chigs are massing. Form on Hardway's wing, weapons cold. We look, we leave." | 7.5s |
+| `house.recon1.mp3` | "First mark logged. Reactor bloom out there — something big is warming up." | 5s |
+| `house.recon3.mp3` | "Third mark. It's a staging yard — they're building for a push. Get it all and get gone. Do not engage." | 6.5s |
+| `house.rtb.mp3` | "That's the package. Bring it home, Longshot — we were never here. House out." | 5.5s |
+
+## HARDWAY — your flight lead  (files `hardway.*`)
+By-the-book grinder, the steady moral centre. Calm, patient, talks you through forming up like an instructor.
+
+| File | Line | ~len |
+|---|---|---|
+| `hardway.formup.mp3` | "Comeout — your slot's the blue box. Slide in nice and easy and hold it. Stay off the gas." | 5.5s |
+| `hardway.in.mp3` | "That's it, you're in the pocket. Flight, pushing up. Eyes on the scopes." | 4.5s |
+
+## BOXCARS — hotshot wingman  (files `boxcars.*`)
+Cocky glory-hound, but this is the moment his grin drops — he's the one who calls the wall of contacts.
+Play it a little rattled under the swagger.
+
+| File | Line | ~len |
+|---|---|---|
+| `boxcars.contacts.mp3` | "Boss, my scope's lit — hard contacts all along the far edge. That's a wall of Chigs." | 5.5s |
+
+## SNAKE-EYES — wingman  (files `snakeeyes.*`)
+The unlucky one who never quite dies — a weary fatalist. Dry, flat, deadpan.
+
+| File | Line | ~len |
+|---|---|---|
+| `snakeeyes.quiet.mp3` | "Always the way. Quiet system, full of teeth." | 3.5s |
+
+---
+
+## Order the player hears them
+1. `house.checkin` — the brief on the net; form on Hardway
+2. `hardway.formup` — slot into the blue box
+3. `hardway.in` — you're formed up; the flight pushes off  *(after you reach the slot)*
+4. `house.recon1` — first mark logged; reactor bloom
+5. `boxcars.contacts` → 6. `snakeeyes.quiet` — the wall of Chigs (back-to-back)
+7. `house.recon3` — staging yard; get out, do not engage
+8. `house.rtb` — bring it home (mission ends at the carrier)
 
 The **player ("Comeout") has no lines** in M1 — you're the silent new arrival.

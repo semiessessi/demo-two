@@ -58,32 +58,40 @@ export function createMissionHud() {
   }
   function hideSubtitle() { sub.style.display = 'none'; }
 
-  // --- nav waypoint marker (projected) ---
-  const nav = el('div', 'position:fixed;left:0;top:0;transform:translate(-50%,-50%);z-index:54;display:none;'
-    + 'pointer-events:none;flex-direction:column;align-items:center;gap:2px;', document.body);
-  const navMark = el('div', 'width:16px;height:16px;border:2px solid rgba(126,208,138,0.9);transform:rotate(45deg);'
-    + 'box-shadow:0 0 8px rgba(126,208,138,0.5);', nav);
-  const navDist = el('div', `${FONT}font-size:10px;color:#7fd08a;text-shadow:0 0 4px #000;`, nav);
-  let waypoint = null; // { pos:THREE.Vector3, label }
-  function setWaypoint(pos, label) { waypoint = pos ? { pos: pos.clone ? pos.clone() : new THREE.Vector3().fromArray(pos), label } : null; if (!waypoint) nav.style.display = 'none'; }
+  // --- projected markers: nav waypoint (green diamond) + formation slot (blue box) ---
+  function makeMarker(shapeCss, color) {
+    const wrap = el('div', 'position:fixed;left:0;top:0;transform:translate(-50%,-50%);z-index:54;display:none;'
+      + 'pointer-events:none;flex-direction:column;align-items:center;gap:2px;', document.body);
+    const mark = el('div', shapeCss, wrap);
+    const dist = el('div', `${FONT}font-size:10px;color:${color};text-shadow:0 0 4px #000;`, wrap);
+    return { wrap, mark, dist };
+  }
+  const navM = makeMarker('width:16px;height:16px;border:2px solid rgba(126,208,138,0.9);transform:rotate(45deg);box-shadow:0 0 8px rgba(126,208,138,0.5);', '#7fd08a');
+  const slotM = makeMarker('width:24px;height:24px;border:2px solid rgba(120,190,255,0.9);border-radius:3px;box-shadow:0 0 9px rgba(120,190,255,0.5);', '#9ec7ff');
+  let waypoint = null; const _wpPos = new THREE.Vector3();
+  let slot = null; const _slotPos = new THREE.Vector3();
+  function setWaypoint(pos, label) { if (!pos) { waypoint = null; navM.wrap.style.display = 'none'; return; } _wpPos.copy(pos.isVector3 ? pos : new THREE.Vector3().fromArray(pos)); waypoint = { pos: _wpPos, label: label || 'NAV' }; }
+  function setSlot(pos, label) { if (!pos) { slot = null; slotM.wrap.style.display = 'none'; return; } _slotPos.copy(pos.isVector3 ? pos : new THREE.Vector3().fromArray(pos)); slot = { pos: _slotPos, label: label || 'FORM UP' }; }
 
   const _v = new THREE.Vector3();
-  function update({ camera, playerPos } = {}) {
-    if (!visible || !waypoint || !camera) { nav.style.display = 'none'; return; }
-    _v.copy(waypoint.pos).project(camera);
+  function projectMarker(M, data, camera, playerPos) {
+    if (!data) { M.wrap.style.display = 'none'; return; }
+    _v.copy(data.pos).project(camera);
     let x = _v.x, y = _v.y;
     const behind = _v.z > 1;
     if (behind) { x = -x; y = -y; }
-    const m = 0.94; // clamp inside the screen edges when off-screen
     const off = behind || x < -1 || x > 1 || y < -1 || y > 1;
-    if (off) { const k = Math.max(Math.abs(x), Math.abs(y)) || 1; x = (x / k) * m; y = (y / k) * m; }
-    const sx = (x * 0.5 + 0.5) * window.innerWidth;
-    const sy = (-y * 0.5 + 0.5) * window.innerHeight;
-    nav.style.left = `${sx}px`;
-    nav.style.top = `${sy}px`;
-    navMark.style.borderColor = off ? 'rgba(126,208,138,0.55)' : 'rgba(126,208,138,0.9)';
-    if (playerPos) { const d = Math.round(waypoint.pos.distanceTo(playerPos)); navDist.textContent = `${waypoint.label || 'NAV'} ${d}`; }
-    nav.style.display = 'flex';
+    if (off) { const k = Math.max(Math.abs(x), Math.abs(y)) || 1; x = (x / k) * 0.94; y = (y / k) * 0.94; }
+    M.wrap.style.left = `${(x * 0.5 + 0.5) * window.innerWidth}px`;
+    M.wrap.style.top = `${(-y * 0.5 + 0.5) * window.innerHeight}px`;
+    M.mark.style.opacity = off ? '0.55' : '1';
+    if (playerPos) M.dist.textContent = `${data.label} ${Math.round(data.pos.distanceTo(playerPos))}`;
+    M.wrap.style.display = 'flex';
+  }
+  function update({ camera, playerPos } = {}) {
+    if (!visible || !camera) { navM.wrap.style.display = 'none'; slotM.wrap.style.display = 'none'; return; }
+    projectMarker(navM, waypoint, camera, playerPos);
+    projectMarker(slotM, slot, camera, playerPos);
   }
 
   // --- outcome overlay (campaign complete/fail) ---
@@ -113,9 +121,10 @@ export function createMissionHud() {
     visible = false;
     obj.style.display = 'none';
     sub.style.display = 'none';
-    nav.style.display = 'none';
+    navM.wrap.style.display = 'none';
+    slotM.wrap.style.display = 'none';
     hideOutcome();
   }
 
-  return { setObjective, clearObjectives, showSubtitle, hideSubtitle, setWaypoint, update, showOutcome, hideOutcome, show, hide };
+  return { setObjective, clearObjectives, showSubtitle, hideSubtitle, setWaypoint, setSlot, update, showOutcome, hideOutcome, show, hide };
 }
