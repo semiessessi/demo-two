@@ -594,6 +594,8 @@ async function init() {
       onChange: (s) => { applyEnvironment(s); applyLoadout(ship, s.loadout); },
       onHost: () => startCoop('host'),
       onJoin: (code) => { startCoop('joiner', code); },
+      onQuickMatch: (role, code) => { startCoop(role, code); }, // quick-match assigns the role + room code
+
       onBack: showTitle, // in-page: back to the title menu (no reload)
     });
     attractMenu = createAttractMenu({

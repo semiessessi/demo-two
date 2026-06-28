@@ -3,6 +3,7 @@ import { peerJsWorksHere } from './net/webrtc-detect.js';
 import { getConfig, getPlayer, isSignedIn, signInWithGoogle, signInWithFacebook, signOut, onSessionChange } from './social/auth.js';
 import * as friends from './social/friends.js';
 import { getLeaderboard } from './social/leaderboard.js';
+import { quickMatch, cancelQuickMatch } from './social/automatch.js';
 
 // Pre-game / "AI Skirmish" setup screen — a self-building DOM overlay (same dark glassy style as the
 // HUD). Sections: Markings, Loadout, Environment, Difficulty, and Launch. Edits write through to the
@@ -33,7 +34,7 @@ const STATIONS = [
 ];
 const ORD_LABEL = { fuel: 'Fuel tank', 'missile-pair': 'Missile pair', 'lr-missile': 'LR missile', laser: 'Laser', empty: 'Empty' };
 
-export function createPregame({ settings, onLaunch, onChange, onHost, onJoin, onBack }) {
+export function createPregame({ settings, onLaunch, onChange, onHost, onJoin, onQuickMatch, onBack }) {
   const fire = () => { saveSettings(settings); if (onChange) onChange(settings); };
 
   const root = el('div', 'position:fixed;inset:0;z-index:200;display:none;pointer-events:none;', document.body);
@@ -166,6 +167,21 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin, on
     coopStatus = el('div', `${FONT}font-size:11px;color:#9fb0d0;margin:6px 2px 0;white-space:pre-line;`, co);
     hostBtn.onclick = () => { if (onHost) { hostCode = onHost(); coopStatus.textContent = `Hosting — share code: ${hostCode}\nwaiting for players… then LAUNCH`; renderFriends(); } };
     joinBtn.onclick = () => { const c = codeInp.value.trim().toUpperCase(); if (c && onJoin) { onJoin(c); coopStatus.textContent = `Joining ${c}…\nwait for the host to launch`; } };
+    if (onQuickMatch) {
+      const qmRow = el('div', 'display:flex;margin-top:6px;', co);
+      const qmBtn = el('button', BTN + 'flex:1;', qmRow);
+      qmBtn.textContent = 'Quick Match';
+      let searching = false;
+      qmBtn.onclick = async () => {
+        if (searching) { searching = false; cancelQuickMatch(); qmBtn.textContent = 'Quick Match'; coopStatus.textContent = ''; return; }
+        if (!isSignedIn()) { coopStatus.textContent = 'sign in to use Quick Match'; return; }
+        searching = true; qmBtn.textContent = 'Cancel'; coopStatus.textContent = 'Searching for a match…';
+        const m = await quickMatch('coop:' + settings.difficulty, { onWaiting: (n) => { if (searching) coopStatus.textContent = `Searching… (${n} waiting)`; } });
+        searching = false; qmBtn.textContent = 'Quick Match';
+        if (m) { hostCode = m.role === 'host' ? m.room_code : null; onQuickMatch(m.role, m.room_code); coopStatus.textContent = m.role === 'host' ? `Matched — you host (${m.room_code}). Press LAUNCH.` : `Matched — joining ${m.room_code}…`; renderFriends(); }
+        else coopStatus.textContent = 'No match — try again.';
+      };
+    }
   }
 
   // ---- Friends + invites (signed-in only) ----

@@ -10,6 +10,7 @@ import { googleExchange } from './auth/google.js';
 import { facebookExchange } from './auth/facebook.js';
 import * as social from './social.js';
 import * as lb from './leaderboard.js';
+import * as am from './automatch.js';
 
 const CORS = {
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
@@ -68,7 +69,7 @@ export default {
       }
       // --- social (M3): friends + invites (all require auth) ---
       const seg = path.split('/').filter(Boolean);
-      if (path.startsWith('/players/') || path.startsWith('/me/') || path.startsWith('/friend-requests') || path.startsWith('/invite')) {
+      if (path.startsWith('/players/') || path.startsWith('/me/') || path.startsWith('/friend-requests') || path.startsWith('/invite') || path.startsWith('/automatch')) {
         const s = await readSession(request, env);
         if (!s) return json({ error: 'unauthenticated' }, 401, request);
         const me = s.playerId;
@@ -85,6 +86,9 @@ export default {
         if (seg[0] === 'invite' && seg.length === 3 && request.method === 'POST') return wrap(await social.actOnInvite(env, me, seg[1], seg[2]));
         if (path === '/me/notifications' && request.method === 'GET') return json(await social.notifications(env, me), 200, request);
         if (path === '/me/runs' && request.method === 'POST') return wrap(await lb.submitRun(env, me, body));
+        if (path === '/automatch/join' && request.method === 'POST') return wrap(await am.join(env, me, body.ruleset_id));
+        if (path === '/automatch/status' && request.method === 'GET') return json(await am.status(env, me), 200, request);
+        if (path === '/automatch/leave' && request.method === 'POST') return wrap(await am.leave(env, me));
       }
       return json({ error: 'not found', path }, 404, request);
     } catch (e) {
