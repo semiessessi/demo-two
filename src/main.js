@@ -497,7 +497,7 @@ async function init() {
   // register the lit hull materials so the cascaded sun shadows fall on them (self + ship-to-ship)
   lighting.registerTree(ship.pivot);
   lighting.registerTree(chigKit.template);
-  enemyMgr = createEnemyManager(scene, chigKit, projectiles);
+  enemyMgr = createEnemyManager(scene, chigKit, projectiles, { onFire: (pos) => sfx.chigShot(pos) });
   if (!ATTRACT) waves = createWaveManager(enemyMgr); // attract owns its own wave loop
   vfx = createVfx(scene, camera, { lightDir: sunDir, onExplosion: (p, s) => sfx.onExplosion(p, s) }); // align smoke self-shadow with the real sun; SFX boom on every explosion
   if (OCCLUDE) vfx.setOcclusion(depthTexture(), camera.near, camera.far); // feed the smoke the opaque depth

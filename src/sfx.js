@@ -15,7 +15,8 @@ const MANIFEST = {
   engine: '/sfx/engine',
   cannon: '/sfx/cannon',
   gun: '/sfx/gun', // the Hammerhead cannon — a short sample looped + gain-gated while the trigger is down
-  flybys: ['/sfx/chig-flyby-1'], // Chig whoosh past the camera (random-picked; drop chig-flyby-2.. to add variants)
+  flybys: ['/sfx/chig-flyby-1', '/sfx/chig-flyby-2'], // Chig whoosh past the camera (random-picked; add more variants here)
+  chigShot: '/sfx/chig-shot', // Chig weapon shot — one-shot per enemy bolt (voice-capped so it can't starve booms)
 };
 const EXTS = ['.mp3', '.ogg', '.wav'];
 
@@ -23,7 +24,7 @@ const MAX_VOICES = 12;
 const REF_DIST = 120; // full volume within this range of the camera (was 80 — the furball sat past it -> too quiet)
 const ROLLOFF = 0.45; // <1 softens the inverse-distance falloff so the whole furball stays audible
 const MAX_DIST = 1400; // gentle fade to silence by here
-const ENGINE_LEVEL = 0.6; // overall engine-hum ceiling — kept low so it sits under the music
+const ENGINE_LEVEL = 0.85; // overall jet-engine ceiling — present but sits under the action/music
 const GUN_LEVEL = 0.5;    // player's own cannon loop — prominent (NOT distance-attenuated; it's at the camera)
 const GUN_HOLD = 0.13;    // seconds one shot sustains the loop — bridges inter-shot gaps + leaves a short release tail
 const DEFAULT_MASTER = 1.0;
@@ -58,7 +59,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
   if (!enabled) {
     return {
       ready: Promise.resolve(0),
-      unlock() {}, onExplosion() {}, flyby() {}, weaponFire() {}, engine() {}, gunFiring() {}, gunTick() {}, setMasterGain() {},
+      unlock() {}, onExplosion() {}, flyby() {}, chigShot() {}, weaponFire() {}, engine() {}, gunFiring() {}, gunTick() {}, setMasterGain() {},
       get isUnlocked() { return false; },
     };
   }
@@ -73,10 +74,12 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
   let rawCannon = null;
   let rawGun = null;
   let rawFlybys = [];
+  let rawChigShot = null;
 
   // decoded buffers + graph nodes (built in unlock())
   let expBuffers = [];
   let flybyBuffers = [];
+  let chigShotBuf = null;
   let engineBuf = null;
   let cannonBuf = null;
   let busGain = null;
@@ -93,19 +96,21 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
 
   // probe + load everything we ship with; resolves to how many sounds are present
   const ready = (async () => {
-    const [exp, eng, can, gun, fly] = await Promise.all([
+    const [exp, eng, can, gun, fly, cs] = await Promise.all([
       Promise.all(MANIFEST.explosions.map(fetchFirst)),
       fetchFirst(MANIFEST.engine),
       fetchFirst(MANIFEST.cannon),
       fetchFirst(MANIFEST.gun),
       Promise.all(MANIFEST.flybys.map(fetchFirst)),
+      fetchFirst(MANIFEST.chigShot),
     ]);
     rawExplosions = exp.filter(Boolean);
     rawEngine = eng;
     rawCannon = can;
     rawGun = gun;
     rawFlybys = fly.filter(Boolean);
-    return rawExplosions.length + (rawEngine ? 1 : 0) + (rawCannon ? 1 : 0) + (rawGun ? 1 : 0) + rawFlybys.length;
+    rawChigShot = cs;
+    return rawExplosions.length + (rawEngine ? 1 : 0) + (rawCannon ? 1 : 0) + (rawGun ? 1 : 0) + rawFlybys.length + (rawChigShot ? 1 : 0);
   })();
 
   function decode(ab) {
@@ -140,6 +145,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     await ready;
     expBuffers = (await Promise.all(rawExplosions.map(decode))).filter(Boolean);
     flybyBuffers = (await Promise.all(rawFlybys.map(decode))).filter(Boolean);
+    chigShotBuf = rawChigShot ? await decode(rawChigShot) : null;
     engineBuf = rawEngine ? await decode(rawEngine) : null;
     cannonBuf = rawCannon ? await decode(rawCannon) : null;
     const gunBuf = rawGun ? await decode(rawGun) : null;
@@ -167,9 +173,9 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
 
   // one-shot voice: gentle inverse-distance gain + distance muffling (far booms lose their highs and become
   // rumble) + stereo pan from the camera's right axis -> bus.
-  function playOneShot(buffer, pos, base, rateLo, rateRange) {
+  function playOneShot(buffer, pos, base, rateLo, rateRange, voiceCap = MAX_VOICES) {
     if (!ctx || ctx.state !== 'running' || !buffer) return;
-    if (voices >= MAX_VOICES) return;
+    if (voices >= voiceCap) return; // low-priority sounds (Chig shots) pass a smaller cap -> reserve voices for booms
     _camPos.copy(camera.position);
     const d = pos.distanceTo(_camPos);
     const inv = d <= REF_DIST ? 1 : REF_DIST / (REF_DIST + ROLLOFF * (d - REF_DIST));
@@ -216,6 +222,15 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     } catch (_) {}
   }
 
+  // A Chig firing its pulse cannon — one-shot per bolt, spatialised + panned. Capped at 7 concurrent voices
+  // so a swarm's worth of enemy fire can't starve explosions/flybys out of the 12-voice pool.
+  function chigShot(pos) {
+    try {
+      if (!chigShotBuf) return;
+      playOneShot(chigShotBuf, pos, 0.35, 0.9, 0.2, 7);
+    } catch (_) {}
+  }
+
   // silent until the user drops a /sfx/cannon.mp3 in — then it just works
   function weaponFire(pos) {
     try {
@@ -228,7 +243,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
   function engine(thrust01) {
     if (!engineGain || !ctx || ctx.state !== 'running') return;
     const t = clamp01(thrust01);
-    const target = (0.12 + 0.5 * t) * ENGINE_LEVEL;
+    const target = (0.26 + 0.48 * t) * ENGINE_LEVEL; // audible idle, spools up with thrust
     try {
       engineGain.gain.setTargetAtTime(target, ctx.currentTime, 0.12);
       if (engineSrc) engineSrc.playbackRate.setTargetAtTime(0.85 + 0.4 * t, ctx.currentTime, 0.15);
@@ -265,6 +280,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     unlock,
     onExplosion,
     flyby,
+    chigShot,
     weaponFire,
     engine,
     gunFiring,
