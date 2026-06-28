@@ -11,10 +11,11 @@ shown (e.g. `house.checkin.mp3`). Reload the game and it just plays — no code 
   below; small ad-libs are fine (the game keys off the filename, not the words).
 
 **Mission:** Your first sortie — a recon sweep through the Groombridge gate. Command is nervous the Chigs
-might be staging here, so the flight forms up, runs three nav marks, and finds **the system completely
-empty — nothing here at all.** No build-up, no contact; the recon's whole job is to confirm it's clear, and
-it is. Log it and head home. **Tone: a quiet, uneventful first run — wry relief, a little anticlimax, with
-House's dry "don't get used to it" hinting they won't all be this easy.** No combat.
+might be staging here, so the flight forms up and runs three nav marks. **The system is completely empty —
+nothing here at all.** Then **flash traffic breaks in: the Chigs slipped past, and they're inbound on
+EARTH.** The recon is scrubbed — race back to the wormhole and jump out. (This cliffhanger leads straight
+into Mission 2, "Battle of the Belt.") **Tone: quiet, slightly anticlimactic recon → the floor drops out
+when the intel hits → urgent dash for the gate.** No combat in this one.
 
 ---
 
@@ -29,7 +30,10 @@ won't always be this quiet.
 | `house.checkin.mp3` | "Longshot flight, House. We're through the Groombridge gate — recon sweep. Command thinks the Chigs might be staging here; we go and find out. Form on Hardway, weapons cold." | 7.5s |
 | `house.recon1.mp3` | "First mark... clear. Nothing on the scope — no reactors, no traffic, nothing at all." | 5.5s |
 | `house.recon3.mp3` | "Last mark's clear too. Whole system's a ghost — no build-up, no Chigs, nothing. That's our recon: there's nothing here." | 7.5s |
-| `house.rtb.mp3` | "Good. Log it clear and take it home, Longshot. A quiet one — don't get used to them. House out." | 6s |
+| `house.flash.mp3` | "Longshot flight — flash traffic, priority one. The Chigs slipped past us; they're inbound on Earth. Recon's scrubbed — get back to the gate and jump, NOW." | 8s |
+| `house.jump.mp3` | "Gate's hot. Punch through, Longshot — Earth won't wait. See you on the other side." | 6s |
+
+*(`house.flash` is the turn — calm CO suddenly all business and urgent. `house.jump` is clipped, driving.)*
 
 ## HARDWAY — your flight lead  (files `hardway.*`)
 By-the-book grinder, the steady moral centre. Calm, patient — talks you through forming up like an instructor.
@@ -38,6 +42,7 @@ By-the-book grinder, the steady moral centre. Calm, patient — talks you throug
 |---|---|---|
 | `hardway.formup.mp3` | "Comeout — your slot's the blue box. Slide in nice and easy and hold it. Stay off the gas." | 5.5s |
 | `hardway.in.mp3` | "Good, you're in the pocket. Flight, pushing up. Let's see what's out here." | 4.5s |
+| `hardway.burn.mp3` | "You heard her — firewall it for the wormhole. Form on me, we jump together." | 5s |
 
 ## BOXCARS — hotshot wingman  (files `boxcars.*`)
 Cocky glory-hound, itching for a fight — here he's just let down/bored that there's nothing to shoot.
@@ -62,6 +67,8 @@ The unlucky one who never quite dies — a weary fatalist. Dry, flat, deadpan. A
 4. `house.recon1` — first mark: clear, nothing on the scope
 5. `boxcars.empty` → 6. `snakeeyes.quiet` — nothing out here (back-to-back)
 7. `house.recon3` — all clear; the recon's job was to find nothing, and it did
-8. `house.rtb` — log it clear and head home (mission ends at the carrier)
+8. `house.flash` — flash traffic: the Chigs are inbound on Earth; scrub the recon, get to the gate
+9. `hardway.burn` — firewall it for the wormhole, jump together
+10. `house.jump` — punch through the gate (mission ends → leads into M2)
 
 The **player ("Comeout") has no lines** in M1 — you're the silent new arrival.

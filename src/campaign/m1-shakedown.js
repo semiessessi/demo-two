@@ -28,7 +28,7 @@ export const m1 = {
   },
 
   player: { callsign: 'COMEOUT', start: { pos: [0, 0, 0], heading: [0, 0, -1] } },
-  home: { pos: [0, 0, 160] }, // the carrier you launched from / return to (placeholder cube)
+  gate: { pos: [0, 0, 160] }, // the wormhole you came through / jump back out of (placeholder ring)
 
   // The wingmen hold station on this moving anchor; you must fly into playerSlot to form up.
   formation: { anchorStart: [0, 6, -55], cruise: 22, arrive: 60, playerSlot: [16, -2, 18] },
@@ -42,7 +42,7 @@ export const m1 = {
     RECON1: [250, 40, -1000],
     RECON2: [-350, -30, -1900],
     RECON3: [450, 70, -2800],
-    HOME: [0, 0, 160],
+    GATE: [0, 0, 160],
   },
 
   script: [
@@ -59,13 +59,17 @@ export const m1 = {
     { id: 'b_r2', when: { or: [ { waypoint: 'RECON2', radius: 200 }, { after: 'b_r1', delay: 150 } ] },
       do: [ { comms: ['boxcars.empty', 'snakeeyes.quiet'] }, { waypoint: { id: 'RECON3', label: 'RECON 3' } } ] },
     { id: 'b_r3', when: { or: [ { waypoint: 'RECON3', radius: 200 }, { after: 'b_r2', delay: 150 } ] },
-      do: [ { comms: 'house.recon3' }, { objective: { id: 'recon', state: 'complete' } },
-            { objective: { id: 'rtb', state: 'active', label: 'Return to the carrier' } },
-            { waypoint: { id: 'HOME', label: 'CARRIER' } } ] },
-    { id: 'b_home', when: { or: [ { waypoint: 'HOME', radius: 110 }, { after: 'b_r3', delay: 220 } ] },
-      do: [ { comms: 'house.rtb' }, { objective: { id: 'rtb', state: 'complete' } } ] },
-    { id: 'b_end', when: { commsDone: 'house.rtb' },
-      do: [ { complete: { title: 'RECON COMPLETE', sub: 'Groombridge is clear — no build-up, no contact. A quiet first run. They will not all be.' } } ] },
+      do: [ { comms: 'house.recon3' }, { objective: { id: 'recon', state: 'complete' } } ] },
+    // the recon was clean — and then the real news breaks: the Chigs are already at Earth.
+    { id: 'b_flash', when: { commsDone: 'house.recon3' },
+      do: [ { comms: 'house.flash' },
+            { objective: { id: 'rtb', state: 'active', label: 'Get back to the wormhole' } },
+            { waypoint: { id: 'GATE', label: 'WORMHOLE' } } ] },
+    { id: 'b_push', when: { commsDone: 'house.flash' }, do: [ { comms: 'hardway.burn' } ] },
+    { id: 'b_jump', when: { or: [ { waypoint: 'GATE', radius: 90 }, { after: 'b_flash', delay: 240 } ] },
+      do: [ { comms: 'house.jump' }, { objective: { id: 'rtb', state: 'complete' } } ] },
+    { id: 'b_end', when: { commsDone: 'house.jump' },
+      do: [ { complete: { title: 'JUMPING OUT', sub: 'Groombridge was empty because the Chigs are already at Earth. The Longshots jump out one step behind them — into the Belt.' } } ] },
   ],
 
   lines: {
@@ -76,6 +80,8 @@ export const m1 = {
     'boxcars.empty':  { speaker: 'boxcars',   text: "Boss, there's nothing out here. Where's this build-up they dragged us out for?", dur: 4.5 },
     'snakeeyes.quiet':{ speaker: 'snakeeyes', text: "Empty suits me fine. Nobody out here to roll snake-eyes on me.", dur: 4.0 },
     'house.recon3':   { speaker: 'house',     text: "Last mark's clear too. Whole system's a ghost — no build-up, no Chigs, nothing. That's our recon: there's nothing here.", dur: 7.5 },
-    'house.rtb':      { speaker: 'house',     text: "Good. Log it clear and take it home, Longshot. A quiet one — don't get used to them. House out.", dur: 6.0 },
+    'house.flash':    { speaker: 'house',     text: "Longshot flight — flash traffic, priority one. The Chigs slipped past us; they're inbound on Earth. Recon's scrubbed — get back to the gate and jump, NOW.", dur: 8.0 },
+    'hardway.burn':   { speaker: 'hardway',   text: "You heard her — firewall it for the wormhole. Form on me, we jump together.", dur: 5.0 },
+    'house.jump':     { speaker: 'house',     text: "Gate's hot. Punch through, Longshot — Earth won't wait. See you on the other side.", dur: 6.0 },
   },
 };

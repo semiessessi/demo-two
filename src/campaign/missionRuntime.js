@@ -34,7 +34,7 @@ export function createMission(def, world) {
   let anchorTarget = null;     // THREE.Vector3 the formation flies toward (the active waypoint)
   let formationMoving = false; // form-up holds the formation; set true once we push off
   let slotShown = false;       // is the player's form-up slot marker visible
-  let homeMesh = null;
+  let gateMesh = null;         // wormhole ring placeholder
 
   const _off = new THREE.Vector3();
   const _ps = new THREE.Vector3();
@@ -84,13 +84,13 @@ export function createMission(def, world) {
     for (const k of Object.keys(def.waypoints || {})) wpVec[k] = new THREE.Vector3().fromArray(def.waypoints[k]);
     headingQuat(anchor.quat, new THREE.Vector3(0, 0, -1)); // formation faces forward (-Z) at start
     spawnWingmen();
-    // home ship — a placeholder grey box (the carrier) you return to
-    if (def.home) {
-      const geo = new THREE.BoxGeometry(64, 20, 96);
-      const mat = new THREE.MeshStandardMaterial({ color: 0x8895b0, metalness: 0.35, roughness: 0.55 });
-      homeMesh = new THREE.Mesh(geo, mat);
-      homeMesh.position.fromArray(def.home.pos || [0, 0, 140]);
-      scene.add(homeMesh);
+    // wormhole gate — a glowing ring placeholder you jump out through to end the mission
+    if (def.gate) {
+      const geo = new THREE.TorusGeometry(58, 7, 16, 48);
+      const mat = new THREE.MeshStandardMaterial({ color: 0x3a6cff, emissive: 0x2c54ff, emissiveIntensity: 1.6, metalness: 0.2, roughness: 0.4 });
+      gateMesh = new THREE.Mesh(geo, mat);
+      gateMesh.position.fromArray(def.gate.pos || [0, 0, 160]);
+      scene.add(gateMesh);
     }
     if (comms) comms.load(def.vo, def.lines || {});
     if (missionHud) { missionHud.clearObjectives(); missionHud.setWaypoint(null); missionHud.setSlot(null); missionHud.show(); }
@@ -180,6 +180,8 @@ export function createMission(def, world) {
       if (w.rcs) w.rcs.update(dt, true);
     }
 
+    if (gateMesh) gateMesh.rotation.z += dt * 0.3; // idle spin on the wormhole ring
+
     // form-up slot marker tracks the live slot
     if (slotShown && missionHud) { playerSlotWorld(_ps); missionHud.setSlot(_ps, 'FORM UP'); }
 
@@ -200,7 +202,7 @@ export function createMission(def, world) {
       try { w.ally.alive = false; scene.remove(w.pivot); if (w.rcs && w.rcs.group) scene.remove(w.rcs.group); } catch (_) { /* best effort */ }
     }
     wingmen.length = 0;
-    if (homeMesh) { try { scene.remove(homeMesh); homeMesh.geometry.dispose(); homeMesh.material.dispose(); } catch (_) {} homeMesh = null; }
+    if (gateMesh) { try { scene.remove(gateMesh); gateMesh.geometry.dispose(); gateMesh.material.dispose(); } catch (_) {} gateMesh = null; }
     if (comms) comms.clear();
     if (missionHud) { missionHud.hide(); missionHud.clearObjectives(); }
   }
