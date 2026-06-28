@@ -48,7 +48,7 @@ const SOUND = /[?&]sound\b/.test(window.location.search);
 
 // --- renderer + scene ------------------------------------------------------
 const app = document.getElementById('app');
-const { renderer, scene, camera, composer, bloom, render, setRenderScale } = createRenderer(app);
+const { renderer, scene, camera, composer, bloom, render, setRenderScale, gpuFrameMs } = createRenderer(app);
 
 // Lighting: a warm orange "sun" as the main light, a cool rim from the opposite side for separation,
 // and a dim hemisphere fill so shadowed sides aren't pure black.
@@ -339,7 +339,7 @@ function attractFrame(dt) {
   render();
   fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
   quality.update(dt, fps); // auto-scale shadow/VFX tier (6 Hammerheads + 24 Chigs is heavy)
-  if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
+  if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
 }
 
 function startLoop() {
@@ -405,7 +405,7 @@ function startLoop() {
 
     fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
     quality.update(dt, fps); // auto-scale shadow/VFX tier to the framerate (rate-limited)
-    if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
+    if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
   });
 }
 

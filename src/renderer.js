@@ -76,6 +76,34 @@ export function createRenderer(container) {
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
+  // GPU frame-time via a timer query (EXT_disjoint_timer_query_webgl2): measures ACTUAL GPU render time
+  // per frame, INDEPENDENT of vsync, so the quality controller can target a ms budget and see the headroom
+  // the vsync-capped wall clock can't. Small ring (results land a frame or two late). No ext (Safari/iOS)
+  // -> gpuFrameMs() returns 0 and the controller falls back to wall-clock.
+  const gl = renderer.getContext();
+  const timerExt = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  const TQ = timerExt ? [gl.createQuery(), gl.createQuery(), gl.createQuery()] : null;
+  let tqHead = 0, tqTail = 0, tqLen = 0, gpuMs = 0, tqActive = false;
+  const gpuTimerBegin = () => { if (!timerExt || tqLen >= TQ.length) { tqActive = false; return; } gl.beginQuery(timerExt.TIME_ELAPSED_EXT, TQ[tqHead]); tqActive = true; };
+  const gpuTimerEnd = () => { if (!tqActive) return; gl.endQuery(timerExt.TIME_ELAPSED_EXT); tqHead = (tqHead + 1) % TQ.length; tqLen++; tqActive = false; };
+  const gpuTimerPoll = () => {
+    while (tqLen > 0) {
+      const q = TQ[tqTail];
+      if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
+      if (!gl.getParameter(timerExt.GPU_DISJOINT_EXT)) {
+        const ms = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6; // ns -> ms
+        gpuMs = gpuMs > 0 ? gpuMs * 0.85 + ms * 0.15 : ms; // smooth
+      }
+      tqTail = (tqTail + 1) % TQ.length; tqLen--;
+    }
+  };
+  function render() {
+    gpuTimerPoll();
+    gpuTimerBegin();
+    composer.render();
+    gpuTimerEnd();
+  }
+
   function setSize(w, h) {
     curW = w;
     curH = h;
@@ -99,5 +127,5 @@ export function createRenderer(container) {
     setSize(curW, curH);
   }
 
-  return { renderer, scene, camera, composer, bloom, render: () => composer.render(), setSize, setRenderScale };
+  return { renderer, scene, camera, composer, bloom, render, setSize, setRenderScale, gpuFrameMs: () => gpuMs };
 }
