@@ -60,6 +60,9 @@ const { renderer, scene, camera, composer, bloom, render, setRenderScale, render
 // Smoke occlusion: an opaque depth pre-pass lets the smoke raymarch skip puffs hidden behind ships.
 // On by default; ?noocclude disables it (escape hatch).
 const OCCLUDE = !/[?&]noocclude\b/.test(window.location.search);
+// Diagnostic switch: ?nobodies hides every celestial backdrop body (cloud planet / black hole / Saturn /
+// Jupiter / Ixion) to isolate the "angle-dependent everything-goes-black" bug to a body shader vs the rest.
+const NOBODIES = /[?&]nobodies\b/.test(window.location.search);
 
 // Lighting: a warm orange "sun" as the main light, a cool rim from the opposite side for separation,
 // and a dim hemisphere fill so shadowed sides aren't pure black.
@@ -340,7 +343,7 @@ function applyEnvironment(s) {
   applyBody(e.body);
   // optional SECOND background body (Tartarus pairs the cyan cloud planet with a grey ringed planet)
   ensureBody(e.body2);
-  if (saturn) saturn.group.visible = e.body2 === 'saturn';
+  if (saturn) saturn.group.visible = !NOBODIES && e.body2 === 'saturn';
 }
 // Binary companion star: a dim second disc+glow on the opposite side of the sky + a fill light at its colour.
 function applyCompanion(e) {
@@ -367,6 +370,7 @@ function applySun(c) {
 // Show the environment's background body (Jupiter / black hole / cloud planet / Ixion / none),
 // building it on first use (lazy) so unused envs cost nothing.
 function applyBody(kind) {
+  if (NOBODIES) kind = 'none'; // diagnostic: force all bodies off
   ensureBody(kind);
   if (jupiter) jupiter.group.visible = kind === 'jupiter';
   if (blackhole) blackhole.group.visible = kind === 'blackhole';
@@ -544,7 +548,7 @@ async function init() {
 }
 
 // --- render loop -----------------------------------------------------------
-const clock = new THREE.Clock();
+const clock = new THREE.Timer(); // THREE.Clock is deprecated -> Timer (update() each frame, then getDelta())
 let fps = 60;
 
 // Attract mode frame: drive the AI dogfight + cinematic camera, reusing the shared combat/vfx/debris/
@@ -589,6 +593,7 @@ function attractFrame(dt) {
 
 function startLoop() {
   renderer.setAnimationLoop(() => {
+    clock.update();
     const dt = Math.min(clock.getDelta(), 0.1);
     if (DEBUG && debug && debug.frame(dt)) return; // debug viewer modes own the frame
     if (ATTRACT) { attractFrame(dt); return; } // standalone ?attract: a leaner, player-less frame

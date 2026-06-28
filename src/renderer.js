@@ -79,6 +79,9 @@ export function createRenderer(container) {
     0.72,
   );
   composer.addPass(bloom);
+  // Diagnostic switch: ?nobloom disables the bloom pass — a bright/NaN body fragment fed through the bloom
+  // blur can spread across the whole frame, so this isolates "everything goes black" to the bloom vs not.
+  if (typeof location !== 'undefined' && /[?&]nobloom\b/.test(location.search)) bloom.enabled = false;
   composer.addPass(new OutputPass());
 
   // --- Smoke occlusion depth pre-pass ---------------------------------------------------------------
