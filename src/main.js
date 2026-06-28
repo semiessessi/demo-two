@@ -45,6 +45,10 @@ const DEBUG =
 // Attract mode: a self-running cinematic AI-vs-AI dogfight (no player). On ?attract we build the attract
 // orchestrator instead of the player flight/cannon/HUD/gameState and run a separate, leaner render frame.
 const ATTRACT = /[?&]attract\b/.test(window.location.search);
+// Skirmish setup: the pre-game customisation menu + the cinematic attract battle behind it. Gated behind
+// ?skirmish so the DEFAULT boot is light (no menu, no 6-Hammerhead attract battle built up front) and
+// drops straight into flight — matching the base game's fast load.
+const SKIRMISH = /[?&]skirmish\b/.test(window.location.search);
 
 // Sound effects (explosions + engine hum) are opt-in for now — they still need work, so they're gated
 // behind ?sound and silent by default. Music (audio.js / track.mp3) is independent of this flag.
@@ -172,7 +176,15 @@ function ensureBody(kind) {
   else if (kind === 'cloudplanet' && !cloudplanet) { cloudplanet = createCloudPlanet(); scene.add(cloudplanet.group); }
   else if (kind === 'habitable' && !habitable) { habitable = createHabitablePlanet(); scene.add(habitable.group); }
 }
-const JUP_DIR = new THREE.Vector3(0.35, 0.12, -0.93).normalize();
+// Jupiter Trojans sit at Jupiter's L4/L5 Lagrange point — the Sun, Jupiter and the Trojan camp form an
+// EQUILATERAL triangle, so from here the Sun and Jupiter are exactly 60° apart in the sky. Build JUP_DIR
+// as the direction 60° off the sun, in the plane toward a chosen viewing side.
+const JUP_DIR = (() => {
+  const fwd = new THREE.Vector3(0.5, 0.0, -0.86); // where we'd like Jupiter (forward-right)
+  const perp = fwd.clone().addScaledVector(sunDir, -fwd.dot(sunDir)).normalize(); // component ⟂ to the sun
+  const a = THREE.MathUtils.degToRad(60);
+  return new THREE.Vector3().addScaledVector(sunDir, Math.cos(a)).addScaledVector(perp, Math.sin(a)).normalize();
+})();
 const BH_DIR = new THREE.Vector3(0.40, 0.18, -0.90).normalize();
 const CLOUD_DIR = new THREE.Vector3(0.30, 0.15, -0.94).normalize();
 // Ixion sits toward the sun (blend of forward + sunDir) so it's strongly back-lit -> a thin crescent,
@@ -373,6 +385,14 @@ function launchSkirmish(s) {
   firstGesture(); // the launch click is a user gesture -> unlock + start audio (autoplay policy)
   gameState.launch();
 }
+// Default (non-skirmish) start: no menu, no attract backdrop — apply the saved settings and drop straight
+// into flight. Also serves as gameState.onMenu so a finished mission restarts back into flight (not a menu).
+function bootFlight() {
+  applySettings(settings);
+  restartWorld();
+  if (hud) hud.setVisible(true);
+  if (gameState.mode === 'menu') gameState.launch(); // menu -> flying (audio unlocks on first input)
+}
 
 async function init() {
   stars = await buildStarfield(starUniforms);
@@ -439,8 +459,9 @@ async function init() {
 
   hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
   targetDisplay = createTargetDisplay(chigKit.template);
-  gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld, onMenu: enterMenu });
-  pregame = createPregame({ settings, onLaunch: launchSkirmish, onChange: (s) => { applyEnvironment(s); applyLoadout(ship, s.loadout); } });
+  // ?skirmish -> return to the menu after a mission; default -> drop straight back into flight.
+  gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld, onMenu: SKIRMISH ? enterMenu : bootFlight });
+  if (SKIRMISH) pregame = createPregame({ settings, onLaunch: launchSkirmish, onChange: (s) => { applyEnvironment(s); applyLoadout(ship, s.loadout); } });
   damage.setCallbacks({
     onEject: () => gameState.eject(),
     onDestroyed: () => gameState.destroyed(),
@@ -471,9 +492,10 @@ async function init() {
       gameState.tumble('WING TORN OFF — EJECTED');
     },
   });
-  // Cinematic battle behind the pre-game menu: the player ship is ally #1 (reusing the player's own RCS
-  // so there's no doubled jet rig), plus clones vs looping Chigs. enterMenu() shows/re-arms it.
-  attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting, rcs });
+  // Cinematic battle behind the pre-game menu (skirmish only): the player ship is ally #1 (reusing the
+  // player's own RCS so there's no doubled jet rig), plus clones vs looping Chigs. Building it is the bulk
+  // of the boot cost, so the default (non-skirmish) path skips it entirely.
+  if (SKIRMISH) attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting, rcs });
   }
 
   if (DEBUG && !ATTRACT) {
@@ -493,7 +515,8 @@ async function init() {
   // death-debris / muzzle flash doesn't pay a compile stall mid-fight.
   try { renderer.compile(scene, camera); } catch (e) { console.warn('[prewarm] compile skipped', e); }
 
-  enterMenu(); // open on the AI Skirmish setup screen (flight begins on Launch)
+  if (SKIRMISH) enterMenu(); // open on the AI Skirmish setup screen (flight begins on Launch)
+  else bootFlight();         // default: straight into flight with the saved settings (light load, no menu)
   startLoop();
   reveal();
 }
