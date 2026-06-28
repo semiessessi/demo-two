@@ -296,6 +296,12 @@ function applyEnvironment(s) {
   if (u.uBrightness) u.uBrightness.value = e.nebula.uBrightness;
   if (u.uSaturation) u.uSaturation.value = e.nebula.uSaturation;
   if (u.uMilkyWay) u.uMilkyWay.value = e.nebula.uMilkyWay;
+  // big localized nebula patch (Cerberus): a broad blue/purple cloud around the black hole
+  if (u.uPatchBright) u.uPatchBright.value = e.patch ? e.patch.bright : 0;
+  if (e.patch) {
+    if (u.uPatchColor) u.uPatchColor.value.setHex(e.patch.color);
+    if (u.uPatchDir) u.uPatchDir.value.copy(BH_DIR);
+  }
   lighting.setSunIntensity(e.sunMult != null ? e.sunMult : 7); // intensity matches the star (Sol@5AU dim, etc.)
   lighting.setSunColor(e.sun.light != null ? e.sun.light : 0xffffff); // cast light colour matches the star type
   applySun(e.sun);

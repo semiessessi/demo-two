@@ -21,6 +21,9 @@ uniform float uBrightness;
 uniform float uSaturation;
 uniform float uMilkyWay; // brightness of the Milky Way band
 uniform vec3 uMwPole;    // unit galactic NORTH pole (scene coords) — the Milky Way is the great circle perpendicular to it
+uniform vec3 uPatchDir;    // centre of a big localized nebula patch (e.g. around the Cerberus black hole)
+uniform float uPatchBright; // 0 = off; >0 fills a broad swathe of sky around uPatchDir
+uniform vec3 uPatchColor;  // patch tint (blue/purple)
 uniform vec3 uColorA; // deep base
 uniform vec3 uColorB; // mid clouds
 uniform vec3 uColorC; // hot cores
@@ -88,6 +91,17 @@ void main() {
   vec3 mwTint = mix(vec3(0.62, 0.66, 0.78), uColorC, 0.18);    // warm-grey, a hint of the core colour
   col += mwTint * mw * fil * mix(1.0, 0.42, rift) * uMilkyWay;
 
+  // Big localized nebula patch: a broad blue/purple cloud across ~2/3 of the sky around uPatchDir
+  // (Cerberus, surrounding the black hole). Cloudy (fbm) so it reads as nebulosity, not a flat wash.
+  // Added after the global dimming so it sits above the ~10% backdrop.
+  if (uPatchBright > 0.001) {
+    float pd = dot(dir, uPatchDir);
+    float cov = smoothstep(-0.4, 0.3, pd);                       // broad cone -> ~2/3 of the sky
+    float nb = fbm(dir * 1.7 + vec3(0.0, 0.0, uTime * 0.008) + 12.0) * 0.65 + fbmDetail(dir * 4.2 + 5.0) * 0.45;
+    float dens = cov * smoothstep(0.28, 0.95, nb);
+    col += uPatchColor * dens * uPatchBright;
+  }
+
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -99,6 +113,9 @@ export function createNebula() {
     uSaturation: { value: 0.32 }, // greyer still — the blue was too rich
     uMilkyWay: { value: 0.12 }, // galactic band brightness (sits above the dimmed nebula)
     uMwPole: { value: new THREE.Vector3(0.868, 0.456, -0.198) }, // galactic N pole (real RA 192.86°, Dec +27.13°) -> band through Crux, Cygnus, past Orion
+    uPatchDir: { value: new THREE.Vector3(0.40, 0.18, -0.90).normalize() }, // toward the Cerberus black hole
+    uPatchBright: { value: 0 }, // per-environment (Cerberus turns it on)
+    uPatchColor: { value: new THREE.Color(0x4d2d8c) }, // blue/purple
     uColorA: { value: new THREE.Color(0x04050f) }, // deep blue-black base
     uColorB: { value: new THREE.Color(0x223080) }, // blue clouds (dominant)
     uColorC: { value: new THREE.Color(0xd8401f) }, // red hot cores (accent touches)
