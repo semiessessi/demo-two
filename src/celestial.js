@@ -136,7 +136,7 @@ export function createBlackHole() {
       uTime: { value: 0 },
       uSteps: { value: 150 },
       uMwNormal: { value: new THREE.Vector3(0.9101, 0.4020, -0.1002).normalize() }, // galactic pole (lensed Milky Way)
-      uSpokeBright: { value: 0.9 }, // brightness of the spoked blue/purple nebula behind the hole
+      uSpokeBright: { value: 0.6 }, // brightness of the blue/purple nebula behind the hole (dimmed — it glowed too much)
     },
     transparent: true,
     depthWrite: false,
@@ -173,22 +173,16 @@ export function createBlackHole() {
         float ca = clamp(dot(dir, axis), -1.0, 1.0);
         float ang = acos(ca);                                    // 0 at the hole, grows outward
         if (ang > 1.18) return 0.0;                              // past the spoke reach -> skip the heavy fbm over the wider cone
-        vec3 t = dir - axis * ca;                                // tangential component
         vec3 up = abs(axis.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
         vec3 ux = normalize(cross(axis, up));
         vec3 vx = cross(axis, ux);
-        float az = atan(dot(t, vx), dot(t, ux));                 // azimuth — feeds cos() ONLY (periodic, so the +/-pi wrap is seamless)
-        az += 0.3 * smoothstep(0.12, 1.0, ang);                  // tips curve toward the same rotational sense
-        vec2 pp = vec2(dot(dir, ux), dot(dir, vx));              // CONTINUOUS tangential coords -> the NOISE has no atan2 seam (the old fbm(az) tore here)
-        float warp = fbm(pp * 1.7 + 5.0);
-        float spk = mix(0.4, 1.0, pow(0.5 + 0.5 * cos(az * 22.0 + warp * 6.2831), 0.1)); // very wide overlapping arms + a 0.4 floor -> no dark gaps between them
-        float fil = fbm(pp * 5.0 + 21.0);                        // radial filaments (seamless)
-        float body = spk * mix(0.48, 1.0, fil);                  // higher floor -> fuller, padded arms
-        float lanes = fbm(pp * 11.0 + 40.0);                     // fine dust lanes (seamless)
-        body *= mix(0.28, 1.0, smoothstep(0.34, 0.66, lanes));   // carve dark dust lanes (Milky-Way-ish)
-        // annular radial profile: starts at the hole, fades before the cone edge (soft -> no square)
+        vec2 pp = vec2(dot(dir, ux), dot(dir, vx));             // CONTINUOUS tangential coords -> seamless everywhere
+        // continuous nebula CLOUD (layered fbm) — organic, wispy, Milky-Way-ish. NO discrete cos-spokes: those
+        // left thin spiral seam-lines between them. Everything samples pp, so there is no azimuth seam at all.
+        float cloud = fbm(pp * 2.2 + 5.0) * 0.55 + fbm(pp * 5.5 + 21.0) * 0.3 + fbm(pp * 12.0 + 40.0) * 0.15;
+        float body = smoothstep(0.28, 0.86, cloud);             // soft wispy filaments
         float radial = smoothstep(0.0, 0.05, ang) * (1.0 - smoothstep(0.52, 1.15, ang));
-        radial *= 0.5 + 0.7 * fbm(pp * 3.0 + 2.0);              // large-scale clumping (seamless)
+        radial *= 0.45 + 0.8 * fbm(pp * 1.4 + 2.0);             // large-scale clumping (seamless)
         return clamp(body * radial, 0.0, 1.0);
       }
 
@@ -204,14 +198,15 @@ export function createBlackHole() {
         vec2 dp = vec2(dot(hit, T), dot(hit, Bv));
         float cs = cos(spin), sn = sin(spin);
         vec2 dpr = vec2(cs * dp.x - sn * dp.y, sn * dp.x + cs * dp.y);
-        float turb = fbm(dpr * 0.9 + vec2(uTime * 0.05, 3.0));
-        turb = mix(turb, fbm(dpr * 1.8 + 11.0), 0.4); // finer co-rotating filaments
+        float dang = atan(dpr.y, dpr.x);                         // rotated azimuth -> feeds cos() ONLY (periodic = seamless)
+        float wisp = 0.5 + 0.5 * cos(dang * 6.0 - rr * 0.8);     // smooth spiral wisps (cosine -> soft, no harsh blotches)
+        float turb = wisp * 0.6 + fbm(dpr * 1.5 + 11.0) * 0.4;   // wisps + a little fine detail
         // temperature ramp: blue-white (inner) -> orange -> deep red (outer)
         vec3 hot = vec3(0.95, 0.55, 1.0);   // hot inner -> violet-white
         vec3 mid = vec3(1.0, 0.32, 0.42);   // red-magenta
         vec3 cool = vec3(0.62, 0.05, 0.24); // deep red-purple outer
         vec3 col = mix(mix(hot, mid, smoothstep(0.0, 0.45, t)), cool, smoothstep(0.45, 1.0, t));
-        float bright = (1.7 - 1.2 * t) * (0.55 + 0.9 * turb);
+        float bright = (0.85 - 0.55 * t) * (0.8 + 0.4 * turb); // ~50% dimmer + softer contrast (less blotchy red)
         // relativistic doppler beaming: prograde orbital velocity vs view
         vec3 vel = normalize(cross(N, hit));
         float beta = clamp(0.62 / sqrt(rr), 0.0, 0.72);
@@ -280,7 +275,7 @@ export function createBlackHole() {
         float ring = exp(-pow((minr - 1.5) * 6.0, 2.0));
         ring *= 0.5 + 0.6 * (0.5 + 0.5 * sin(azr * 3.0 - uTime * 2.0)) + 0.16 * sin(uTime * 1.3); // orbiting hot-spots + pulse
         ring = max(ring, 0.0);
-        acc += vec3(1.0, 0.92, 0.78) * ring * 0.9;
+        acc += vec3(1.0, 0.92, 0.78) * ring * 0.45; // ~half the glow
         alpha = max(alpha, ring * 0.9 * zone);
         // MANY strongly-LENSED star arcs hugging the hole — tangential bright streaks = the warping signature
         float arcs = 0.0;
@@ -293,7 +288,7 @@ export function createBlackHole() {
           float ag = exp(-pow(da * 2.0, 2.0));                          // localized in azimuth -> an arc, not a full ring
           arcs += rg * ag;
         }
-        acc += mix(vec3(0.92, 0.96, 1.0), nebCol * 2.0, 0.3) * arcs * 3.2 * zone; // bright bluish-white distorted STAR arcs
+        acc += mix(vec3(0.92, 0.96, 1.0), nebCol * 2.0, 0.3) * arcs * 2.4 * zone; // bright bluish-white distorted STAR arcs
         alpha = max(alpha, clamp(arcs, 0.0, 1.0) * zone);
         if (alpha < 0.004) discard;                  // nothing here -> let the real scene show through
         gl_FragColor = vec4(acc, clamp(alpha, 0.0, 1.0));

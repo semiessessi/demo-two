@@ -127,6 +127,39 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
   }
 
   // Called from the first user gesture (after audio.ensureContext()/resumeContext()). Builds the graph and
+  // Procedurally synthesize a one-off explosion into a buffer: a lowpassed-noise BODY (the boom) + a
+  // sweeping-down sine SUB (the thump) + optional sharp CRACKLE (debris), all randomized so every call is a
+  // distinct variant. Peak-normalized + soft-clipped for glue. Used to pad the file-based variants.
+  function synthExplosion(c) {
+    const sr = c.sampleRate;
+    const dur = 0.9 + Math.random() * 1.4;                  // 0.9 - 2.3 s
+    const n = Math.floor(sr * dur);
+    const buf = c.createBuffer(1, n, sr);
+    const ch = buf.getChannelData(0);
+    const subF = 38.0 + Math.random() * 60.0;               // body fundamental 38-98 Hz
+    const subSweep = 1.0 + Math.random() * 2.5;             // how fast the sub drops
+    const subDecay = 2.0 + Math.random() * 3.5;
+    const bodyDecay = 2.5 + Math.random() * 4.5;
+    const cut = 0.03 + Math.random() * 0.22;                // body lowpass (dark -> bright)
+    const crackle = Math.random();                          // debris crackle amount
+    const crackleDecay = 8.0 + Math.random() * 16.0;
+    let lp = 0.0, peak = 1e-6;
+    for (let i = 0; i < n; i++) {
+      const t = i / sr;
+      const nz = Math.random() * 2.0 - 1.0;
+      lp += (nz - lp) * cut;                                // one-pole lowpass -> the boom body
+      let s = lp * Math.exp(-t * bodyDecay) * 1.4;
+      const f = subF * Math.exp(-t * subSweep);
+      s += Math.sin(6.28318 * f * t) * Math.exp(-t * subDecay) * 1.1; // sub thump
+      if (crackle > 0.35) s += (Math.random() * 2.0 - 1.0) * Math.exp(-t * crackleDecay) * crackle * 0.5;
+      ch[i] = s;
+      const a = Math.abs(s); if (a > peak) peak = a;
+    }
+    const g = 0.85 / peak;
+    for (let i = 0; i < n; i++) ch[i] = Math.tanh(ch[i] * g * 1.2) * 0.9; // normalize + soft-clip
+    return buf;
+  }
+
   // decodes the buffers on the now-live context.
   async function unlock() {
     if (unlocked) return;
@@ -149,6 +182,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
 
     await ready;
     expBuffers = (await Promise.all(rawExplosions.map(decode))).filter(Boolean);
+    for (let i = 0; i < 7; i++) { try { expBuffers.push(synthExplosion(ctx)); } catch (_) {} } // +7 synthesized variants (sick of the same boom)
     flybyBuffers = (await Promise.all(rawFlybys.map(decode))).filter(Boolean);
     chigShotBuf = rawChigShot ? await decode(rawChigShot) : null;
     engineBuf = rawEngine ? await decode(rawEngine) : null;
