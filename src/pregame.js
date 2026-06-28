@@ -2,6 +2,7 @@ import { DIFFICULTY, ENVIRONMENT, saveSettings } from './settings.js';
 import { peerJsWorksHere } from './net/webrtc-detect.js';
 import { getConfig, getPlayer, isSignedIn, signInWithGoogle, signInWithFacebook, signOut, onSessionChange } from './social/auth.js';
 import * as friends from './social/friends.js';
+import { getLeaderboard } from './social/leaderboard.js';
 
 // Pre-game / "AI Skirmish" setup screen — a self-building DOM overlay (same dark glassy style as the
 // HUD). Sections: Markings, Loadout, Environment, Difficulty, and Launch. Edits write through to the
@@ -201,6 +202,37 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin }) 
   onSessionChange(() => renderFriends());
   const frPoll = setInterval(() => { if (isSignedIn() && root.style.display !== 'none') renderFriends(); }, 15000); // surface incoming invites/requests
   void frPoll;
+
+  // ---- Leaderboard ----
+  const lb = el('div', '', panel);
+  el('div', LABEL, lb).textContent = 'Leaderboard';
+  const lbToggles = el('div', 'display:flex;gap:6px;margin-bottom:4px;', lb);
+  const lbList = el('div', '', lb);
+  let lbMetric = 'wave', lbScope = 'global';
+  function mkToggle(text, on, fn) { const b = el('button', BTN + 'padding:4px 9px;' + (on() ? BTN_ON : ''), lbToggles); b.textContent = text; b.onclick = () => { fn(); paintToggles(); renderLb(); }; return b; }
+  let tWave, tKills, tGlobal, tFriends;
+  function paintToggles() {
+    tWave.style.cssText = BTN + 'padding:4px 9px;' + (lbMetric === 'wave' ? BTN_ON : '');
+    tKills.style.cssText = BTN + 'padding:4px 9px;' + (lbMetric === 'kills' ? BTN_ON : '');
+    tGlobal.style.cssText = BTN + 'padding:4px 9px;' + (lbScope === 'global' ? BTN_ON : '');
+    tFriends.style.cssText = BTN + 'padding:4px 9px;' + (lbScope === 'friends' ? BTN_ON : '');
+  }
+  tWave = mkToggle('Wave', () => lbMetric === 'wave', () => { lbMetric = 'wave'; });
+  tKills = mkToggle('Kills', () => lbMetric === 'kills', () => { lbMetric = 'kills'; });
+  tGlobal = mkToggle('Global', () => lbScope === 'global', () => { lbScope = 'global'; });
+  tFriends = mkToggle('Friends', () => lbScope === 'friends', () => { lbScope = 'friends'; });
+  async function renderLb() {
+    lbList.innerHTML = '';
+    const rows = await getLeaderboard(lbMetric, lbScope);
+    if (!rows.length) { el('div', `${FONT}font-size:11px;color:#8a96b4;`, lbList).textContent = 'no scores yet'; return; }
+    rows.forEach((r, i) => {
+      const row = el('div', 'display:flex;gap:8px;margin:2px 0;', lbList);
+      el('span', `${FONT}font-size:11px;color:#8a96b4;width:18px;`, row).textContent = `${i + 1}.`;
+      el('span', `${FONT}flex:1;font-size:12px;color:#cdd6ea;`, row).textContent = r.callsign || r.display_name || 'Pilot';
+      el('span', `${FONT}font-size:12px;color:#9ec7ff;`, row).textContent = lbMetric === 'kills' ? `${r.total_kills}` : `wave ${r.best_wave}`;
+    });
+  }
+  renderLb();
 
   // ---- Launch ----
   const launch = el('button', `${FONT}font-size:16px;letter-spacing:0.14em;color:#eaeefc;cursor:pointer;`

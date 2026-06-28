@@ -37,7 +37,8 @@ import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlane
 import { createPeerTransport } from './net/peer.js';
 import { createNetGame } from './net/netgame.js';
 import { peerJsWorksHere } from './net/webrtc-detect.js';
-import { refreshMe, onSessionChange } from './social/auth.js';
+import { refreshMe, onSessionChange, isSignedIn } from './social/auth.js';
+import { submitRun } from './social/leaderboard.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin. It can also be opted into on the deployed
@@ -308,9 +309,11 @@ let debug = null;
 let quality = null;
 let attract = null;
 let net = null; // co-op netplay (null = single-player)
+let runSubmitted = false; // leaderboard: submit a run once when it ends
 
 // Re-arm a fresh fight after a mission ends (called by gameState.restart()).
 function restartWorld() {
+  runSubmitted = false; // a fresh run -> allow one leaderboard submit when it ends
   ship.pivot.position.set(0, 0, 0);
   ship.pivot.quaternion.identity();
   if (damage) damage.reset();
@@ -738,6 +741,10 @@ function startLoop() {
     if (playerDebris) playerDebris.update(dt, null, enemyMgr.enemies); // player wreck debris (no self-collide)
     enemyMgr.prune();
     gameState.update(dt, input);
+    if (gameState.mode === 'over' && !runSubmitted) { // record the run for the leaderboard (once)
+      runSubmitted = true;
+      if (isSignedIn()) submitRun({ wave: (waves && waves.wave) || 0, kills: enemyMgr.kills, deaths: 1, difficulty: settings.difficulty, environment: settings.environment, coop: !!net });
+    }
     hud.update({ waves, enemies: enemyMgr.enemies, player, ejectProgress: gameState.ejectProgress });
     targetDisplay.update(cannon.target, ship.pivot.quaternion, ship.pivot.position, cannon.locked);
 

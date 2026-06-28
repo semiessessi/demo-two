@@ -9,6 +9,7 @@ import { issueSession, readSession } from './auth/session.js';
 import { googleExchange } from './auth/google.js';
 import { facebookExchange } from './auth/facebook.js';
 import * as social from './social.js';
+import * as lb from './leaderboard.js';
 
 const CORS = {
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
@@ -41,6 +42,10 @@ export default {
       // public config so the client can build authorize URLs without hardcoding ids
       if (path === '/auth/config' && request.method === 'GET') {
         return json({ googleClientId: env.GOOGLE_CLIENT_ID || null, facebookAppId: env.FACEBOOK_CLIENT_ID || null }, 200, request);
+      }
+      if (path === '/leaderboard' && request.method === 'GET') {
+        const s = await readSession(request, env); // optional — only scope=friends needs it
+        return json({ rows: await lb.getLeaderboard(env, { metric: url.searchParams.get('metric') || 'wave', scope: url.searchParams.get('scope') || 'global', me: s ? s.playerId : null }) }, 200, request);
       }
       if (path === '/auth/google/exchange' && request.method === 'POST') {
         return await handleExchange(googleExchange, 'google', request, env);
@@ -79,6 +84,7 @@ export default {
         if (path === '/me/invites' && request.method === 'GET') return json({ invites: await social.listInvites(env, me) }, 200, request);
         if (seg[0] === 'invite' && seg.length === 3 && request.method === 'POST') return wrap(await social.actOnInvite(env, me, seg[1], seg[2]));
         if (path === '/me/notifications' && request.method === 'GET') return json(await social.notifications(env, me), 200, request);
+        if (path === '/me/runs' && request.method === 'POST') return wrap(await lb.submitRun(env, me, body));
       }
       return json({ error: 'not found', path }, 404, request);
     } catch (e) {
