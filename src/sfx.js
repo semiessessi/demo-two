@@ -254,6 +254,9 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
 
   // The cannon fired a shot this frame — refresh the hold so the loop stays up. Called per bolt (onFire).
   function gunFiring() {
+    if (gunHold <= 0 && gunSrc && ctx) { // first shot of a burst -> nudge the loop pitch for subtle variety
+      try { gunSrc.playbackRate.setTargetAtTime(0.97 + Math.random() * 0.08, ctx.currentTime, 0.012); } catch (_) {}
+    }
     gunHold = GUN_HOLD;
   }
 

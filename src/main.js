@@ -311,7 +311,7 @@ function updateBackdropBodies(dt) {
     blackhole.group.position.copy(camera.position); // sky-pass sphere centred on the camera (no billboard)
     const u = blackhole.mat.uniforms;
     u.uCamPos.value.copy(camera.position);
-    u.uCenter.value.copy(camera.position).addScaledVector(BH_DIR, 3600); // the hole sits in the BH_DIR sky direction
+    u.uCenter.value.copy(camera.position).addScaledVector(BH_DIR, 7200); // the hole sits in the BH_DIR sky direction (2x farther -> ~half the apparent size)
     u.uTime.value += dt;
   }
 }
