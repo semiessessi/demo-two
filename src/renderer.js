@@ -16,11 +16,19 @@ import { detectDevice } from './device.js';
 // Mobile is even more fill-bound and has weaker GPUs — cap at 1.0 there (no super-sampling at all).
 const { isMobile: IS_MOBILE } = detectDevice();
 const MAX_PR = IS_MOBILE ? 1.0 : 1.3;
-// Firefox on Linux/Mesa runs the MULTISAMPLED resolve/blit of the EffectComposer HDR target through a
-// slow path that tanks even strong GPUs — so on Firefox we drop MSAA (samples 0). We keep the HDR
-// HALF-FLOAT format though: it's not the slow part, and an 8-bit intermediate bands hard on the smooth
-// low-brightness nebula/bloom gradients. (Without MSAA, bright sub-pixel points alias a little more.)
-const IS_FIREFOX = typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent || '');
+// MSAA on the EffectComposer's HDR (half-float) target is only safe-and-fast on desktop Chromium:
+//   • Firefox/Linux+Mesa runs the multisampled-float resolve/blit through a slow path (tanks strong GPUs).
+//   • Apple WebKit (iOS Safari/Chrome AND desktop Safari) can't allocate a multisampled HALF-FLOAT
+//     renderbuffer at all — the target comes back INCOMPLETE and the whole canvas renders BLACK. This is
+//     exactly why it was black on iPad.
+//   • Mobile GPUs are too fill-bound to spend on MSAA regardless.
+// So enable MSAA only where it's known-good; everywhere else samples:0. We always keep the HALF-FLOAT
+// format (it's not the slow/broken part, and an 8-bit intermediate bands the smooth nebula/bloom badly) —
+// dropping back to 8-bit only if the GPU genuinely can't render to float (see HALF_FLOAT_OK below).
+const UA = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+const IS_FIREFOX = /firefox/i.test(UA);
+const IS_APPLE_WEBKIT = /AppleWebKit/.test(UA) && !/Chrome|Chromium|Edg\//.test(UA); // Safari (desktop + iOS), iOS Chrome
+const ALLOW_MSAA = !IS_FIREFOX && !IS_MOBILE && !IS_APPLE_WEBKIT;
 
 export function createRenderer(container) {
   const renderer = new THREE.WebGLRenderer({
@@ -28,6 +36,11 @@ export function createRenderer(container) {
     powerPreference: 'high-performance',
     stencil: false,
   });
+  // Can this GPU actually RENDER to a half-float colour buffer? WebGL2 needs EXT_color_buffer_float (or
+  // the half-float variant); without it the HDR target is incomplete -> black. Present on iOS 15+ and all
+  // modern desktops, so we keep half-float there; only ancient/locked-down browsers fall back to 8-bit.
+  const glCaps = renderer.getContext();
+  const HALF_FLOAT_OK = !!(glCaps.getExtension('EXT_color_buffer_float') || glCaps.getExtension('EXT_color_buffer_half_float'));
   // renderScale (0.5..1) is the quality controller's fill-rate lever on top of the MAX_PR cap.
   let renderScale = 1;
   let curW = window.innerWidth;
@@ -63,8 +76,8 @@ export function createRenderer(container) {
   // keeps bright (>1) values for the bloom threshold.
   const dpr = renderer.getDrawingBufferSize(new THREE.Vector2());
   const renderTarget = new THREE.WebGLRenderTarget(dpr.x, dpr.y, {
-    type: THREE.HalfFloatType, // always HDR — 8-bit here banded the nebula/bloom gradients badly
-    samples: IS_FIREFOX ? 0 : 4, // drop only MSAA on Firefox (its multisampled resolve is the slow path)
+    type: HALF_FLOAT_OK ? THREE.HalfFloatType : THREE.UnsignedByteType, // HDR when renderable; 8-bit fallback (bands, but draws)
+    samples: ALLOW_MSAA ? 4 : 0, // MSAA only on desktop Chromium; off on Apple/mobile (black) + Firefox (slow)
   });
   const composer = new EffectComposer(renderer, renderTarget);
   composer.addPass(new RenderPass(scene, camera));
