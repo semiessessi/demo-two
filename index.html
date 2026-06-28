@@ -223,6 +223,9 @@
     </aside>
     <div id="toast"><span>Press <kbd>Tab</kbd> for controls</span></div>
     <div id="fade"></div>
+    <!-- PeerJS (WebRTC signaling via the public broker) for co-op multiplayer; sets window.Peer -->
+    <link rel="preconnect" href="https://0.peerjs.com" crossorigin />
+    <script defer src="/vendor/peerjs.min.js"></script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
