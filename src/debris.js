@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
+import { createSpatialGrid } from './spatialGrid.js';
 
 // Runtime ship-fracture debris. A Web Worker (fracture-worker.js) generates fracture variations off
 // the main thread; we cache them as they arrive and grow the pool toward `count` (64). On an enemy
@@ -96,6 +97,13 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
   }
 
   const movers = [];
+  // Broad-phase spatial grid: insert the live enemy ships once per frame, then each chunk queries only the
+  // few nearby ones to bounce off (replaces "every chunk × every ship"). curMover/gridCollide avoid a
+  // per-chunk closure allocation.
+  const grid = createSpatialGrid(16);
+  const GRID_QR = 6; // query radius — must exceed maxEnemyRadius (~2.2) + FRAG_R (1.1) so no bounce is missed
+  let curMover = null;
+  const gridCollide = (e) => { if (e.alive) collide(curMover, e.pos, e.radius, e.vel); };
   const _dir = new THREE.Vector3();
   const _pos = new THREE.Vector3();
   const _n = new THREE.Vector3();
@@ -210,6 +218,7 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
   function update(dt, player, enemies) {
     elapsed += dt;
     if (heat > 0) { heat = Math.max(0, heat - dt / 2.0); interiorMat.emissiveIntensity = heat * 0.8; } // cool over ~2s
+    if (enemies) { grid.begin(); for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (e.alive) grid.insert(e.pos.x, e.pos.y, e.pos.z, e); } }
     for (let i = movers.length - 1; i >= 0; i--) {
       const m = movers[i];
       // secondary re-break: shatter this chunk into its children mid-flight
@@ -237,7 +246,7 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
       if (m.noCollideT > 0) m.noCollideT -= dt; // let the chunk clear the wreck first (no sticking on spawn)
       else {
         if (player) collide(m, player.pos, player.radius, player.vel);
-        if (enemies) for (const e of enemies) { if (e.alive) collide(m, e.pos, e.radius, e.vel); }
+        if (enemies) { curMover = m; grid.query(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z, GRID_QR, gridCollide); }
       }
       if (m.life < 0.5) m.mesh.scale.setScalar(Math.max(0.001, m.life / 0.5)); // graceful shrink at end-of-life
     }
