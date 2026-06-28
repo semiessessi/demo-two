@@ -477,7 +477,10 @@ function bootAttract() {
   applyEnvironment({ ...settings, environment: 'cerberus' }); // attract showcases the Cerberus black hole by default
   if (attract) { attract.resume(); attract.setVisible(true); }
   // Title menu over the cinematic: logo + New Game / Multiplayer / Options (only Multiplayer is live for now).
-  const menu = createAttractMenu({ onMultiplayer: () => { location.href = location.pathname + '?skirmish'; } });
+  const menu = createAttractMenu({
+    onMultiplayer: () => { location.href = location.pathname + '?skirmish'; },
+    onControls: () => infoEl?.classList.toggle('open'), // same toggle as Tab
+  });
   menu.show();
 }
 
@@ -829,11 +832,10 @@ function reveal() {
 }
 setTimeout(reveal, 8000); // safety net if a frame never lands
 
-// show the controls panel briefly on load, then retract
-infoEl?.classList.add('open');
-setTimeout(() => infoEl?.classList.remove('open'), 6500);
-setTimeout(() => toastEl?.classList.add('show'), 7000);
-setTimeout(() => toastEl?.classList.remove('show'), 11000);
+// Controls panel starts HIDDEN now; just slide in a brief "press Tab" toast as a hint. Tab (or, on the
+// attract screen, the menu's Controls item) toggles the panel.
+setTimeout(() => toastEl?.classList.add('show'), 2400);
+setTimeout(() => toastEl?.classList.remove('show'), 8400);
 
 let statsOn = false;
 function setStats(on) {

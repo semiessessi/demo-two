@@ -45,7 +45,7 @@ function injectStyle() {
   document.head.appendChild(el);
 }
 
-export function createAttractMenu({ onMultiplayer } = {}) {
+export function createAttractMenu({ onMultiplayer, onControls } = {}) {
   injectStyle();
   const wrap = document.createElement('div');
   wrap.id = 'attract-menu';
@@ -54,9 +54,11 @@ export function createAttractMenu({ onMultiplayer } = {}) {
     <div class="am-panel">
       <button class="am-btn" data-act="new" disabled>New Game</button>
       <button class="am-btn am-primary" data-act="mp">Multiplayer</button>
+      <button class="am-btn" data-act="ctrl">Controls</button>
       <button class="am-btn" data-act="opt" disabled>Options</button>
     </div>`;
   wrap.querySelector('[data-act="mp"]').addEventListener('click', () => { if (onMultiplayer) onMultiplayer(); });
+  wrap.querySelector('[data-act="ctrl"]').addEventListener('click', () => { if (onControls) onControls(); });
   document.body.appendChild(wrap);
   return {
     el: wrap,
