@@ -188,9 +188,9 @@ const JUP_DIR = (() => {
 })();
 const BH_DIR = new THREE.Vector3(0.40, 0.18, -0.90).normalize();
 const CLOUD_DIR = new THREE.Vector3(0.30, 0.15, -0.94).normalize();
-// Tartarus ringed planet: the OPPOSITE (non-blue) side of the sky from the cyan cloud planet, lit ~side-on
-// by the sun for a dramatic terminator. Tweakable.
-const SATURN_DIR = new THREE.Vector3(-0.52, 0.20, 0.83).normalize();
+// Cerberus ringed planet: OPPOSITE the black hole (BH_DIR), away from the blue/purple nebula patch (the
+// "non-blue region"), lit ~side-on by the sun for a dramatic terminator. Tweakable.
+const SATURN_DIR = new THREE.Vector3(-0.40, 0.22, 0.89).normalize();
 // Ixion sits toward the sun (blend of forward + sunDir) so it's strongly back-lit -> a thin crescent,
 // with the sun ~40deg off to the side (not directly behind).
 const IXION_DIR = new THREE.Vector3(0, 0, -1).addScaledVector(sunDir, 0.6).normalize();
@@ -224,6 +224,17 @@ function updateBackdropBodies(dt) {
     u.uCamPos.value.copy(camera.position);
     u.uCenter.value.copy(blackhole.group.position);
     u.uTime.value += dt;
+  }
+}
+// Backdrop bodies sit at infinity (3000+ units); the foreground smoke is always nearer, so they NEVER
+// occlude it — yet the smoke-occlusion DEPTH pre-pass was re-rendering them (incl. the 150-step black-hole
+// raymarch + the fullscreen cloud planet), a second full pass that doubled their cost and overloaded the
+// GPU in Cerberus/Tartarus -> WebGL context loss -> "keeps going black + no ship". Skip them in that pass.
+function bodiesForDepth(hide) {
+  for (const b of [jupiter, blackhole, cloudplanet, habitable, saturn]) {
+    if (!b) continue;
+    if (hide) { b._depthWas = b.group.visible; b.group.visible = false; }
+    else if (b._depthWas) b.group.visible = true;
   }
 }
 const starUniforms = {
@@ -561,12 +572,14 @@ function attractFrame(dt) {
     nebula.mesh.visible = false;
     stars.visible = false;
     vfx.setHiddenForDepth(true);
+    bodiesForDepth(true); // keep the heavy backdrop bodies (black hole / cloud planet) out of the depth pass
     const db = drawingBufferSize();
     renderDepthOnly(scene, camera);
     vfx.updateOcclusion(camera, db.x, db.y);
     nebula.mesh.visible = true;
     stars.visible = true;
     vfx.setHiddenForDepth(false);
+    bodiesForDepth(false);
   }
   render();
   fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
@@ -640,12 +653,14 @@ function startLoop() {
       nebula.mesh.visible = false;
       stars.visible = false;
       vfx.setHiddenForDepth(true);
+      bodiesForDepth(true); // keep the heavy backdrop bodies (black hole / cloud planet) out of the depth pass
       const db = drawingBufferSize();
       renderDepthOnly(scene, camera);
       vfx.updateOcclusion(camera, db.x, db.y);
       nebula.mesh.visible = true;
       stars.visible = true;
       vfx.setHiddenForDepth(false);
+      bodiesForDepth(false);
     }
 
     render();
