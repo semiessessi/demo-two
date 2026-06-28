@@ -251,7 +251,12 @@ export function createNetGame(scene, opts) {
     try { transport.close(); } catch { /* ignore */ }
   }
 
-  return { myId, isHost, captureLocal, applyRemotes, targetFor, rosterWithSelf,
+  // local player died -> peers remove our ship proxy (instead of it freezing in place)
+  function localDead() { transport.send({ t: M.PDEAD, id: myId }); }
+  // local player respawned / re-launched -> peers re-show our ship
+  function localRespawn() { transport.send({ t: M.PRESPAWN, id: myId }); }
+
+  return { myId, isHost, captureLocal, applyRemotes, targetFor, rosterWithSelf, localDead, localRespawn,
     get started() { return started; }, setStarted(v) { started = v; },
     broadcastStart(settings) { if (isHost) transport.send({ t: M.START, settings }); },
     end };

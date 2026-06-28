@@ -767,6 +767,7 @@ function startLoop() {
     gameState.update(dt, input);
     if (gameState.mode === 'over' && !runSubmitted) { // record the run for the leaderboard (once)
       runSubmitted = true;
+      if (net) net.localDead(); // co-op: peers remove our ship proxy instead of freezing it
       if (isSignedIn()) submitRun({ wave: (waves && waves.wave) || 0, kills: enemyMgr.kills, deaths: 1, difficulty: settings.difficulty, environment: settings.environment, coop: !!net });
     }
     hud.update({ waves, enemies: enemyMgr.enemies, player, ejectProgress: gameState.ejectProgress });
