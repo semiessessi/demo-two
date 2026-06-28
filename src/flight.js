@@ -102,8 +102,17 @@ export function createFlight(ship, camera, domElement, input) {
     const yawIn = input.yaw; // +1 = yaw left (A / stick left)
     const rollIn = input.roll; // +1 = roll left (Q / LB)
 
-    const tPitch = pitchIn * TUNE.pitchRate * pitchScale;
-    const tYaw = yawIn * TUNE.yawRate;
+    // Turning circle vs throttle: braking -> ~0.5x the cruise circle (tighter), boosting -> ~2x (wider).
+    // circle = speed / turn-rate, so scale the pitch+yaw rate by `agility` to hit that target circle, so
+    // slowing down lets you turn tighter. (Roll is left alone.)
+    const circleScale = THREE.MathUtils.clamp(
+      speed <= TUNE.baseSpeed
+        ? THREE.MathUtils.mapLinear(speed, TUNE.brakeSpeed, TUNE.baseSpeed, 0.5, 1.0)
+        : THREE.MathUtils.mapLinear(speed, TUNE.baseSpeed, TUNE.boostSpeed, 1.0, 2.0),
+      0.5, 2.0);
+    const agility = (speed / TUNE.baseSpeed) / circleScale;
+    const tPitch = pitchIn * TUNE.pitchRate * pitchScale * agility;
+    const tYaw = yawIn * TUNE.yawRate * agility;
     const tRoll = rollIn * TUNE.rollRate * rollScale - yawIn * TUNE.autoBank; // canard loss saps commanded roll (auto-bank kept)
 
     const k = 1 - Math.exp(-TUNE.damp * dt);

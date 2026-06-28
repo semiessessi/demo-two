@@ -10,6 +10,8 @@ import { loadChig, layoutChigGlows, chigThruster } from './enemyShip.js';
 import { createThrusters } from './thruster.js';
 import { createFlight } from './flight.js';
 import { createAudioManager } from './audio.js';
+import { createSfx } from './sfx.js';
+import { creditsHtml } from './credits.js';
 import { createReactive } from './reactive.js';
 import { createInput } from './input.js';
 import { createProjectiles } from './projectiles.js';
@@ -40,9 +42,6 @@ const DEBUG =
   ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) ||
   /[?&]debug\b/.test(window.location.search);
 
-// Maneuvering-thruster (RCS) exhaust is WIP — only fire the jets when ?thrusters is in the URL.
-const THRUSTERS = /[?&]thrusters\b/.test(window.location.search);
-
 // Attract mode: a self-running cinematic AI-vs-AI dogfight (no player). On ?attract we build the attract
 // orchestrator instead of the player flight/cannon/HUD/gameState and run a separate, leaner render frame.
 const ATTRACT = /[?&]attract\b/.test(window.location.search);
@@ -65,9 +64,9 @@ window.addEventListener('resize', () => lighting.onResize());
 
 // Visible sun disc in the sky, in the sun's direction, kept at infinity (moved with the camera).
 // Bright + warm so it blooms.
-const sun = makeSprite(sunGradient, 560, -5); // the bright disc
-const sunGlow = makeSprite(glowGradient, 2900, -6); // soft warm corona, ~5x the disc diameter
-const sunHalo = makeSprite(haloGradient, 7600, -7); // huge faint wash over ~1/3 of the sky
+const sun = makeSprite(sunGradient, 560, -5, 512); // the bright disc
+const sunGlow = makeSprite(glowGradient, 2900, -6, 1024); // soft warm corona, ~5x the disc diameter
+const sunHalo = makeSprite(haloGradient, 7600, -7, 2048); // huge faint wash that fills the view -> most res
 scene.add(sunHalo);
 scene.add(sunGlow);
 scene.add(sun);
@@ -86,8 +85,10 @@ const companionLight = new THREE.DirectionalLight(0xffffff, 0);
 companionLight.position.copy(companionDir).multiplyScalar(200);
 scene.add(companionLight);
 
-function makeCanvasTex(paint) {
-  const s = 1024; // high-res so the big glow/halo sprites don't band when stretched across the sky
+function makeCanvasTex(paint, size = 1024) {
+  // The sun sprites are HUGE on screen (the halo fills the view), so a small texture magnified that much
+  // shows its texels / 8-bit banding. Render the gradient at high res + dither it (below).
+  const s = size;
   const cv = document.createElement('canvas');
   cv.width = cv.height = s;
   const ctx = cv.getContext('2d');
@@ -138,11 +139,11 @@ function haloGradient(g) {
   g.addColorStop(0.55, 'rgba(225,95,45,0.025)');
   g.addColorStop(1.0, 'rgba(200,80,40,0)');
 }
-function makeSprite(paint, scale, order) {
+function makeSprite(paint, scale, order, size = 1024) {
   const spr = new THREE.Sprite(
     // depthTest true so the ship occludes the sun when it passes in front (and so the sun, like the
     // stars, doesn't paint over the opaque hull in the transparent pass).
-    new THREE.SpriteMaterial({ map: makeCanvasTex(paint), blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true, transparent: true }),
+    new THREE.SpriteMaterial({ map: makeCanvasTex(paint, size), blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true, transparent: true }),
   );
   spr.scale.setScalar(scale);
   spr.renderOrder = order;
@@ -201,6 +202,7 @@ const starUniforms = {
 
 const reactive = createReactive();
 const audio = createAudioManager();
+const sfx = createSfx({ getContext: audio.ensureContext, camera }); // shares audio's AudioContext (one gesture unlocks both)
 const input = createInput();
 
 // combat systems (created once the ship is loaded)
@@ -381,7 +383,7 @@ async function init() {
     cannon = createPlayerCannon(scene, ship, projectiles, {
       getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
       canFire: () => !damage || damage.canFire(), // gun subsystem destroyed -> cannon offline
-      onFire: (pos) => lighting.muzzleFlash(pos), // real muzzle-flash light pulse
+      onFire: (pos) => { lighting.muzzleFlash(pos); sfx.weaponFire(pos); }, // muzzle-flash light pulse + (silent until /sfx/cannon.mp3 exists) weapon shot
     });
   }
 
@@ -391,7 +393,7 @@ async function init() {
   lighting.registerTree(chigKit.template);
   enemyMgr = createEnemyManager(scene, chigKit, projectiles);
   if (!ATTRACT) waves = createWaveManager(enemyMgr); // attract owns its own wave loop
-  vfx = createVfx(scene, camera, { lightDir: sunDir }); // align smoke self-shadow with the real sun
+  vfx = createVfx(scene, camera, { lightDir: sunDir, onExplosion: (p, s) => sfx.onExplosion(p, s) }); // align smoke self-shadow with the real sun; SFX boom on every explosion
   enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
   debris = createDebris(scene, { template: chigKit.template, material: chigKit.material, vfx });
   enemyMgr.setDebris(debris); // ship-fracture chunks on death
@@ -499,9 +501,11 @@ function attractFrame(dt) {
   nebula.uniforms.uTime.value += dt;
   starUniforms.uTime.value += dt;
   lighting.update(dt, { player: attract.focus, thrust: 0.8, projectiles, enemies: enemyMgr.enemies }); // cascades fit to the camera; dynamic lights around the action
+  sfx.engine(0.85); // steady engine hum (allies cruise ~0.85)
   render();
   fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
-  quality.update(dt, fps); // auto-scale shadow/VFX tier (3 Hammerheads + 12 Chigs is heavy)
+  quality.update(dt, fps); // auto-scale shadow/VFX tier (6 Hammerheads + 24 Chigs is heavy)
+  if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
 }
 
 function startLoop() {
@@ -550,7 +554,8 @@ function startLoop() {
 
     for (const m of ship.engineMaterials) m.emissiveIntensity = 1.8 + r.thrust * 3.2;
     thrusters.update(r.thrust, dt);
-    if (rcs && THRUSTERS) rcs.update(dt, flying); // WIP: jets only with ?thrusters; fire from actual rotation
+    sfx.engine(r.thrust); // engine hum rises with thrust/boost
+    if (rcs) rcs.update(dt, flying); // maneuvering jets — fire from the ship's actual rotation + deceleration
 
     // keep the backdrop centred on the camera so it sits at infinity (no parallax)
     nebula.mesh.position.copy(camera.position);
@@ -581,6 +586,11 @@ const statsEl = document.getElementById('stats');
 const playBtn = document.getElementById('playToggle');
 const muteBtn = document.getElementById('muteToggle');
 const volEl = document.getElementById('volume');
+
+// Asset attribution — rendered from the single source of truth in credits.js (a dedicated About screen
+// can reuse the same data later).
+const creditsEl = document.getElementById('credits');
+if (creditsEl) creditsEl.innerHTML = creditsHtml();
 
 let revealed = false;
 function reveal() {
@@ -626,7 +636,9 @@ let gestured = false;
 function firstGesture() {
   if (gestured) return;
   gestured = true;
+  audio.ensureContext(); // build the shared ctx even when there's no music track...
   audio.resumeContext();
+  sfx.unlock(); // ...so SFX can decode + play off it too (one gesture unlocks both)
   if (audio.isAvailable !== false) audio.play().then(setPlayIcon);
   startEl?.classList.add('hidden');
 }
@@ -653,8 +665,8 @@ window.addEventListener('keydown', (e) => {
     audio.resumeContext();
     audio.toggle();
     setTimeout(setPlayIcon, 60);
-  } else if (DEBUG && e.code === 'KeyF') {
-    setStats(!statsOn);
+  } else if (e.code === 'KeyF') {
+    setStats(!statsOn); // FPS / frame-time counter — toggle it ANYWHERE (not just ?debug)
   }
 });
 
@@ -758,7 +770,7 @@ function buildTweakGui() {
   // Sky — Milky Way band
   const sf = gui.addFolder('Sky');
   sf.add(nebula.uniforms.uMilkyWay, 'value', 0, 0.4, 0.01).name('milky way');
-  sf.add(nebula.uniforms.uMwTilt, 'value', -1.6, 1.6, 0.02).name('mw tilt');
+  // (the band orientation is now fixed to the real galactic plane via uMwPole — no tilt slider)
   sf.close();
 
   // VFX — trigger + tune the volumetric explosions/smoke

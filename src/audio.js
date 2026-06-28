@@ -45,10 +45,20 @@ export function createAudioManager() {
     available = false;
   });
 
+  // Lazily create the shared AudioContext (starts 'suspended' until a user gesture). Split out of
+  // buildGraph so SFX can share ONE context even when there's no music track — otherwise ctx would only
+  // ever be built by play(), and a missing /music/track.mp3 would leave SFX permanently silent.
+  function ensureContext() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+    }
+    return ctx;
+  }
+
   function buildGraph() {
-    if (ctx) return;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    ctx = new AC();
+    if (srcNode) return;
+    ensureContext();
     srcNode = ctx.createMediaElementSource(audioEl);
     analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
@@ -142,6 +152,7 @@ export function createAudioManager() {
 
   return {
     ready,
+    ensureContext, // shared AudioContext for SFX (sfx.js) — one user gesture unlocks music + SFX
     play,
     pause,
     toggle,

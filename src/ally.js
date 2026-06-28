@@ -12,16 +12,24 @@ const FWD = new THREE.Vector3(0, 0, -1);
 const UP = new THREE.Vector3(0, 1, 0);
 const ZAX = new THREE.Vector3(0, 0, 1);
 
+const HEAL_DELAY = 1.5; // attract auto-repair: seconds without a hit before a ship starts mending
+const HEAL_RATE = 0.3; // fraction of max HP mended per second (so lulls clear the smoke)
+
 const DEFAULT_TUNE = {
-  speed: 40, // between Hammerhead cruise (26) and boost (70)
+  speed: 40, // cruise (energy-managed: brakes into hard turns, opens up when lined up)
+  brakeSpeed: 22, // slow into a hard turn -> tighter circle (circle = speed / turnRate)
+  boostSpeed: 56, // open up when lined up / extending
   turnRate: 0.85, // lazy, heavy arcs (< Chig 1.4)
   aimTurnRate: 1.6, // sharper when lined up, but still can't pivot on a dime (< Chig 2.8)
   fireRange: 220,
   fireRate: 7, // cinematic bursts (player cannon is ~27)
-  fireConeCos: Math.cos(0.18), // only fire when genuinely on target
+  aimCone: Math.cos(0.6), // steer harder when the target is within ~34deg of the nose
+  gimbalCone: Math.cos(0.42), // gun gimbal: fire when the intercept LEAD is within ~24deg (auto-track)
   boltSpeed: 380, // == weapons boltSpeed
   damage: 9, // == player bolt
-  autoBank: 0.9, // roll into the turn (== flight TUNE.autoBank)
+  bankGain: 3.0, // how readily a turn becomes roll (higher = visibly banks on even lazy turns)
+  maxBank: 1.0, // steepest bank (rad, ~57deg) — aircraft-like
+  bankResp: 2.6, // how fast roll eases toward the target bank
   sepDist: 26,
   sepStrength: 1.1, // stay off the other allies
   avoidDist: 22,
@@ -45,6 +53,7 @@ export function createAlly(scene, opts) {
   } = opts;
   const T = Object.assign({}, DEFAULT_TUNE, opts.tune || {});
   const damageModel = opts.damageModel || createDamageModel({ pivot });
+  let healWait = 0; // attract auto-repair countdown (reset on every hit)
 
   // live refs into the pivot transform + per-instance scratch (NEVER share vectors across allies — see the
   // aliasing bug noted in debris.js).
@@ -53,6 +62,7 @@ export function createAlly(scene, opts) {
   const vel = new THREE.Vector3(0, 0, -1).multiplyScalar(T.speed);
   const st = new THREE.Vector3();
   const _toT = new THREE.Vector3();
+  const _aim = new THREE.Vector3();
   const _lead = new THREE.Vector3();
   const _away = new THREE.Vector3();
   const _dir = new THREE.Vector3();
@@ -65,6 +75,7 @@ export function createAlly(scene, opts) {
   const _zero = new THREE.Vector3();
   const _m = new THREE.Matrix4();
   const _q = new THREE.Quaternion();
+  let curSpeed = T.speed; // energy-managed flight speed (brakes into turns)
 
   const ally = {
     pivot, model, radius, pos, quat, vel, alive: true,
@@ -131,47 +142,71 @@ export function createAlly(scene, opts) {
       if (d > 1e-3 && d < T.sepDist) { _away.copy(pos).sub(o.pos).multiplyScalar(1 / d); st.addScaledVector(_away, (T.sepDist - d) * T.sepStrength); }
     }
 
-    // aiming test against the CURRENT nose
+    // how on-target are we? (drives both the sharper steer and the energy management)
     _fwd.copy(FWD).applyQuaternion(quat);
-    let aiming = false;
+    let aiming = false, onAxis = 1;
     if (tgt) {
       _toT.copy(tgt.pos).sub(pos);
       const dist = _toT.length() || 1;
-      aiming = dist < T.fireRange && _fwd.dot(_toT.multiplyScalar(1 / dist)) > T.fireConeCos;
+      onAxis = _fwd.dot(_toT.multiplyScalar(1 / dist)); // 1 = nose dead on the target
+      aiming = dist < T.fireRange && onAxis > T.aimCone;
     }
+    // ENERGY MANAGEMENT: brake into hard turns (target off the nose) for a tighter circle, open up when
+    // lined up / extending. circle = speed / turnRate, so slowing literally tightens the turn.
+    const spdTarget = THREE.MathUtils.lerp(T.boostSpeed, T.brakeSpeed, THREE.MathUtils.clamp((1 - onAxis) * 1.3, 0, 1));
+    curSpeed += (spdTarget - curSpeed) * (1 - Math.exp(-2.5 * dt));
 
-    // bank into the turn: how far the steer direction lies off our right axis
+    // bank like an aircraft: project the steer direction onto the ship's right axis -> how hard we're
+    // turning, amplify it, and roll INTO the turn (so even gentle, lazy turns produce a visible bank).
     _dir.copy(st).sub(pos);
     if (_dir.lengthSq() > 1e-6) _dir.normalize();
     _right.copy(_fwd).cross(UP);
     if (_right.lengthSq() > 1e-6) _right.normalize();
-    const bankTarget = THREE.MathUtils.clamp(-_dir.dot(_right), -1, 1) * T.autoBank;
-    ally.roll += (bankTarget - ally.roll) * (1 - Math.exp(-4 * dt));
+    const turn = THREE.MathUtils.clamp(_dir.dot(_right) * T.bankGain, -1, 1); // +1 = turning hard right
+    const bankTarget = -turn * T.maxBank; // roll into the turn
+    ally.roll += (bankTarget - ally.roll) * (1 - Math.exp(-T.bankResp * dt));
 
     steer(dt, aiming ? T.aimTurnRate : T.turnRate);
     orient();
 
-    // fire boresight team:'player' bolts -> combat.js sweeps them vs enemyMgr.enemies and kills Chigs for free
+    // AUTO-TRACKING gun (like the player's gimballed cannon): aim the bolt at the target's intercept LEAD
+    // within a cone of the nose -> they actually connect, and keep firing even when the nose is a bit off.
     ally.fireCd -= dt;
-    if (aiming && ally.fireCd <= 0) {
-      ally.fireCd = 1 / T.fireRate;
+    if (tgt && ally.fireCd <= 0) {
+      _fwd.copy(FWD).applyQuaternion(quat); // post-orient nose
       const muzzle = _out.copy(_fwd).multiplyScalar(radius * 0.95).add(pos);
-      const bvel = _up.copy(_fwd).multiplyScalar(T.boltSpeed).add(vel);
-      projectiles.spawn({ pos: muzzle, vel: bvel, color: 0xffffff, team, damage: T.damage, life: 2.0, radius: 0.4, scale: 0.5 });
-      if (lighting) lighting.muzzleFlash(muzzle);
+      _aim.copy(_lead).sub(muzzle);
+      const ad = _aim.length() || 1;
+      _aim.multiplyScalar(1 / ad);
+      if (ad < T.fireRange && _fwd.dot(_aim) > T.gimbalCone) {
+        ally.fireCd = 1 / T.fireRate;
+        const bvel = _up.copy(_aim).multiplyScalar(T.boltSpeed).add(vel); // fire AT the lead, not down the nose
+        projectiles.spawn({ pos: muzzle, vel: bvel, color: 0xffffff, team, damage: T.damage, life: 2.0, radius: 0.4, scale: 0.5 });
+        if (lighting) lighting.muzzleFlash(muzzle);
+      }
     }
 
     if (thrusters) thrusters.update(0.85, dt);
     for (const m of engineMaterials) m.emissiveIntensity = 1.8 + 0.85 * 3.2;
-    damageModel.update(dt, vfx); // per-zone smoke/embers when hurt
+    // ATTRACT auto-repair: slowly mend damaged zones during lulls so the smoke isn't perpetual (and blown
+    // canards/wings regrow). Every hit resets the timer, so a ship under sustained fire keeps smoking.
+    if (!mortal) {
+      healWait -= dt;
+      if (healWait <= 0) for (const z of damageModel.zones) {
+        if (z.hp >= z.maxHp) continue;
+        z.hp = Math.min(z.maxHp, z.hp + z.maxHp * HEAL_RATE * dt);
+        if (!z.alive && z.hp >= z.maxHp * 0.5) { z.alive = true; if (z.node) z.node.visible = true; } // regrow a blown part
+      }
+    }
+    damageModel.update(dt, vfx); // per-zone smoke/embers (auto-stops once a zone heals back above the smoke threshold)
   }
 
   // lerp velocity toward (st - pos) at `turn`, then advance (mirrors enemies.steer)
   function steer(dt, turn) {
     _desired.copy(st).sub(pos);
-    if (_desired.lengthSq() > 1e-6) _desired.setLength(T.speed);
+    if (_desired.lengthSq() > 1e-6) _desired.setLength(curSpeed);
     vel.lerp(_desired, 1 - Math.exp(-turn * dt));
-    if (vel.lengthSq() > 1e-6) vel.setLength(T.speed);
+    if (vel.lengthSq() > 1e-6) vel.setLength(curSpeed);
     pos.addScaledVector(vel, dt);
   }
 
@@ -186,12 +221,14 @@ export function createAlly(scene, opts) {
 
   function applyHit(worldPoint, dmg, fromPoint) {
     if (!ally.alive) return null;
+    healWait = HEAL_DELAY; // took a hit -> hold off the auto-repair
     const zone = damageModel.applyHit(worldPoint, dmg, fromPoint);
     const lethal = (z) => z && (z.kind === 'cockpit' || z.kind === 'fuselage' || z.kind === 'fuel');
     if (!mortal) {
-      // immortal: revive any lethal zone the hit just killed so nothing fatal can fire; it keeps smoking.
+      // immortal: revive any lethal zone the hit just killed (nothing fatal can fire), AND the GUN so an
+      // ally never gets disarmed — it keeps smoking but keeps shooting.
       for (const z of damageModel.zones) {
-        if (!z.alive && lethal(z)) {
+        if (!z.alive && (lethal(z) || z.kind === 'gun')) {
           z.alive = true;
           z.hp = z.maxHp * T.hpFloorFrac;
           vfx.spark(worldPoint, 0xcfe8ff);

@@ -74,7 +74,8 @@ export async function loadChig() {
   // very dark green, near-black; flat-shaded so the low-poly facets read as panels; vertex colours
   // give each facet a slightly different tone for a paneled-hull feel.
   const material = new THREE.MeshStandardMaterial({
-    color: 0x3a423c, // dark grey with a green tint — reads against space, not pure black
+    color: 0x111513, // near-black with a green tint — diffuse dropped to ~30% of the old 0x3a423c (new lighting was over-brightening it); rim + specular below are kept
+
     metalness: 0.45,
     roughness: 0.45,
     envMapIntensity: 0.7,

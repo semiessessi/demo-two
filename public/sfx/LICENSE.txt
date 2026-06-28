@@ -1,0 +1,15 @@
+Sound effects in this folder
+============================
+
+explosion1.wav, explosion2.wav, explosion3.wav, engine.wav
+
+These were synthesized from scratch for this project (procedural Web-Audio-style DSP —
+noise/sine layers with envelopes; no third-party samples). They are dedicated to the
+public domain under CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/).
+
+You may overwrite any of these with your own samples. The loader (src/sfx.js) prefers
+.mp3, then .ogg, then .wav for each basename, so dropping in e.g. explosion1.mp3 will
+take precedence over explosion1.wav automatically.
+
+cannon.* is intentionally absent — the weapon-fire hook stays silent until you add one
+(e.g. public/sfx/cannon.mp3).

@@ -20,8 +20,7 @@ uniform float uPulse;
 uniform float uBrightness;
 uniform float uSaturation;
 uniform float uMilkyWay; // brightness of the Milky Way band
-uniform float uMwTilt;   // (legacy) tilt of the band plane (rad)
-uniform vec3 uMwNormal;  // galactic pole (band plane normal), derived from the star catalog
+uniform vec3 uMwPole;    // unit galactic NORTH pole (scene coords) — the Milky Way is the great circle perpendicular to it
 uniform vec3 uColorA; // deep base
 uniform vec3 uColorB; // mid clouds
 uniform vec3 uColorC; // hot cores
@@ -57,6 +56,7 @@ float fbmDetail(vec3 p) {
 
 void main() {
   vec3 dir = normalize(vDir);
+  float galLat = dot(dir, uMwPole); // sine of galactic latitude: 0 on the Milky-Way plane, ±1 at its poles
   // slow drift so the nebula isn't dead-static
   vec3 p = dir * 2.6 + vec3(0.0, 0.0, uTime * 0.012);
   float base = fbm(p);
@@ -67,11 +67,8 @@ void main() {
   vec3 col = mix(uColorA, uColorB, smoothstep(0.15, 0.6, density));
   col = mix(col, uColorC, smoothstep(0.62, 0.95, density) * 0.85);
 
-  // distance from the galactic plane (uMwNormal = pole derived from the real star catalog, so the
-  // band sits where the dense stars are)
-  float gy = dot(dir, uMwNormal);
-  // a broad, dim band across the galactic plane for some structure
-  float band = exp(-pow(gy * 2.3, 2.0));
+  // a broad, dim band across the real galactic plane for some structure
+  float band = exp(-pow(galLat * 2.3, 2.0));
   col += uColorB * band * 0.18;
 
   col *= 0.55 + 0.9 * density;
@@ -81,16 +78,13 @@ void main() {
   col *= 1.0 + uPulse * 0.5; // music breath
   col *= uBrightness;        // overall dimmer (user: ~10%)
 
-  // Milky Way: a narrower, brighter band on a tilted plane, broken up by the fbm into dust lanes,
-  // tinted warm-grey. Added AFTER the nebula dimming so it sits above the 10% backdrop and reads as
-  // the brightest diffuse feature. uMilkyWay scales it; uMwTilt rotates the band plane.
-  float mw = exp(-pow(gy * 4.0, 2.0));            // band envelope (a touch broader -> more bulk)
-  // wispy filaments, but with body: high-freq fbm breaks the band up without blowing dark gaps wide open
+  // Milky Way on the REAL galactic plane (perpendicular to uMwPole), with body + wispy high-freq
+  // filaments and a thin central dust rift (Great Rift) — tuned to read as a textured band, not a blob.
+  float mw = exp(-pow(galLat * 4.0, 2.0));        // band envelope (broad -> bulk)
   float wisp = fbmDetail(dir * 12.0 + vec3(0.0, 0.0, uTime * 0.004));
   float wisp2 = fbmDetail(dir * 28.0 - vec3(0.0, uTime * 0.003, 0.0)); // finer detail on top
   float fil = mix(0.40, 1.2, smoothstep(0.30, 0.85, wisp)) * mix(0.78, 1.12, wisp2);
-  // a THIN, wispy central dust rift (Great Rift): narrow + broken up by the noise; darkens but never blacks out
-  float rift = exp(-pow(gy * 22.0, 2.0)) * smoothstep(0.36, 0.85, wisp) * mix(0.5, 1.0, wisp2);
+  float rift = exp(-pow(galLat * 22.0, 2.0)) * smoothstep(0.36, 0.85, wisp) * mix(0.5, 1.0, wisp2);
   vec3 mwTint = mix(vec3(0.62, 0.66, 0.78), uColorC, 0.18);    // warm-grey, a hint of the core colour
   col += mwTint * mw * fil * mix(1.0, 0.42, rift) * uMilkyWay;
 
@@ -104,9 +98,7 @@ export function createNebula() {
     uBrightness: { value: 0.1 }, // ~10% overall — keep the backdrop subtle
     uSaturation: { value: 0.32 }, // greyer still — the blue was too rich
     uMilkyWay: { value: 0.12 }, // galactic band brightness (sits above the dimmed nebula)
-    uMwTilt: { value: 0.6 }, // (legacy, unused now the band uses uMwNormal)
-    uMwNormal: { value: new THREE.Vector3(0.9101, 0.4020, -0.1002).normalize() }, // galactic pole from the star-catalog covariance
-
+    uMwPole: { value: new THREE.Vector3(0.868, 0.456, -0.198) }, // galactic N pole (real RA 192.86°, Dec +27.13°) -> band through Crux, Cygnus, past Orion
     uColorA: { value: new THREE.Color(0x04050f) }, // deep blue-black base
     uColorB: { value: new THREE.Color(0x223080) }, // blue clouds (dominant)
     uColorC: { value: new THREE.Color(0xd8401f) }, // red hot cores (accent touches)
