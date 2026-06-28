@@ -3,6 +3,7 @@ import GUI from 'lil-gui';
 import { createRenderer } from './renderer.js';
 import { createLighting } from './lighting.js';
 import { createQuality } from './quality.js';
+import { detectDevice } from './device.js';
 import { createNebula } from './nebula.js';
 import { buildStarfield } from './starfield.js';
 import { loadShip } from './ship.js';
@@ -67,6 +68,7 @@ const OCCLUDE = !/[?&]noocclude\b/.test(window.location.search);
 // Diagnostic switch: ?nobodies hides every celestial backdrop body (cloud planet / black hole / Saturn /
 // Jupiter / Ixion) to isolate the "angle-dependent everything-goes-black" bug to a body shader vs the rest.
 const NOBODIES = /[?&]nobodies\b/.test(window.location.search);
+const IS_MOBILE = detectDevice().isMobile; // perf scaling: leaner debris pools (and quality.js adaptive tier) on phones
 
 // Lighting: a warm orange "sun" as the main light, a cool rim from the opposite side for separation,
 // and a dim hemisphere fill so shadowed sides aren't pure black.
@@ -502,11 +504,11 @@ async function init() {
   vfx = createVfx(scene, camera, { lightDir: sunDir, onExplosion: (p, s) => sfx.onExplosion(p, s) }); // align smoke self-shadow with the real sun; SFX boom on every explosion
   if (OCCLUDE) vfx.setOcclusion(depthTexture(), camera.near, camera.far); // feed the smoke the opaque depth
   enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
-  debris = createDebris(scene, { template: chigKit.template, material: chigKit.material, vfx });
+  debris = createDebris(scene, { template: chigKit.template, material: chigKit.material, vfx, count: IS_MOBILE ? 24 : 64, cap: IS_MOBILE ? 96 : 240 });
   enemyMgr.setDebris(debris); // ship-fracture chunks on death
   if (!ATTRACT) {
     debrisPlayer = { pos: ship.pivot.position, radius: ship.radius, vel: playerVel };
-    playerDebris = createDebris(scene, { template: ship.pivot, convex: true, vfx, count: 12, cap: 160 }); // player Hammerhead (171k verts/45 meshes) -> convex-hull proxy, shatters when destroyed
+    playerDebris = createDebris(scene, { template: ship.pivot, convex: true, vfx, count: IS_MOBILE ? 6 : 12, cap: IS_MOBILE ? 72 : 160 }); // player Hammerhead (171k verts/45 meshes) -> convex-hull proxy, shatters when destroyed
   }
   quality = createQuality({ lighting, vfx, debris, setRenderScale, gpuFrameMs }); // GPU-ms two-rate autoscaler: per-frame volumetric steps + debounced tier (render scale, CSM, shadow budget, smoke, vfx)
   combat = createCombat(projectiles, enemyMgr, vfx, {
