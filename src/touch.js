@@ -36,7 +36,7 @@ export function createTouchControls() {
   // touchscreen laptops, which have a keyboard — don't, so we gate on isMobile rather than bare touch.
   if (!isMobile && !(touch && /[?&]touch\b/.test(location.search))) {
     // Non-mobile device: a no-op stub so callers don't have to branch. (?touch forces it on for testing.)
-    return { read: () => null, setVisible() {}, dispose() {}, active: false };
+    return { read: () => null, setVisible() {}, setInvertPitch() {}, invertPitch: false, dispose() {}, active: false };
   }
 
   const style = document.createElement('style');
@@ -60,6 +60,9 @@ export function createTouchControls() {
   const knob = root.querySelector('.knob');
   let stickId = null;
   const R = 56; // travel radius (px)
+  // Pitch sign: default matches the gamepad (drag forward/up = nose down). Some players want the inverse
+  // (drag up = climb); ?invertpitch or a saved 'invertPitch' flag flips it without touching the gamepad.
+  let pitchSign = (/[?&]invertpitch\b/.test(location.search) || localStorage.getItem('invertPitch') === '1') ? -1 : 1;
   function setStick(clientX, clientY) {
     const r = stick.getBoundingClientRect();
     let dx = clientX - (r.left + r.width / 2);
@@ -68,8 +71,8 @@ export function createTouchControls() {
     if (len > R) { dx *= R / len; dy *= R / len; }
     const nx = dx / R; // +right
     const ny = dy / R; // +down (screen)
-    state.yaw = -nx;   // drag left -> yaw left (+1), matching the gamepad
-    state.pitch = ny;  // drag up (ny<0) -> nose down (-1), matching stick-forward = nose down
+    state.yaw = -nx;            // drag left -> yaw left (+1), matching the gamepad
+    state.pitch = pitchSign * ny; // drag up (ny<0) -> nose down (-1) by default; pitchSign flips it
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
   }
   function resetStick() {
@@ -142,5 +145,10 @@ export function createTouchControls() {
     style.remove();
   }
 
-  return { read, setVisible, dispose, active: true };
+  function setInvertPitch(on) {
+    pitchSign = on ? -1 : 1;
+    try { localStorage.setItem('invertPitch', on ? '1' : '0'); } catch (e) { /* private mode */ }
+  }
+
+  return { read, setVisible, setInvertPitch, get invertPitch() { return pitchSign < 0; }, dispose, active: true };
 }

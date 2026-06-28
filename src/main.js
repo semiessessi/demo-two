@@ -920,8 +920,9 @@ function reveal() {
 }
 setTimeout(reveal, 8000); // safety net if a frame never lands
 
-// Controls panel starts HIDDEN now; just slide in a brief "press Tab" toast as a hint. Tab (or, on the
-// attract screen, the menu's Controls item) toggles the panel.
+// Controls panel starts HIDDEN now; just slide in a brief hint toast. On desktop it's "press Tab"; on
+// touch there's no keyboard/Tab pane, so swap in a flight hint for the on-screen controls instead.
+if (toastEl && detectDevice().isMobile) toastEl.innerHTML = '<span>Drag to fly · <b>FIRE</b> to shoot</span>';
 setTimeout(() => toastEl?.classList.add('show'), 2400);
 setTimeout(() => toastEl?.classList.remove('show'), 8400);
 
