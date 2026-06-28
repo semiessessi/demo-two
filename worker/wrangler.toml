@@ -17,6 +17,13 @@ main = "src/index.js"
 compatibility_date = "2026-06-01"
 workers_dev = true
 
+# Route just the API path to this worker. The static site owns the d2 Custom Domain; this more-specific
+# /api/* route steals only that prefix. (If Cloudflare rejects this because the Custom Domain swallows
+# the hostname, we move the API to its own subdomain instead.)
+[[routes]]
+pattern = "d2.redmarmosetstudios.com/api/*"
+zone_name = "redmarmosetstudios.com"
+
 [vars]
 # public OAuth client identifiers (safe to commit; the secrets are separate)
 GOOGLE_CLIENT_ID = "878982957875-9rgcj8ebv6f75kk5vgm0o49mciltsdvc.apps.googleusercontent.com"
