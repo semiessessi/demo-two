@@ -1,3 +1,5 @@
+import { detectDevice } from './device.js';
+
 // Framerate-driven quality controller. Owns the single shadow/VFX "tier ladder" and nudges it up or
 // down based on smoothed FPS (with hysteresis + a cooldown so the rare recompiles/CSM rebuilds a tier
 // change triggers never land on the hot path). Seeded from a device guess so phones start shadow-free.
@@ -38,25 +40,39 @@ function deviceStartTier() {
   return mobile || small ? 1 : 4;
 }
 
-// Decision cadence + hysteresis. We sample at a fixed ~100ms tick (not per-frame, so vsync jitter and
-// the framerate itself don't change how reactive we are), require the FPS to sit OUTSIDE a dead-zone
-// for several consecutive ticks before moving, and hold a cooldown after every change. The dead-zone
-// (DOWN_FPS..UP_FPS) is the core anti-ping-pong guard: a tier-down lands near DOWN_FPS, which is still
-// below UP_FPS, so it can't immediately bounce back up.
-const TICK = 0.1;       // evaluate ~10x/sec
-const DOWN_FPS = 45;    // sustained below this -> shed a tier
-const UP_FPS = 57;      // sustained above this -> add a tier (dead-zone 45..57 prevents oscillation)
-const DOWN_HOLD = 3;    // ticks of sag before stepping down (~0.3s — react fast to relieve pressure)
-const UP_HOLD = 12;     // ticks of headroom before stepping up (~1.2s — climb slowly)
+// STRUCTURAL-tier cadence + hysteresis. The tier is sampled at a fixed ~100ms tick; it only moves when
+// `pressure` (below) sits past a threshold for several consecutive ticks, then holds a cooldown. The
+// asymmetric holds (fast down, slow up) + the wide pressure dead-zone (UP_PRESS..DOWN_PRESS) are the
+// anti-ping-pong guard so the expensive CSM rebuild / render-target resize never thrash.
+const TICK = 0.1;       // structural-tier decision cadence (~10x/sec)
+const DOWN_HOLD = 3;    // ticks of pinned pressure before stepping a tier DOWN (~0.3s — react fast)
+const UP_HOLD = 12;     // ticks of headroom before stepping a tier UP (~1.2s — climb slowly)
 const COOLDOWN = 20;    // ticks to wait after any change (~2s) so recompiles/CSM rebuilds settle
 
-export function createQuality({ lighting, vfx, debris, setRenderScale, startTier } = {}) {
+// Per-frame GPU-budget controller — the fast reactive layer ON TOP of the tier ladder. A continuous
+// `pressure` (0..1), measured from real GPU ms (timer query) when available else wall-clock, drives the
+// CHEAP uniform levers (volumetric raymarch steps) EVERY frame, so a transient spike (an explosion) is
+// absorbed without a tier change. The structural TIER only moves on SUSTAINED pressure.
+const { isMobile: IS_MOBILE } = detectDevice();
+const BUDGET_MS = IS_MOBILE ? 14 : 13; // target GPU ms (under the ~16.7ms 60Hz vsync window, with margin)
+const WALL_TARGET_MS = 1000 / 57;      // wall-clock fallback (~57fps): only engages on REAL drops (vsync hides GPU headroom)
+const DEAD_MS = 1.0;                    // dead-band so we don't chase noise
+const ATTACK = 6.0;                     // pressure gain OVER budget  -> rises fast (relieve in a few frames)
+const RELEASE = 1.2;                    // pressure gain UNDER budget -> falls slow (climb back cautiously)
+const DOWN_PRESS = 0.85;                // tier steps DOWN when pressure stays pinned this high (cheap levers exhausted)
+const UP_PRESS = 0.30;                  // tier steps UP when pressure stays this low (real structural headroom)
+const AUTO_MAX = TIERS.length - 2;      // auto climbs only to 'high' (2048); 'ultra' (4096) is manual-only — stay lean
+const STRUCTURAL_AUTO = false; // structural auto-stepping held off (it was not the cause; left off pending live verification)
+
+export function createQuality({ lighting, vfx, debris, setRenderScale, gpuFrameMs, startTier } = {}) {
   let current = startTier != null ? clamp(startTier, 0, TIERS.length - 1) : deviceStartTier();
-  let acc = 0;          // time accumulator -> fires a decision every TICK
+  let acc = 0;          // time accumulator -> fires a structural decision every TICK
   let downTicks = 0;
   let upTicks = 0;
   let cooldownTicks = 0;
   let manual = false; // a manual override pins the tier (debug GUI)
+  let pressure = 0;     // 0 = lots of GPU headroom, 1 = pegged over the ms budget
+  let emaWallMs = 16.7; // wall-clock fallback, seeded at ~60fps
 
   function apply(i) {
     current = clamp(i, 0, TIERS.length - 1);
@@ -71,23 +87,40 @@ export function createQuality({ lighting, vfx, debris, setRenderScale, startTier
 
   apply(current);
 
-  // Step DOWN quickly when FPS sags (relieve pressure); step UP slowly when there's sustained headroom.
-  function update(dt, fps) {
-    if (manual) return;
+  // Two-rate controller, run every frame:
+  //   1. CHEAP lever (volumetric raymarch steps) follows a continuous `pressure` derived from GPU ms —
+  //      absorbs transient spikes (explosions) instantly, no tier change.
+  //   2. STRUCTURAL tier (render scale / CSM / transient budget) only snaps on SUSTAINED pressure, after
+  //      the cheap levers are exhausted (down) or there's real headroom (up). Debounced + cooled down so
+  //      the expensive CSM rebuild / render-target resize never thrash.
+  function update(dt) {
+    if (dt > 0.2) return; // skip a giant load/hitch frame (would spike pressure spuriously)
+    emaWallMs += (dt * 1000 - emaWallMs) * 0.1;
+    const gpu = gpuFrameMs ? gpuFrameMs() : 0;
+    const useGpu = gpu > 0.05;
+    const ms = useGpu ? gpu : emaWallMs;
+    const target = useGpu ? BUDGET_MS : WALL_TARGET_MS;
+    const err = ms - target;
+    if (err > DEAD_MS) pressure += ATTACK * (err - DEAD_MS) * dt;       // over budget -> rise fast
+    else if (err < -DEAD_MS) pressure += RELEASE * (err + DEAD_MS) * dt; // under budget -> fall slow
+    pressure = clamp(pressure, 0, 1);
+    if (vfx && vfx.setLoad) vfx.setLoad(pressure); // the per-frame cheap lever (smooth — never flashes)
+
+    if (manual || !STRUCTURAL_AUTO) return; // structural auto-stepping disabled (see STRUCTURAL_AUTO note)
     acc += dt;
     if (acc < TICK) return;
     acc = 0;
     if (cooldownTicks > 0) { cooldownTicks--; return; }
-    if (fps < DOWN_FPS && current > 0) {
+    if (pressure >= DOWN_PRESS && current > 0) {
       downTicks++;
       upTicks = 0;
       if (downTicks >= DOWN_HOLD) { apply(current - 1); downTicks = 0; cooldownTicks = COOLDOWN; }
-    } else if (fps > UP_FPS && current < TIERS.length - 1) {
+    } else if (pressure <= UP_PRESS && current < AUTO_MAX) {
       upTicks++;
       downTicks = 0;
       if (upTicks >= UP_HOLD) { apply(current + 1); upTicks = 0; cooldownTicks = COOLDOWN; }
     } else {
-      downTicks = 0; // inside the dead-zone -> reset both; no drift toward a change
+      downTicks = 0; // in the pressure dead-zone -> hold
       upTicks = 0;
     }
   }
@@ -96,6 +129,10 @@ export function createQuality({ lighting, vfx, debris, setRenderScale, startTier
     update,
     get tier() { return current; },
     get tierName() { return TIERS[current].name; },
+    get pressure() { return pressure; },
+    get gpuMs() { return gpuFrameMs ? gpuFrameMs() : 0; },
+    get renderScale() { return TIERS[current].scale; },
+    get budget() { return BUDGET_MS; },
     get auto() { return !manual; },
     set auto(v) { manual = !v; },
     setTier(i) { manual = true; apply(i); }, // pin via the debug GUI

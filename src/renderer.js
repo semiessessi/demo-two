@@ -79,6 +79,9 @@ export function createRenderer(container) {
     0.72,
   );
   composer.addPass(bloom);
+  // Diagnostic switch: ?nobloom disables the bloom pass — a bright/NaN body fragment fed through the bloom
+  // blur can spread across the whole frame, so this isolates "everything goes black" to the bloom vs not.
+  if (typeof location !== 'undefined' && /[?&]nobloom\b/.test(location.search)) bloom.enabled = false;
   composer.addPass(new OutputPass());
 
   // --- Smoke occlusion depth pre-pass ---------------------------------------------------------------
@@ -132,12 +135,15 @@ export function createRenderer(container) {
       tqTail = (tqTail + 1) % TQ.length; tqLen--;
     }
   };
+  // NOTE: the GPU timer query (gpuTimerBegin/End/Poll) is DISABLED — EXT_disjoint_timer_query_webgl2 can
+  // destabilise the GPU / drop the WebGL context under heavy load on some drivers, which exactly matched a
+  // regression where the two heaviest scenes (Cerberus black hole, Tartarus cloud planet) kept going black
+  // (independent of render scale — downscaling didn't help — which a timer-query fault explains and raw
+  // overload does not). gpuFrameMs() returns 0 -> the quality controller falls back to wall-clock.
   function render() {
-    gpuTimerPoll();
-    gpuTimerBegin();
     composer.render();
-    gpuTimerEnd();
   }
+  void gpuTimerPoll; void gpuTimerBegin; void gpuTimerEnd; // kept (unused) so re-enabling is a one-line change
 
   function setSize(w, h) {
     curW = w;

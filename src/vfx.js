@@ -276,6 +276,7 @@ export function createVfx(scene, camera, opts = {}) {
     quality = q;
     vol.setQuality(q);
   }
+  function setLoad(p) { vol.setLoad(p); } // per-frame autoscaler pressure -> trims volumetric raymarch cost
 
-  return { explosion, firework, spark, ember, smoke, spawnDebris, clearDebris, update, setQuality, setSmokeShadows: vol.setSmokeShadows, createTrail: vol.createTrail, setOcclusion: vol.setOcclusion, updateOcclusion: vol.updateOcclusion, setHiddenForDepth: vol.setHiddenForDepth, get quality() { return quality; }, _vol: vol };
+  return { explosion, firework, spark, ember, smoke, spawnDebris, clearDebris, update, setQuality, setLoad, setSmokeShadows: vol.setSmokeShadows, createTrail: vol.createTrail, setOcclusion: vol.setOcclusion, updateOcclusion: vol.updateOcclusion, setHiddenForDepth: vol.setHiddenForDepth, get quality() { return quality; }, _vol: vol };
 }

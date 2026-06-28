@@ -32,7 +32,7 @@ import { createPregame } from './pregame.js';
 import { applyLoadout } from './loadout.js';
 import { loadSettings, DIFFICULTY, ENVIRONMENT } from './settings.js';
 import { createAttract } from './attract.js';
-import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlanet } from './celestial.js';
+import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlanet, createRingedPlanet } from './celestial.js';
 import { createPeerTransport } from './net/peer.js';
 import { createNetGame } from './net/netgame.js';
 import { peerJsWorksHere } from './net/webrtc-detect.js';
@@ -64,6 +64,9 @@ const { renderer, scene, camera, composer, bloom, render, setRenderScale, render
 // Smoke occlusion: an opaque depth pre-pass lets the smoke raymarch skip puffs hidden behind ships.
 // On by default; ?noocclude disables it (escape hatch).
 const OCCLUDE = !/[?&]noocclude\b/.test(window.location.search);
+// Diagnostic switch: ?nobodies hides every celestial backdrop body (cloud planet / black hole / Saturn /
+// Jupiter / Ixion) to isolate the "angle-dependent everything-goes-black" bug to a body shader vs the rest.
+const NOBODIES = /[?&]nobodies\b/.test(window.location.search);
 
 // Lighting: a warm orange "sun" as the main light, a cool rim from the opposite side for separation,
 // and a dim hemisphere fill so shadowed sides aren't pure black.
@@ -173,12 +176,13 @@ scene.add(nebula.mesh);
 // Background bodies are built LAZILY (only the selected environment's one) — building all four at boot
 // compiled 4+ shaders (incl. the heavy black-hole raymarch) + loaded the 2 MB Jupiter texture up front,
 // which slowed the load badly. ensureBody() creates + caches on first selection.
-let jupiter = null, blackhole = null, cloudplanet = null, habitable = null;
+let jupiter = null, blackhole = null, cloudplanet = null, habitable = null, saturn = null;
 function ensureBody(kind) {
   if (kind === 'jupiter' && !jupiter) { jupiter = createJupiter(renderer, sunDir); scene.add(jupiter.group); }
   else if (kind === 'blackhole' && !blackhole) { blackhole = createBlackHole(); scene.add(blackhole.group); }
   else if (kind === 'cloudplanet' && !cloudplanet) { cloudplanet = createCloudPlanet(); scene.add(cloudplanet.group); }
   else if (kind === 'habitable' && !habitable) { habitable = createHabitablePlanet(); scene.add(habitable.group); }
+  else if (kind === 'saturn' && !saturn) { saturn = createRingedPlanet(renderer, sunDir); scene.add(saturn.group); }
 }
 // Jupiter Trojans sit at Jupiter's L4/L5 Lagrange point — the Sun, Jupiter and the Trojan camp form an
 // EQUILATERAL triangle, so from here the Sun and Jupiter are exactly 60° apart in the sky. Build JUP_DIR
@@ -191,6 +195,9 @@ const JUP_DIR = (() => {
 })();
 const BH_DIR = new THREE.Vector3(0.40, 0.18, -0.90).normalize();
 const CLOUD_DIR = new THREE.Vector3(0.30, 0.15, -0.94).normalize();
+// Cerberus ringed planet: OPPOSITE the black hole (BH_DIR), away from the blue/purple nebula patch (the
+// "non-blue region"), lit ~side-on by the sun for a dramatic terminator. Tweakable.
+const SATURN_DIR = new THREE.Vector3(-0.40, 0.22, 0.89).normalize();
 // Ixion sits toward the sun (blend of forward + sunDir) so it's strongly back-lit -> a thin crescent,
 // with the sun ~40deg off to the side (not directly behind).
 const IXION_DIR = new THREE.Vector3(0, 0, -1).addScaledVector(sunDir, 0.6).normalize();
@@ -204,9 +211,13 @@ function updateBackdropBodies(dt) {
     jupiter.update(dt); // spin Jupiter + orbit Io/Ganymede
   }
   if (cloudplanet && cloudplanet.group.visible) {
-    cloudplanet.group.position.copy(camera.position).addScaledVector(CLOUD_DIR, 1500); // close -> dominates the sky
+    cloudplanet.group.position.copy(camera.position).addScaledVector(CLOUD_DIR, 3000); // pushed back 2x (was 1500) -> large but no longer fills the sky
     cloudplanet.mat.uniforms.uTime.value += dt; // animate the swirling clouds
     cloudplanet.planet && (cloudplanet.planet.rotation.y += 0.004 * dt);
+  }
+  if (saturn && saturn.group.visible) {
+    saturn.group.position.copy(camera.position).addScaledVector(SATURN_DIR, 3000); // big ringed world on the far side
+    saturn.update(dt); // spin + keep the ring's planet-shadow centre current
   }
   if (habitable && habitable.group.visible) {
     habitable.group.position.copy(camera.position).addScaledVector(IXION_DIR, 2500); // big + close
@@ -220,6 +231,17 @@ function updateBackdropBodies(dt) {
     u.uCamPos.value.copy(camera.position);
     u.uCenter.value.copy(blackhole.group.position);
     u.uTime.value += dt;
+  }
+}
+// Backdrop bodies sit at infinity (3000+ units); the foreground smoke is always nearer, so they NEVER
+// occlude it — yet the smoke-occlusion DEPTH pre-pass was re-rendering them (incl. the 150-step black-hole
+// raymarch + the fullscreen cloud planet), a second full pass that doubled their cost and overloaded the
+// GPU in Cerberus/Tartarus -> WebGL context loss -> "keeps going black + no ship". Skip them in that pass.
+function bodiesForDepth(hide) {
+  for (const b of [jupiter, blackhole, cloudplanet, habitable, saturn]) {
+    if (!b) continue;
+    if (hide) { b._depthWas = b.group.visible; b.group.visible = false; }
+    else if (b._depthWas) b.group.visible = true;
   }
 }
 const starUniforms = {
@@ -324,6 +346,9 @@ function applyEnvironment(s) {
   applySun(e.sun);
   applyCompanion(e); // binary second star (Groombridge), else off
   applyBody(e.body);
+  // optional SECOND background body (Tartarus pairs the cyan cloud planet with a grey ringed planet)
+  ensureBody(e.body2);
+  if (saturn) saturn.group.visible = !NOBODIES && e.body2 === 'saturn';
 }
 // Binary companion star: a dim second disc+glow on the opposite side of the sky + a fill light at its colour.
 function applyCompanion(e) {
@@ -350,6 +375,7 @@ function applySun(c) {
 // Show the environment's background body (Jupiter / black hole / cloud planet / Ixion / none),
 // building it on first use (lazy) so unused envs cost nothing.
 function applyBody(kind) {
+  if (NOBODIES) kind = 'none'; // diagnostic: force all bodies off
   ensureBody(kind);
   if (jupiter) jupiter.group.visible = kind === 'jupiter';
   if (blackhole) blackhole.group.visible = kind === 'blackhole';
@@ -482,7 +508,7 @@ async function init() {
     debrisPlayer = { pos: ship.pivot.position, radius: ship.radius, vel: playerVel };
     playerDebris = createDebris(scene, { template: ship.pivot, convex: true, vfx, count: 12, cap: 160 }); // player Hammerhead (171k verts/45 meshes) -> convex-hull proxy, shatters when destroyed
   }
-  quality = createQuality({ lighting, vfx, debris, setRenderScale }); // FPS-driven tier ladder: render scale, CSM res, shadow-light budget, smoke, vfx, debris
+  quality = createQuality({ lighting, vfx, debris, setRenderScale, gpuFrameMs }); // GPU-ms two-rate autoscaler: per-frame volumetric steps + debounced tier (render scale, CSM, shadow budget, smoke, vfx)
   combat = createCombat(projectiles, enemyMgr, vfx, {
     getPlayerPos: () => ship.pivot.position,
     playerHitRadius: ship.radius * 0.85,
@@ -568,7 +594,7 @@ async function init() {
 }
 
 // --- render loop -----------------------------------------------------------
-const clock = new THREE.Clock();
+const clock = new THREE.Timer(); // THREE.Clock is deprecated -> Timer (update() each frame, then getDelta())
 let fps = 60;
 
 // Attract mode frame: drive the AI dogfight + cinematic camera, reusing the shared combat/vfx/debris/
@@ -596,17 +622,19 @@ function attractFrame(dt) {
     nebula.mesh.visible = false;
     stars.visible = false;
     vfx.setHiddenForDepth(true);
+    bodiesForDepth(true); // keep the heavy backdrop bodies (black hole / cloud planet) out of the depth pass
     const db = drawingBufferSize();
     renderDepthOnly(scene, camera);
     vfx.updateOcclusion(camera, db.x, db.y);
     nebula.mesh.visible = true;
     stars.visible = true;
     vfx.setHiddenForDepth(false);
+    bodiesForDepth(false);
   }
   render();
   fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
-  quality.update(dt, fps); // auto-scale shadow/VFX tier (6 Hammerheads + 24 Chigs is heavy)
-  if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
+  quality.update(dt); // auto-scale shadow/VFX tier (6 Hammerheads + 24 Chigs is heavy)
+  if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (man)'} · P${Math.round(quality.pressure * 100)} · ×${quality.renderScale.toFixed(2)}`;
 }
 
 // A background clock: a Web Worker firing ~30 Hz regardless of window focus/visibility, so the co-op
@@ -628,6 +656,7 @@ function startLoop() {
   // and sending instead of freezing. Single-player is unaffected (the bg clock only fires frame when net).
   function frame() {
     lastFrame = performance.now();
+    clock.update(); // THREE.Timer — advance before getDelta()
     const dt = Math.min(clock.getDelta(), 0.1);
     if (DEBUG && debug && debug.frame(dt)) return; // debug viewer modes own the frame
     if (ATTRACT) { attractFrame(dt); return; } // standalone ?attract: a leaner, player-less frame
@@ -696,19 +725,21 @@ function startLoop() {
       nebula.mesh.visible = false;
       stars.visible = false;
       vfx.setHiddenForDepth(true);
+      bodiesForDepth(true); // keep the heavy backdrop bodies (black hole / cloud planet) out of the depth pass
       const db = drawingBufferSize();
       renderDepthOnly(scene, camera);
       vfx.updateOcclusion(camera, db.x, db.y);
       nebula.mesh.visible = true;
       stars.visible = true;
       vfx.setHiddenForDepth(false);
+      bodiesForDepth(false);
     }
 
     render();
 
     fps += (1 / Math.max(dt, 1e-3) - fps) * 0.1;
-    quality.update(dt, fps); // auto-scale shadow/VFX tier to the framerate (rate-limited)
-    if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (manual)'}`;
+    quality.update(dt); // GPU-measured two-rate autoscaler
+    if (statsOn) statsEl.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1)).toFixed(1)} ms${gpuFrameMs() > 0 ? ' · ' + gpuFrameMs().toFixed(1) + ' gpu' : ''}\n${quality.tierName}${quality.auto ? '' : ' (man)'} · P${Math.round(quality.pressure * 100)} · ×${quality.renderScale.toFixed(2)}`;
   }
   renderer.setAnimationLoop(() => { if (!document.hidden) frame(); });
   // co-op only: if rAF hasn't run in >40ms (window hidden/throttled), the bg clock keeps frame() going
