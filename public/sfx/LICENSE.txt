@@ -1,7 +1,7 @@
 Sound effects in this folder
 ============================
 
-explosion1.wav, explosion2.wav, explosion3.wav, engine.wav
+explosion1.wav .. explosion6.wav, engine.wav
 
 These were synthesized from scratch for this project (procedural Web-Audio-style DSP —
 noise/sine layers with envelopes; no third-party samples). They are dedicated to the

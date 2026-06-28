@@ -5,6 +5,10 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   build: {
     target: 'es2022',
+    // The only chunks over Vite's default 500 kB are VENDOR, not app code: three.js (~690 kB, its own
+    // cached chunk, ~177 kB gzip) and the Draco decoder (loaded on demand for the compressed .glb models).
+    // The app chunk itself is ~157 kB. Raise the warning to the real vendor baseline so it stops false-alarming.
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
         // Split three.js into its own chunk: it rarely changes (caches across app deploys)
