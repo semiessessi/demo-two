@@ -181,13 +181,13 @@ export function createBlackHole() {
         az += 0.3 * smoothstep(0.12, 1.0, ang);                  // spokes curve toward the same rotational sense at their tips
         // irregular radial spokes: cosine lobes whose phase is warped by noise (continuous around az)
         float warp = fbm(vec2(cos(az) * 1.7 + 5.0, sin(az) * 1.7 + 9.0));
-        float spk = pow(0.5 + 0.5 * cos(az * 22.0 + warp * 6.2831), 0.9); // 2x as many spokes, ~1.5x wider (lower exponent)
+        float spk = pow(0.5 + 0.5 * cos(az * 22.0 + warp * 6.2831), 0.5); // fat arms: low exponent -> wide angular lobes
         float fil = fbm(vec2(az * 4.0 + 21.0, ang * 4.0));       // break spokes into radial filaments
-        float body = spk * mix(0.35, 1.0, fil);
+        float body = spk * mix(0.48, 1.0, fil); // higher floor -> fuller, more padded arms
         float lanes = fbm(vec2(az * 10.0 + 40.0, ang * 8.0));    // fine dust structure
         body *= mix(0.28, 1.0, smoothstep(0.34, 0.66, lanes));   // carve dark dust lanes through the cloud (Milky-Way-ish)
         // annular radial profile: rises just outside the hole, fades before the quad edge (~0.42 rad)
-        float radial = smoothstep(0.02, 0.12, ang) * (1.0 - smoothstep(0.52, 1.15, ang)); // ~2x longer reach
+        float radial = smoothstep(0.0, 0.05, ang) * (1.0 - smoothstep(0.52, 1.15, ang)); // start right at the hole (no inner gap), ~2x longer reach
         radial *= 0.5 + 0.7 * fbm(vec2(ang * 3.0, az * 1.5));    // large-scale clumping
         return clamp(body * radial, 0.0, 1.0);
       }
