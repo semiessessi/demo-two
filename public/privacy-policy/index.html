@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SA-43: Hammerhead — Privacy Policy</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; background: #030308; color: #aeb6c6;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; line-height: 1.6; }
+    .legal { max-width: 760px; margin: 0 auto; padding: 48px 22px 80px; }
+    .legal-header { border-bottom: 1px solid rgba(150,180,255,0.12); margin-bottom: 28px; padding-bottom: 14px; }
+    a.back { color: #9ec7ff; text-decoration: none; font-size: 13px; }
+    a.back:hover { text-decoration: underline; }
+    h1 { color: #eaeefc; font-size: 28px; margin: 14px 0 6px; }
+    h2 { color: #cdd6ea; font-size: 18px; margin: 30px 0 8px; }
+    h3 { color: #cdd6ea; font-size: 15px; margin: 20px 0 6px; }
+    .muted { color: #6b7488; font-size: 13px; margin: 0; }
+    a { color: #9ec7ff; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em;
+      background: rgba(150,180,255,0.1); padding: 1px 5px; border-radius: 5px; color: #cdd6ea; }
+    .note { background: rgba(120,170,255,0.06); border: 1px solid rgba(150,180,255,0.14);
+      border-radius: 12px; padding: 14px 18px; margin: 22px 0; }
+  </style>
+</head>
+<body>
+  <main class="legal">
+    <header class="legal-header">
+      <a class="back" href="/">← SA-43: Hammerhead</a>
+      <h1>Privacy Policy</h1>
+      <p class="muted">Last updated: 28 June 2026</p>
+    </header>
+
+    <p>SA-43: Hammerhead is a browser space-combat game that runs almost entirely in your browser. This policy explains, in plain language, the small amount of data the game touches.</p>
+
+    <div class="note"><strong>Fan project.</strong> This is a non-commercial fan tribute to the TV series <em>Space: Above and Beyond</em>. It is not affiliated with, endorsed by, or licensed by the show's rights holders. See <a href="/terms-of-service/">Terms of Service</a> for the music and asset notice.</div>
+
+    <h2>What is stored on your device</h2>
+    <p>The game uses your browser's <strong>localStorage</strong> to remember things between visits. Nothing in storage leaves your device unless you choose to sign in or join an online room. The keys it uses are:</p>
+    <ul>
+      <li><code>d2.skirmish.v2</code> — your game preferences: chosen environment, difficulty, ship loadout, and livery (colour / callsign / squadron).</li>
+      <li><code>d2.session.token</code> — only present after you sign in. The signed bearer token issued by our backend (see <em>Sessions</em>), used to identify you to the API on later visits.</li>
+      <li><code>d2.session.player</code> — only present after you sign in. A small cached copy of your player record (player id, display name) so the UI can render before the first network call returns.</li>
+    </ul>
+    <p>You can wipe all of it any time by clearing the site's storage in your browser settings. Signing out from the menu also removes the two <code>d2.session.*</code> keys.</p>
+
+    <h2>What is not stored anywhere</h2>
+    <ul>
+      <li><strong>No passwords, no email.</strong> The only ways to identify yourself are via OAuth with one of the providers below — the game never sees your password, and never requests an email-bearing scope.</li>
+      <li><strong>No analytics, no tracking, no third-party trackers, no advertising identifiers.</strong></li>
+      <li><strong>No cookies.</strong> The OAuth provider's own access token is used briefly during sign-in and then discarded; the longer-lived <code>d2.session.token</code> is HMAC-signed and stored in your browser's storage as a <code>Bearer</code> header source, not as a cookie.</li>
+    </ul>
+
+    <h2>Account linking (optional)</h2>
+    <p>Signing in is <strong>optional</strong> and only used to appear on the leaderboard, add friends, and invite them to co-op games. Sign-in uses standard OAuth with the smallest practical scope:</p>
+    <ul>
+      <li><strong>Google</strong> — <code>openid profile</code>. We receive your Google "sub" identifier and your name. We do not request <code>email</code> or any other Google scope.</li>
+      <li><strong>Facebook</strong> — <code>public_profile</code>. We receive your Facebook user ID and your name. We do not request <code>email</code>, friends, posts, or any other scope.</li>
+    </ul>
+    <p>When you sign in, the following is stored against your player record on the backend (a Cloudflare Worker + D1 database run for this game at <code>redmarmosetstudios.com</code>):</p>
+    <ul>
+      <li>The provider name (e.g. <code>google</code>) and the stable user ID that provider gave us, used only to recognise you on later sign-ins.</li>
+      <li>The display name / callsign used as your leaderboard handle. You can change it in the menu.</li>
+      <li>Friend links and pending invites you create, so friends and co-op invitations persist between sessions.</li>
+    </ul>
+
+    <h3>Sessions</h3>
+    <p>After a successful sign-in the backend issues a signed session token (HMAC-SHA256, 30-day expiry) containing only your player id. It is stored under <code>d2.session.token</code> and replayed on every API call as a <code>Bearer</code> header. It is not a cookie and is not shared with third parties; rotating the backend signing key invalidates every existing session immediately.</p>
+
+    <h2>Leaderboard</h2>
+    <p>If you sign in and submit a score, your display name and that score are stored on the backend and shown on the public leaderboard to anyone who opens it. If you do not want this to be public, do not sign in / submit. To have your player record deleted, use the contact below.</p>
+
+    <h2>Online co-op (WebRTC)</h2>
+    <p>When you host or join an online room, the game uses <a href="https://peerjs.com" target="_blank" rel="noopener">PeerJS</a>'s free public broker for the initial handshake so the two browsers can find each other. After that the connection is a direct peer-to-peer WebRTC channel between the players' browsers; game state does not pass through our server. The handshake exposes your public IP address to the broker and the other peer — this is inherent to how WebRTC works. The broker is operated by the PeerJS project; we do not log connection metadata ourselves.</p>
+
+    <h2>Children</h2>
+    <p>The game is suitable for all ages and does not knowingly collect personal information from anyone, regardless of age.</p>
+
+    <h2>Changes</h2>
+    <p>If this policy changes, the "Last updated" date above will move. Previous versions live in the project's source history.</p>
+
+    <h2>Contact</h2>
+    <p>For privacy questions, open an issue on the project's source repository.</p>
+  </main>
+</body>
+</html>

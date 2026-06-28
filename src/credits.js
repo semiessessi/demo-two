@@ -24,8 +24,8 @@ export const CREDITS = [
   {
     kind: 'Audio',
     items: [
-      { name: 'Explosion + engine SFX', author: 'synthesized for this project', license: 'CC0', url: '' },
-      { name: 'Music', author: '—', license: '(supplied / sampled)', url: '' },
+      { name: 'Explosion / weapon / engine SFX', author: 'synthesized for this project', license: 'CC0', url: '' },
+      { name: 'Music — Space: Above and Beyond suite', author: '© its original rights holders', license: 'fan use · non-commercial', url: '' },
     ],
   },
   {
@@ -57,5 +57,8 @@ export function creditsHtml() {
   const groups = CREDITS.map(
     (g) => `<div class="cgroup"><div class="chead">${esc(g.kind)}</div>${g.items.map(line).join('')}</div>`,
   ).join('');
-  return `<h2>Credits</h2>${groups}`;
+  const footer = `<div class="cgroup" style="margin-top:12px;border-top:1px solid rgba(150,180,255,0.12);padding-top:10px;">`
+    + `<div class="crow" style="opacity:0.78;">Non-commercial fan tribute to <em>Space: Above and Beyond</em> — not affiliated with, endorsed by, or licensed by its rights holders. Music &amp; trademarks &copy; their owners, used under fan terms.</div>`
+    + `<div class="crow"><a href="/privacy-policy/" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a href="/terms-of-service/" target="_blank" rel="noopener">Terms of Service</a></div></div>`;
+  return `<h2>Credits</h2>${groups}${footer}`;
 }
