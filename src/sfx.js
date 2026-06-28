@@ -123,7 +123,12 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     if (!ctx) return;
     busGain = ctx.createGain();
     busGain.gain.value = master;
-    const comp = ctx.createDynamicsCompressor(); // tame stacked blasts
+    const comp = ctx.createDynamicsCompressor(); // gentle glue — tame stacked blasts WITHOUT pumping the gun under every boom
+    comp.threshold.value = -16; // higher than the -24 default -> only the loudest peaks engage it
+    comp.knee.value = 18;
+    comp.ratio.value = 3.5;     // far gentler than the 12:1 default (which audibly ducked the gun on each explosion)
+    comp.attack.value = 0.004;
+    comp.release.value = 0.18;
     busGain.connect(comp);
     comp.connect(ctx.destination);
 
@@ -191,7 +196,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     try {
       if (!expBuffers.length) return;
       // rate biased BELOW 1 (0.72-1.0) -> pitched down -> deeper/longer; 6 source variants for variety
-      playOneShot(expBuffers[(Math.random() * expBuffers.length) | 0], pos, 0.9 + 0.6 * scale, 0.72, 0.28);
+      playOneShot(expBuffers[(Math.random() * expBuffers.length) | 0], pos, 0.6 + 0.45 * scale, 0.72, 0.28);
     } catch (_) { /* never throw into the render loop */ }
   }
 
