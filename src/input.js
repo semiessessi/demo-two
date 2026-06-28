@@ -14,7 +14,9 @@ const DEADZONE = 0.12;
 const dz = (v) => (Math.abs(v) < DEADZONE ? 0 : v);
 const clamp1 = (v) => (v < -1 ? -1 : v > 1 ? 1 : v);
 
-export function createInput() {
+// touchRead (optional) is a getter returning normalized on-screen-control signals (see touch.js), merged
+// in alongside keyboard + gamepad so flight/gun read one unified source. Returns null on non-touch devices.
+export function createInput(touchRead) {
   const keys = new Set();
   const isFormEl = (t) => t && (t.tagName === 'INPUT' || t.tagName === 'BUTTON' || t.tagName === 'TEXTAREA');
   const onDown = (e) => {
@@ -82,6 +84,20 @@ export function createInput() {
       gunAimY = dz(ax[3] || 0) || gunAimY; // right stick Y -> gun gimbal (pitch)
       lock = lock || btn(10) > 0.5; // right-stick click (R3) = lock target
       eject = eject || btn(3) > 0.5 || btn(8) > 0.5; // Y or View/Back
+    }
+
+    // on-screen touch controls (mobile/tablet) — additive, same conventions as the gamepad
+    const tch = touchRead ? touchRead() : null;
+    if (tch) {
+      pitch += tch.pitch || 0;
+      yaw += tch.yaw || 0;
+      roll += tch.roll || 0;
+      fire = Math.max(fire, tch.fire || 0);
+      boost = boost || tch.boost;
+      brake = brake || tch.brake;
+      gunAimX = gunAimX || (tch.gunAimX || 0);
+      gunAimY = gunAimY || (tch.gunAimY || 0);
+      lock = lock || tch.lock;
     }
 
     input.pitch = clamp1(pitch);

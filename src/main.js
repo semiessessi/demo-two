@@ -15,6 +15,7 @@ import { createSfx } from './sfx.js';
 import { creditsHtml } from './credits.js';
 import { createReactive } from './reactive.js';
 import { createInput } from './input.js';
+import { createTouchControls } from './touch.js';
 import { createProjectiles } from './projectiles.js';
 import { createPlayerCannon } from './weapons.js';
 import { createEnemyManager } from './enemies.js';
@@ -291,7 +292,8 @@ const starUniforms = {
 const reactive = createReactive();
 const audio = createAudioManager();
 const sfx = createSfx({ getContext: audio.ensureContext, camera, enabled: SOUND }); // shares audio's AudioContext; opt-in via ?sound
-const input = createInput();
+const touchControls = createTouchControls(); // on-screen flight controls (touch devices only; no-op stub otherwise)
+const input = createInput(touchControls.read);
 
 // combat systems (created once the ship is loaded)
 let projectiles = null;
@@ -760,8 +762,9 @@ function startLoop() {
     if (ATTRACT) { attractFrame(dt); return; } // standalone ?attract: a leaner, player-less frame
     if (attract && gameState.mode === 'menu') { attractFrame(dt); return; } // cinematic battle behind the menu
 
-    input.poll(); // keyboard + gamepad -> shared signals (read by flight + cannon)
+    input.poll(); // keyboard + gamepad + touch -> shared signals (read by flight + cannon)
     const flying = gameState.mode === 'flying';
+    touchControls.setVisible(flying); // show the on-screen stick/buttons only while actually flying
     let res = { throttle: 0, speed: 0, boosting: false };
     if (flying) {
       flight.setSpeedScale(damage.speedScale()); // engine damage cuts top speed
