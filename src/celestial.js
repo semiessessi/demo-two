@@ -177,18 +177,18 @@ export function createBlackHole() {
         vec3 up = abs(axis.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
         vec3 ux = normalize(cross(axis, up));
         vec3 vx = cross(axis, ux);
-        float az = atan(dot(t, vx), dot(t, ux));                 // azimuth around the axis
-        az += 0.3 * smoothstep(0.12, 1.0, ang);                  // spokes curve toward the same rotational sense at their tips
-        // irregular radial spokes: cosine lobes whose phase is warped by noise (continuous around az)
-        float warp = fbm(vec2(cos(az) * 1.7 + 5.0, sin(az) * 1.7 + 9.0));
-        float spk = pow(0.5 + 0.5 * cos(az * 22.0 + warp * 6.2831), 0.5); // fat arms: low exponent -> wide angular lobes
-        float fil = fbm(vec2(az * 4.0 + 21.0, ang * 4.0));       // break spokes into radial filaments
-        float body = spk * mix(0.48, 1.0, fil); // higher floor -> fuller, more padded arms
-        float lanes = fbm(vec2(az * 10.0 + 40.0, ang * 8.0));    // fine dust structure
-        body *= mix(0.28, 1.0, smoothstep(0.34, 0.66, lanes));   // carve dark dust lanes through the cloud (Milky-Way-ish)
-        // annular radial profile: rises just outside the hole, fades before the quad edge (~0.42 rad)
-        float radial = smoothstep(0.0, 0.05, ang) * (1.0 - smoothstep(0.52, 1.15, ang)); // start right at the hole (no inner gap), ~2x longer reach
-        radial *= 0.5 + 0.7 * fbm(vec2(ang * 3.0, az * 1.5));    // large-scale clumping
+        float az = atan(dot(t, vx), dot(t, ux));                 // azimuth — feeds cos() ONLY (periodic, so the +/-pi wrap is seamless)
+        az += 0.3 * smoothstep(0.12, 1.0, ang);                  // tips curve toward the same rotational sense
+        vec2 pp = vec2(dot(dir, ux), dot(dir, vx));              // CONTINUOUS tangential coords -> the NOISE has no atan2 seam (the old fbm(az) tore here)
+        float warp = fbm(pp * 1.7 + 5.0);
+        float spk = pow(0.5 + 0.5 * cos(az * 22.0 + warp * 6.2831), 0.5); // fat arms; cos() is periodic -> seamless across +/-pi
+        float fil = fbm(pp * 5.0 + 21.0);                        // radial filaments (seamless)
+        float body = spk * mix(0.48, 1.0, fil);                  // higher floor -> fuller, padded arms
+        float lanes = fbm(pp * 11.0 + 40.0);                     // fine dust lanes (seamless)
+        body *= mix(0.28, 1.0, smoothstep(0.34, 0.66, lanes));   // carve dark dust lanes (Milky-Way-ish)
+        // annular radial profile: starts at the hole, fades before the cone edge (soft -> no square)
+        float radial = smoothstep(0.0, 0.05, ang) * (1.0 - smoothstep(0.52, 1.15, ang));
+        radial *= 0.5 + 0.7 * fbm(pp * 3.0 + 2.0);              // large-scale clumping (seamless)
         return clamp(body * radial, 0.0, 1.0);
       }
 
@@ -263,7 +263,8 @@ export function createBlackHole() {
         // (no visible square). minr = the ray's closest approach in Rs units.
         float zone = 1.0 - smoothstep(11.0, 36.0, minr); // lensed/smeared stars wrap around the hole (extended farther out)
         float bend = length(d - rd0);
-        float neb = spokeNebula(d, axis);
+        vec3 dn = normalize(rd0 + (d - rd0) * 1.6); // exaggerate the lensing deflection so the nebula visibly warps around the hole
+        float neb = spokeNebula(dn, axis);
         // more PURPLE, with a violet<->magenta shimmer varying over the cloud (texture, Milky-Way-ish)
         vec3 nebCol = mix(vec3(0.30, 0.06, 0.62), vec3(0.55, 0.15, 0.80), fbm(vec2(d.x * 6.0 + 3.0, d.y * 6.0 - 2.0)));
         vec3 bg = nebCol * neb * uSpokeBright;                   // nebula
