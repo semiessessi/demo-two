@@ -59,7 +59,7 @@ function injectStyle() {
   document.head.appendChild(el);
 }
 
-export function createAttractMenu({ onMultiplayer, onControls, onOptions } = {}) {
+export function createAttractMenu({ onMultiplayer, onControls, onOptions, onCampaign } = {}) {
   injectStyle();
   const wrap = document.createElement('div');
   wrap.id = 'attract-menu';
@@ -72,6 +72,9 @@ export function createAttractMenu({ onMultiplayer, onControls, onOptions } = {})
       <button class="am-btn" data-act="opt">Options</button>
     </div>
     <div class="am-legal">This is a non-commercial, fan-made project created out of appreciation for the television series <em>Space: Above and Beyond</em>. It is not affiliated with, endorsed by, or sponsored by The Walt Disney Company, 20th Century Studios, or the show's creators. All trademarks, characters, and related intellectual property belong to their respective owners. No copyright or trademark infringement is intended, and no money is made from this project. If the rights holders object to this work, it will be removed promptly upon request.<br><a href="/privacy-policy/" target="_blank" rel="noopener">Privacy</a> &middot; <a href="/terms-of-service/" target="_blank" rel="noopener">Terms</a></div>`;
+  // "New Game" is the Campaign entry — enabled + relabelled only when main wires onCampaign (i.e. ?singleplayer).
+  const newBtn = wrap.querySelector('[data-act="new"]');
+  if (onCampaign) { newBtn.textContent = 'Campaign'; newBtn.disabled = false; newBtn.addEventListener('click', () => onCampaign()); }
   wrap.querySelector('[data-act="mp"]').addEventListener('click', () => { if (onMultiplayer) onMultiplayer(); });
   wrap.querySelector('[data-act="ctrl"]').addEventListener('click', () => { if (onControls) onControls(); });
   wrap.querySelector('[data-act="opt"]').addEventListener('click', () => { if (onOptions) onOptions(); });

@@ -8,7 +8,7 @@ import * as THREE from 'three';
 const EJECT_HOLD = 1.0;
 const CUTSCENE = 2.6;
 
-export function createGameState({ ship, camera, flight, hud, vfx, debris, playerVel, onRestart, onMenu }) {
+export function createGameState({ ship, camera, flight, hud, vfx, debris, playerVel, onRestart, onMenu, onOver }) {
   let mode = 'menu';
   let ejectHold = 0;
   let cutscene = 0;
@@ -86,7 +86,9 @@ export function createGameState({ ship, camera, flight, hud, vfx, debris, player
       cutscene -= dt;
       if (cutscene <= 0) {
         mode = 'over';
-        if (hud) hud.showMissionOver('MISSION OVER', reasonText);
+        // campaign routes the outcome to its own fail screen; skirmish/co-op use the default overlay
+        if (onOver) onOver('MISSION OVER', reasonText);
+        else if (hud) hud.showMissionOver('MISSION OVER', reasonText);
       }
     } else if (mode === 'tumbling') {
       // out of control: spin + drift with the wreck's momentum; chase camera doesn't roll with the spin.

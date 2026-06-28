@@ -32,11 +32,17 @@ import { createEditor } from './editor.js';
 import { createDebris } from './debris.js';
 import { createPregame } from './pregame.js';
 import { applyLoadout } from './loadout.js';
-import { loadSettings, DIFFICULTY, ENVIRONMENT } from './settings.js';
+import { loadSettings, DIFFICULTY, ENVIRONMENT, markComplete } from './settings.js';
 import { createAttract } from './attract.js';
 import { createAttractMenu } from './attractMenu.js';
 import { createOptions } from './options.js';
 import { createGamepadMenu } from './gamepadMenu.js';
+import { createComms } from './comms.js';
+import { createMissionHud } from './missionHud.js';
+import { createBriefing } from './briefing.js';
+import { createCampaignScreen } from './campaignScreen.js';
+import { createMission } from './campaign/missionRuntime.js';
+import { CHARACTERS } from './campaign/characters.js';
 import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlanet, createRingedPlanet } from './celestial.js';
 import { createPeerTransport } from './net/peer.js';
 import { createNetGame } from './net/netgame.js';
@@ -64,6 +70,9 @@ const ROOM = new URLSearchParams(window.location.search).get('room'); // co-op j
 const SKIRMISH = !ATTRACT;
 // ?skirmish / ?room jump straight to the Multiplayer pane; otherwise we open on the title menu.
 const STRAIGHT_TO_MP = ROOM != null || /[?&]skirmish\b/.test(window.location.search);
+// Single-player story campaign — gated behind ?singleplayer (and &singleplayer) so it ships to master
+// without changing the default experience. Adds the Campaign menu entry + the mission/comms stack.
+const SINGLEPLAYER = new URLSearchParams(window.location.search).has('singleplayer');
 
 // Sound effects (explosions, weapons, flybys, Chig fire) are ON by default now; ?nosound mutes them all.
 // (?sound is still accepted as a harmless no-op so old links keep working.) The engine synth is the lone
@@ -381,6 +390,8 @@ let options = null; // audio-mix options overlay
 const menuGamepad = createGamepadMenu({ onFirstButton: () => firstGesture() }); // d-pad/stick menu nav + audio unlock
 let net = null; // co-op netplay (null = single-player)
 let runSubmitted = false; // leaderboard: submit a run once when it ends
+let mission = null; // active campaign mission runtime (null = not in a mission)
+let comms = null; let missionHud = null; let briefing = null; let campaignScreen = null; // campaign UI (built only when SINGLEPLAYER)
 
 // Re-arm a fresh fight after a mission ends (called by gameState.restart()).
 function restartWorld() {
@@ -498,6 +509,48 @@ function applyVolumes(v) {
 }
 // Full menu entry (boot / mission-over): arm the battle, open on the title menu.
 function enterMenu() { armMenuBattle(); showTitle(); }
+
+// --- campaign (single-player) -----------------------------------------------------------------------
+// Overlay swaps over the running cinematic, same pattern as showTitle/showMultiplayer.
+function showCampaign() { if (pregame) pregame.hide(); if (options) options.hide(); if (briefing) briefing.hide(); if (attractMenu) attractMenu.hide(); if (campaignScreen) campaignScreen.show(); menuGamepad.setMenu(null); }
+function showBriefing(def) { if (campaignScreen) campaignScreen.hide(); if (briefing) briefing.show(def); }
+// Start a scripted mission: set its environment, reset the world, place the player, build + start the runtime.
+function launchMission(def) {
+  if (net) return; // single-player only
+  applyEnvironment({ ...settings, environment: def.environment });
+  applyLoadout(ship, settings.loadout);
+  if (attract) attract.setVisible(false);
+  restartWorld();
+  if (def.player && def.player.start) {
+    ship.pivot.position.fromArray(def.player.start.pos || [0, 0, 0]);
+    const h = def.player.start.heading;
+    if (h) ship.pivot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3().fromArray(h).normalize());
+  }
+  if (briefing) briefing.hide();
+  if (campaignScreen) campaignScreen.hide();
+  if (hud) hud.setVisible(true);
+  missionHud.show();
+  mission = createMission(def, { scene, camera, ship, enemyMgr, projectiles, vfx, lighting, hullDebris: playerDebris, comms, missionHud, onComplete, onFail });
+  if (combat) combat.setFriendlies(mission.friendlies); // enemy bolts can hit wingmen (combat missions)
+  mission.start();
+  firstGesture(); // the launch click is a user gesture -> unlock audio (VO + music)
+  gameState.launch();
+}
+function onComplete(def, info) {
+  markComplete(def.id);
+  missionHud.showOutcome({ title: (info && info.title) || 'MISSION COMPLETE', sub: (info && info.sub) || '', buttons: [['Continue', endMission]] });
+}
+function onFail(def, reason) {
+  missionHud.showOutcome({ title: 'MISSION FAILED', sub: reason || '', buttons: [['Retry', () => { endMission(); launchMission(def); }], ['Abort', endMission]] });
+}
+function endMission() {
+  if (mission) mission.dispose();
+  mission = null;
+  if (combat) combat.setFriendlies(null);
+  gameState.toMenu(); // mode -> menu, restartWorld, enterMenu (re-arms the cinematic + showTitle)
+  showCampaign();     // swap the title overlay for the campaign screen
+  if (missionHud) missionHud.hide();
+}
 // Start (or join) a co-op session from the lobby. role 'host' mints a room code; 'joiner' connects to
 // `code`. Returns the room code (host's own, or the joined one). The match itself begins on LAUNCH
 // (host broadcasts `start`; both peers run coopLaunch).
@@ -632,7 +685,8 @@ async function init() {
   hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
   targetDisplay = createTargetDisplay(chigKit.template);
   // ?skirmish -> return to the menu after a mission; default -> drop straight back into flight.
-  gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld, onMenu: enterMenu }); // mission over -> back to the title menu
+  gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld, onMenu: enterMenu, // mission over -> back to the title menu
+    onOver: (t, r) => { if (mission) mission.onPlayerOut(r); else hud.showMissionOver(t, r); } }); // campaign routes the outcome to its own fail screen
   if (SKIRMISH) {
     pregame = createPregame({
       settings, onLaunch: launchSkirmish,
@@ -651,7 +705,15 @@ async function init() {
       onMultiplayer: showMultiplayer, // in-page: swap to the Multiplayer pane (no reload)
       onControls: () => infoEl?.classList.toggle('open'), // same toggle as Tab
       onOptions: showOptions, // in-page: the audio-mix options pane
+      onCampaign: SINGLEPLAYER ? showCampaign : undefined, // "Campaign" entry — only when ?singleplayer
     });
+    if (SINGLEPLAYER) {
+      missionHud = createMissionHud();
+      comms = createComms({ audio, missionHud, characters: CHARACTERS,
+        getVoiceGain: () => (settings.volume && settings.volume.voice != null ? settings.volume.voice : 0.9) * (settings.volume && settings.volume.master != null ? settings.volume.master : 1) });
+      briefing = createBriefing({ onLaunch: launchMission, onBack: showCampaign });
+      campaignScreen = createCampaignScreen({ onSelect: showBriefing, onBack: showTitle });
+    }
   }
   damage.setCallbacks({
     onEject: () => gameState.eject(),
@@ -717,7 +779,7 @@ async function init() {
   onSessionChange(applyProfile);
 
   if (ATTRACT) bootAttract(); // pure cinematic screensaver (?attract)
-  else { enterMenu(); if (STRAIGHT_TO_MP) showMultiplayer(); } // DEFAULT: title menu (?skirmish/?room jump to the Multiplayer pane)
+  else { enterMenu(); if (SINGLEPLAYER) showCampaign(); else if (STRAIGHT_TO_MP) showMultiplayer(); } // DEFAULT: title menu (?singleplayer -> Campaign; ?skirmish/?room -> Multiplayer)
   if (ROOM && pregame) { startCoop('joiner', ROOM.toUpperCase()); if (pregame.setRoster) pregame.setRoster([], ROOM.toUpperCase()); } // ?room -> auto-join
   startLoop();
   reveal();
@@ -836,8 +898,11 @@ function startLoop() {
     if (net && flying) net.captureLocal(player, { dt, throttle: res.throttle, firing: (input.fire || 0) > 0.5 });
     if (net) net.applyRemotes(dt);
     if (net && !net.isHost) enemyMgr.stepDeaths(dt); // joiner: enemies are host-driven proxies, no local AI
-    else enemyMgr.update(dt, player, net ? net.targetFor : undefined);
-    if (gameState.mode === 'flying' && (!net || net.isHost)) waves.update(dt, player); // host owns waves
+    else enemyMgr.update(dt, player, mission ? mission.targetFor : (net ? net.targetFor : undefined));
+    if (gameState.mode === 'flying') {
+      if (mission) mission.update(dt, player); // campaign: scripted spawns + wingmen + comms + triggers (replaces waves)
+      else if (!net || net.isHost) waves.update(dt, player); // skirmish/co-op host owns waves
+    }
     projectiles.update(dt);
     combat.update(dt);
     if (flying) damage.update(dt, vfx);
@@ -846,7 +911,7 @@ function startLoop() {
     if (playerDebris) playerDebris.update(dt, null, enemyMgr.enemies); // player wreck debris (no self-collide)
     enemyMgr.prune();
     gameState.update(dt, input);
-    if (gameState.mode === 'over' && !runSubmitted) { // record the run for the leaderboard (once)
+    if (gameState.mode === 'over' && !runSubmitted && !mission) { // record the run for the leaderboard (once; not in campaign)
       runSubmitted = true;
       if (net) net.localDead(); // co-op: peers remove our ship proxy instead of freezing it
       if (isSignedIn()) submitRun({ wave: (waves && waves.wave) || 0, kills: net ? net.myKills : enemyMgr.kills, deaths: 1, difficulty: settings.difficulty, environment: settings.environment, coop: !!net });

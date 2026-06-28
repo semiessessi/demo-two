@@ -89,3 +89,29 @@ export function loadSettings() {
 export function saveSettings(s) {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* storage may be unavailable */ }
 }
+
+// --- Campaign progress (separate key from the skirmish settings above) -------------------------------
+// Shape: { version:1, completed: { '<missionId>': { at:<ts> } }, lastPlayed:'<missionId>'|null }.
+const CKEY = 'd2.campaign.v1';
+const CAMPAIGN_DEFAULTS = { version: 1, completed: {}, lastPlayed: null };
+
+export function loadCampaign() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CKEY));
+    if (c && typeof c === 'object') return { ...clone(CAMPAIGN_DEFAULTS), ...c, completed: { ...(c.completed || {}) } };
+  } catch (e) { /* ignore corrupt/unavailable storage */ }
+  return clone(CAMPAIGN_DEFAULTS);
+}
+
+export function saveCampaign(c) {
+  try { localStorage.setItem(CKEY, JSON.stringify(c)); } catch (e) { /* storage may be unavailable */ }
+}
+
+// Mark a mission complete + remember it as last played; returns the updated progress.
+export function markComplete(missionId) {
+  const c = loadCampaign();
+  c.completed[missionId] = { at: Date.now() };
+  c.lastPlayed = missionId;
+  saveCampaign(c);
+  return c;
+}

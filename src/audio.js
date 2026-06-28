@@ -119,6 +119,53 @@ export function createAudioManager() {
     }
   }
 
+  // --- Comms voice (campaign dialogue) ---------------------------------------------------------------
+  // Lives here (not sfx.js) so it works regardless of the ?sound SFX gate — dialogue is core to the
+  // campaign. A separate 2D voice bus (no spatialisation); the caller scales gain per line.
+  const VO_EXTS = ['.mp3', '.ogg', '.wav'];
+  let voiceGain = null;
+  function voiceBus() {
+    ensureContext();
+    if (!voiceGain) { voiceGain = ctx.createGain(); voiceGain.gain.value = 1; voiceGain.connect(ctx.destination); }
+    return voiceGain;
+  }
+  // Probe a base path across VO_EXTS, decode the first present one. `base` has NO extension
+  // (e.g. '/vo/m1-shakedown/co.checkin'). Returns an AudioBuffer or null (missing -> subtitle-only).
+  async function loadVoice(base) {
+    ensureContext();
+    for (const ext of VO_EXTS) {
+      try {
+        const r = await fetch(base + ext);
+        if (!r.ok) continue;
+        if (/text\/html/.test(r.headers.get('content-type') || '')) continue; // SPA fallback = missing
+        const ab = await r.arrayBuffer();
+        const buf = await new Promise((res) => { try { ctx.decodeAudioData(ab.slice(0), res, () => res(null)); } catch (_) { res(null); } });
+        if (buf) return buf;
+      } catch (_) { /* try next ext */ }
+    }
+    return null;
+  }
+  // Play a decoded voice buffer on the 2D voice bus. Returns a handle {duration, stop, onended}.
+  function playVoice(buf, { gain = 1 } = {}) {
+    if (!buf) return null;
+    ensureContext();
+    if (ctx.state === 'suspended') { try { ctx.resume(); } catch (_) {} }
+    const bus = voiceBus();
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const g = ctx.createGain(); g.gain.value = clamp01(gain);
+    src.connect(g).connect(bus);
+    let done = false; const cbs = [];
+    src.onended = () => { done = true; try { src.disconnect(); g.disconnect(); } catch (_) {} cbs.forEach((c) => c()); };
+    try { src.start(); } catch (_) { done = true; }
+    return { duration: buf.duration, stop() { try { src.stop(); } catch (_) {} }, onended(cb) { done ? cb() : cbs.push(cb); } };
+  }
+  // Dip the music under dialogue: multiply the music gain (1 = restore). Smoothed.
+  function duck(mult) {
+    if (!gain) return;
+    const base = muted ? 0 : volume;
+    try { gain.gain.setTargetAtTime(base * clamp01(mult), ctx.currentTime, 0.12); } catch (_) { gain.gain.value = base * clamp01(mult); }
+  }
+
   function getAmplitude() {
     if (!analyser) return 0;
     analyser.getByteTimeDomainData(timeBuf);
@@ -160,6 +207,9 @@ export function createAudioManager() {
     setMuted,
     toggleMute,
     resumeContext,
+    loadVoice,
+    playVoice,
+    duck,
     getAmplitude,
     getBands,
     get isAvailable() {
