@@ -227,7 +227,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
   function chigShot(pos) {
     try {
       if (!chigShotBuf) return;
-      playOneShot(chigShotBuf, pos, 0.35, 0.9, 0.2, 7);
+      playOneShot(chigShotBuf, pos, 0.7, 0.9, 0.2, 8); // was 0.35 -> too quiet to pick out; cap 8 leaves 4 voices for booms
     } catch (_) {}
   }
 
