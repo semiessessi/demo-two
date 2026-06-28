@@ -489,7 +489,7 @@ async function init() {
     cannon = createPlayerCannon(scene, ship, projectiles, {
       getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
       canFire: () => !damage || damage.canFire(), // gun subsystem destroyed -> cannon offline
-      onFire: (pos) => { lighting.muzzleFlash(pos); sfx.weaponFire(pos); }, // muzzle-flash light pulse + (silent until /sfx/cannon.mp3 exists) weapon shot
+      onFire: (pos) => { lighting.muzzleFlash(pos); sfx.weaponFire(pos); sfx.gunFiring(); }, // muzzle-flash light pulse + cannon loop sustain (+ optional one-shot if /sfx/cannon.* exists)
     });
   }
 
@@ -706,6 +706,7 @@ function startLoop() {
     for (const m of ship.engineMaterials) m.emissiveIntensity = 1.8 + r.thrust * 3.2;
     thrusters.update(r.thrust, dt);
     sfx.engine(r.thrust); // engine hum rises with thrust/boost
+    sfx.gunTick(dt); // gate the cannon fire-loop (gunFiring() is pulsed per shot from the cannon's onFire)
     if (rcs) rcs.update(dt, flying); // maneuvering jets — fire from the ship's actual rotation + deceleration
 
     // keep the backdrop centred on the camera so it sits at infinity (no parallax)

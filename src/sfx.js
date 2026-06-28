@@ -14,15 +14,18 @@ const MANIFEST = {
   explosions: ['/sfx/explosion1', '/sfx/explosion2', '/sfx/explosion3', '/sfx/explosion4', '/sfx/explosion5', '/sfx/explosion6'],
   engine: '/sfx/engine',
   cannon: '/sfx/cannon',
+  gun: '/sfx/gun', // the Hammerhead cannon — a short sample looped + gain-gated while the trigger is down
 };
 const EXTS = ['.mp3', '.ogg', '.wav'];
 
 const MAX_VOICES = 12;
-const REF_DIST = 80; // full volume within this range of the camera
-const ROLLOFF = 0.5; // <1 softens the inverse-distance falloff so the whole furball stays audible
+const REF_DIST = 120; // full volume within this range of the camera (was 80 — the furball sat past it -> too quiet)
+const ROLLOFF = 0.45; // <1 softens the inverse-distance falloff so the whole furball stays audible
 const MAX_DIST = 1400; // gentle fade to silence by here
 const ENGINE_LEVEL = 0.6; // overall engine-hum ceiling — kept low so it sits under the music
-const DEFAULT_MASTER = 0.9;
+const GUN_LEVEL = 0.5;    // player's own cannon loop — prominent (NOT distance-attenuated; it's at the camera)
+const GUN_HOLD = 0.13;    // seconds one shot sustains the loop — bridges inter-shot gaps + leaves a short release tail
+const DEFAULT_MASTER = 1.0;
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -54,7 +57,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
   if (!enabled) {
     return {
       ready: Promise.resolve(0),
-      unlock() {}, onExplosion() {}, weaponFire() {}, engine() {}, setMasterGain() {},
+      unlock() {}, onExplosion() {}, weaponFire() {}, engine() {}, gunFiring() {}, gunTick() {}, setMasterGain() {},
       get isUnlocked() { return false; },
     };
   }
@@ -67,6 +70,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
   let rawExplosions = [];
   let rawEngine = null;
   let rawCannon = null;
+  let rawGun = null;
 
   // decoded buffers + graph nodes (built in unlock())
   let expBuffers = [];
@@ -75,6 +79,9 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
   let busGain = null;
   let engineSrc = null;
   let engineGain = null;
+  let gunSrc = null;
+  let gunGain = null;
+  let gunHold = 0; // counts down each gunTick; >0 keeps the gun loop audible (refreshed per shot by gunFiring)
   let voices = 0;
 
   const _camPos = new THREE.Vector3();
@@ -83,15 +90,17 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
 
   // probe + load everything we ship with; resolves to how many sounds are present
   const ready = (async () => {
-    const [exp, eng, can] = await Promise.all([
+    const [exp, eng, can, gun] = await Promise.all([
       Promise.all(MANIFEST.explosions.map(fetchFirst)),
       fetchFirst(MANIFEST.engine),
       fetchFirst(MANIFEST.cannon),
+      fetchFirst(MANIFEST.gun),
     ]);
     rawExplosions = exp.filter(Boolean);
     rawEngine = eng;
     rawCannon = can;
-    return rawExplosions.length + (rawEngine ? 1 : 0) + (rawCannon ? 1 : 0);
+    rawGun = gun;
+    return rawExplosions.length + (rawEngine ? 1 : 0) + (rawCannon ? 1 : 0) + (rawGun ? 1 : 0);
   })();
 
   function decode(ab) {
@@ -122,6 +131,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     expBuffers = (await Promise.all(rawExplosions.map(decode))).filter(Boolean);
     engineBuf = rawEngine ? await decode(rawEngine) : null;
     cannonBuf = rawCannon ? await decode(rawCannon) : null;
+    const gunBuf = rawGun ? await decode(rawGun) : null;
 
     if (engineBuf) {
       engineSrc = ctx.createBufferSource();
@@ -131,6 +141,16 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
       engineGain.gain.value = 0; // silent until engine() raises it
       engineSrc.connect(engineGain).connect(busGain);
       try { engineSrc.start(); } catch (_) {}
+    }
+    if (gunBuf) {
+      // one continuously-looping voice, gain-gated by gunTick — the player's own cannon, so no spatialisation
+      gunSrc = ctx.createBufferSource();
+      gunSrc.buffer = gunBuf;
+      gunSrc.loop = true;
+      gunGain = ctx.createGain();
+      gunGain.gain.value = 0; // silent until the trigger is down
+      gunSrc.connect(gunGain).connect(busGain);
+      try { gunSrc.start(); } catch (_) {}
     }
   }
 
@@ -149,7 +169,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     _toSrc.copy(pos).sub(_camPos);
     if (_toSrc.lengthSq() > 1e-6) _toSrc.normalize();
     const pan = clamp(_camRight.dot(_toSrc), -1, 1) * 0.8;
-    const fc = 16000 - 15400 * clamp01((d - REF_DIST) / 500); // near = full band, far = muffled ~600 Hz
+    const fc = 18000 - 11500 * clamp01((d - REF_DIST) / 1100); // near = full band, far = a gentle ~6.5kHz roll-off (was muffled to ~600Hz -> sounded muted)
     const src = ctx.createBufferSource();
     src.buffer = buffer;
     src.playbackRate.value = rateLo + Math.random() * rateRange;
@@ -171,7 +191,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     try {
       if (!expBuffers.length) return;
       // rate biased BELOW 1 (0.72-1.0) -> pitched down -> deeper/longer; 6 source variants for variety
-      playOneShot(expBuffers[(Math.random() * expBuffers.length) | 0], pos, 0.45 + 0.3 * scale, 0.72, 0.28);
+      playOneShot(expBuffers[(Math.random() * expBuffers.length) | 0], pos, 0.9 + 0.6 * scale, 0.72, 0.28);
     } catch (_) { /* never throw into the render loop */ }
   }
 
@@ -196,6 +216,24 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     }
   }
 
+  // The cannon fired a shot this frame — refresh the hold so the loop stays up. Called per bolt (onFire).
+  function gunFiring() {
+    gunHold = GUN_HOLD;
+  }
+
+  // Call once per frame: decay the hold and gate the loop's gain (fast attack so it kicks in on the first
+  // shot, slower release so it tails off naturally a beat after the trigger releases).
+  function gunTick(dt) {
+    if (!gunGain || !ctx || ctx.state !== 'running') return;
+    if (gunHold > 0) gunHold = Math.max(0, gunHold - dt);
+    const firing = gunHold > 0;
+    try {
+      gunGain.gain.setTargetAtTime(firing ? GUN_LEVEL : 0, ctx.currentTime, firing ? 0.008 : 0.05);
+    } catch (_) {
+      gunGain.gain.value = firing ? GUN_LEVEL : 0;
+    }
+  }
+
   function setMasterGain(v) {
     master = clamp01(v);
     if (busGain) busGain.gain.value = master;
@@ -207,6 +245,8 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     onExplosion,
     weaponFire,
     engine,
+    gunFiring,
+    gunTick,
     setMasterGain,
     get isUnlocked() { return unlocked; },
   };
