@@ -121,6 +121,13 @@ if (DIAG) {
   window.addEventListener('error', (e) => showError(e.message || 'Script error', `${e.filename || ''}:${e.lineno || ''}:${e.colno || ''}\n${(e.error && e.error.stack) || ''}`));
   window.addEventListener('unhandledrejection', (e) => showError('Unhandled promise rejection', String((e.reason && (e.reason.stack || e.reason.message)) || e.reason || '')));
   renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); showError('WebGL context lost', 'The GPU dropped the rendering context — usually out of memory on mobile, or a driver fault under load. Reloading may help; a lighter environment (try ?nobodies or ?nobloom) uses less.'); });
+  // A shader that fails to COMPILE/LINK (iOS GLSL ES is stricter — a prime "renders black" suspect) is
+  // logged by three but never throws, so it wouldn't reach the handlers above. This hook surfaces the GLSL
+  // info-log on screen so we can see exactly which shader and why.
+  renderer.debug.onShaderError = (gl, program, vs, fs) => {
+    const log = `${gl.getShaderInfoLog(vs) || ''}\n${gl.getShaderInfoLog(fs) || ''}\n${gl.getProgramInfoLog(program) || ''}`;
+    showError('Shader compile/link failed', log.trim().slice(0, 700));
+  };
 }
 // Smoke occlusion: an opaque depth pre-pass lets the smoke raymarch skip puffs hidden behind ships.
 // On by default; ?noocclude disables it (escape hatch).
