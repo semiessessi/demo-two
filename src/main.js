@@ -129,12 +129,16 @@ if (DIAG) {
     showError('Shader compile/link failed', log.trim().slice(0, 700));
   };
 }
+// ?safe — one switch to strip the heaviest/most-fragile passes (bloom in renderer.js, the depth pre-pass,
+// and all backdrop bodies) for quick black-screen triage on a device with no console. If ?safe renders
+// but the default is black, the culprit is one of those; narrow it with the individual flags below.
+const SAFE = /[?&]safe\b/.test(window.location.search);
 // Smoke occlusion: an opaque depth pre-pass lets the smoke raymarch skip puffs hidden behind ships.
-// On by default; ?noocclude disables it (escape hatch).
-const OCCLUDE = !/[?&]noocclude\b/.test(window.location.search);
-// Diagnostic switch: ?nobodies hides every celestial backdrop body (cloud planet / black hole / Saturn /
-// Jupiter / Ixion) to isolate the "angle-dependent everything-goes-black" bug to a body shader vs the rest.
-const NOBODIES = /[?&]nobodies\b/.test(window.location.search);
+// On by default; ?noocclude (or ?safe) disables it (escape hatch).
+const OCCLUDE = !SAFE && !/[?&]noocclude\b/.test(window.location.search);
+// Diagnostic switch: ?nobodies (or ?safe) hides every celestial backdrop body (cloud planet / black hole /
+// Saturn / Jupiter / Ixion) to isolate the "angle-dependent everything-goes-black" bug to a body shader.
+const NOBODIES = SAFE || /[?&]nobodies\b/.test(window.location.search);
 const IS_MOBILE = detectDevice().isMobile; // perf scaling: leaner debris pools (and quality.js adaptive tier) on phones
 
 // Lighting: a warm orange "sun" as the main light, a cool rim from the opposite side for separation,
