@@ -73,24 +73,31 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
             break;
           }
         }
-      } else if (b.team === 'enemy' && getFriendlies) {
-        // attract/co-op: test the bolt against every friendly ship; the first one hit takes the damage.
-        for (const f of getFriendlies()) {
-          const rr = f.radius + b.radius;
-          if (segDistSq(segStart, b.pos, f.pos) <= rr * rr) {
-            vfx.spark(b.pos, 0x9fd0ff);
-            f.hit(b.pos, b.damage, segStart);
-            projectiles.kill(b);
-            break;
+      } else if (b.team === 'enemy') {
+        // Test friendly ships first (attract allies / co-op peers / campaign wingmen); the first hit takes
+        // it. If NO friendly was hit, fall through to the player — so wingmen don't shield the player from
+        // every bolt (in the menu, onPlayerHit is guarded by mode==='flying', so this can't hurt there).
+        let hit = false;
+        if (getFriendlies) {
+          for (const f of getFriendlies()) {
+            const rr = f.radius + b.radius;
+            if (segDistSq(segStart, b.pos, f.pos) <= rr * rr) {
+              vfx.spark(b.pos, 0x9fd0ff);
+              f.hit(b.pos, b.damage, segStart);
+              projectiles.kill(b);
+              hit = true;
+              break;
+            }
           }
         }
-      } else if (b.team === 'enemy' && getPlayerPos) {
-        const pp = getPlayerPos();
-        const rr = params.playerHitRadius + b.radius;
-        if (segDistSq(segStart, b.pos, pp) <= rr * rr) {
-          vfx.spark(b.pos, 0x9fd0ff);
-          if (onPlayerHit) onPlayerHit(b.pos, b.damage, segStart); // segStart = bolt path start, for direct-hit (segment) routing
-          projectiles.kill(b);
+        if (!hit && getPlayerPos) {
+          const pp = getPlayerPos();
+          const rr = params.playerHitRadius + b.radius;
+          if (segDistSq(segStart, b.pos, pp) <= rr * rr) {
+            vfx.spark(b.pos, 0x9fd0ff);
+            if (onPlayerHit) onPlayerHit(b.pos, b.damage, segStart); // segStart = bolt path start, for direct-hit (segment) routing
+            projectiles.kill(b);
+          }
         }
       }
     }

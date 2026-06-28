@@ -2,8 +2,9 @@
 // in localStorage via settings.js (loadCampaign). A mission unlocks when its `requires` mission is done.
 
 import { m1 } from './m1-shakedown.js';
+import { m2 } from './m2-belt.js';
 
-export const MISSIONS = [m1];
+export const MISSIONS = [m1, m2];
 
 export const byId = (id) => MISSIONS.find((m) => m.id === id) || null;
 

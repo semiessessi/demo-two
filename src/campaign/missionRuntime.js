@@ -129,7 +129,10 @@ export function createMission(def, world) {
     if (a.comms && comms) comms.play(a.comms);
     if (a.objective) { const o = a.objective; objState[o.id] = o.state || 'active'; if (missionHud) missionHud.setObjective(o.id, { label: o.label, state: o.state }); }
     if (a.slot) { slotShown = !!a.slot.show; if (!slotShown && missionHud) missionHud.setSlot(null); }
-    if (a.formation && a.formation.move != null) formationMoving = a.formation.move;
+    if (a.formation) {
+      if (a.formation.move != null) formationMoving = a.formation.move;
+      if (a.formation.engage != null) for (const w of wingmen) w.mode = a.formation.engage ? 'engage' : 'form'; // whole flight breaks to fight
+    }
     if (a.waypoint) {
       const wp = a.waypoint;
       if (wp.hide || wp.id == null) { anchorTarget = null; if (missionHud) missionHud.setWaypoint(null); }
@@ -167,7 +170,7 @@ export function createMission(def, world) {
     const friends = wingmen.filter((x) => x.ally.alive).map((x) => x.ally);
     for (const w of wingmen) {
       if (!w.ally.alive) continue;
-      if (w.mode === 'engage') { w.ally.update(dt, { enemies: enemyMgr.enemies, friends }); continue; }
+      if (w.mode === 'engage') { w.ally.update(dt, { enemies: enemyMgr.enemies, friends }); if (w.rcs) w.rcs.update(dt, true); continue; } // combat AI flies + fights
       _desired.copy(_off.fromArray(w.slot)).applyQuaternion(anchor.quat).add(anchor.pos);
       _toD.subVectors(_desired, w.ally.pos);
       const d = _toD.length();
