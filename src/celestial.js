@@ -293,12 +293,28 @@ export function createCloudPlanet() {
   const group = new THREE.Group();
   group.visible = false;
   const R = 1300; // huge: placed close (~1500 out) so it DOMINATES the sky
+  // 8 swirl vortices: centres on a Fibonacci sphere + per-swirl twist / tightness / spin, PRECOMPUTED on the
+  // CPU and passed as uniforms. (Recomputing the Fibonacci + hashes per pixel ×8 stalled hard.)
+  const centers = [], swirls = [];
+  const fr = (x) => x - Math.floor(x);
+  const rng = (s) => fr(Math.sin(s) * 43758.5453);
+  for (let i = 0; i < 8; i++) {
+    const y = 1 - (i + 0.5) / 8 * 2, rr = Math.sqrt(Math.max(0, 1 - y * y)), th = i * 2.39996323;
+    centers.push(new THREE.Vector3(rr * Math.cos(th), y, rr * Math.sin(th)));
+    const h = rng(i * 17.3 + 1.7);
+    const str = (1.3 + 1.4 * h) * (h > 0.5 ? 1 : -1);
+    const tight = 3.0 + 5.0 * rng(i * 7.1 + 3.3);
+    const spin = (0.04 + 0.14 * rng(i * 13.7 + 9.1)) * (rng(i * 3.3 + 5.5) > 0.5 ? 1 : -1);
+    swirls.push(new THREE.Vector4(str, tight, spin, 0));
+  }
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
       uSunDir: { value: new THREE.Vector3(-55, 30, -30).normalize() },
       uExposure: { value: 0.85 },
       uAmbient: { value: 0.07 },
+      uCenters: { value: centers },
+      uSwirl: { value: swirls },
     },
     vertexShader: /* glsl */`
       varying vec3 vN; varying vec3 vP;
@@ -307,6 +323,7 @@ export function createCloudPlanet() {
       precision highp float;
       varying vec3 vN; varying vec3 vP;
       uniform float uTime, uExposure, uAmbient; uniform vec3 uSunDir;
+      uniform vec3 uCenters[8]; uniform vec4 uSwirl[8]; // x=twist y=tightness z=spin (precomputed on the CPU)
       float hash(vec3 p){ p = fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
       float noise(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.0-2.0*f);
         return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
@@ -314,20 +331,16 @@ export function createCloudPlanet() {
       float fbm(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.04; a*=0.5; } return v; }
       float fbm3(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<3;i++){ v+=a*noise(p); p*=2.04; a*=0.5; } return v; }
       // 8 overlapping VORTICES: each rotates the sample around its OWN radial axis (a cylinder perpendicular
-      // to the surface, i.e. around the normal there), strongest at its centre and fading out by a gaussian,
-      // with a per-swirl strength / tightness / time-spin. Pure 3D -> it runs through both sides, no facing
-      // to worry about. Deforming the SAMPLE position (not the colour) is what curls the noise into storms.
+      // to the surface, i.e. around the normal there), strongest at its centre and fading out, with a per-
+      // swirl twist / tightness / time-spin. Centres + params come in as uniforms (cheap) and the falloff is
+      // a rational (no per-pixel exp). Pure 3D -> runs through both sides, no facing logic. Deforming the
+      // SAMPLE position (not the colour) is what curls the noise into storms.
       vec3 swirl(vec3 p){
         for(int i=0;i<8;i++){
-          float fi=float(i);
-          float y=1.0-(fi+0.5)/8.0*2.0; float rr=sqrt(max(0.0,1.0-y*y)); float th=fi*2.39996323;
-          vec3 c=vec3(rr*cos(th), y, rr*sin(th));                 // Fibonacci-sphere centre (its normal = c)
-          float h=fract(sin(fi*127.1)*43758.5453);
-          float str=mix(1.3,2.7,h)*(h>0.5?1.0:-1.0);              // variable twist + direction
-          float tight=mix(2.5,6.5,fract(h*7.0));                  // how localised the vortex is
-          float spin=mix(0.04,0.18,fract(h*13.0))*(fract(h*3.0)>0.5?1.0:-1.0);
-          float d=distance(p,c); float fall=exp(-d*d*tight);
-          float ang=(str+uTime*spin)*fall;
+          vec3 c=uCenters[i]; vec4 sp=uSwirl[i];
+          float d=distance(p,c);
+          float fall=1.0/(1.0+d*d*sp.y); fall*=fall;              // tight localised falloff
+          float ang=(sp.x+uTime*sp.z)*fall;
           float s=sin(ang), co=cos(ang);
           p = p*co + cross(c,p)*s + c*dot(c,p)*(1.0-co);          // Rodrigues rotation about axis c
         }
