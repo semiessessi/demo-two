@@ -33,6 +33,9 @@ import { applyLoadout } from './loadout.js';
 import { loadSettings, DIFFICULTY, ENVIRONMENT } from './settings.js';
 import { createAttract } from './attract.js';
 import { createJupiter, createBlackHole, createCloudPlanet, createHabitablePlanet } from './celestial.js';
+import { createPeerTransport } from './net/peer.js';
+import { createNetGame } from './net/netgame.js';
+import { peerJsWorksHere } from './net/webrtc-detect.js';
 
 // Debug tooling (the lil-gui tuning panel, FPS overlay, window.__dbg) is local-dev only —
 // shown on the Vite dev server and any localhost origin. It can also be opted into on the deployed
@@ -48,7 +51,8 @@ const ATTRACT = /[?&]attract\b/.test(window.location.search);
 // Skirmish setup: the pre-game customisation menu + the cinematic attract battle behind it. Gated behind
 // ?skirmish so the DEFAULT boot is light (no menu, no 6-Hammerhead attract battle built up front) and
 // drops straight into flight — matching the base game's fast load.
-const SKIRMISH = /[?&]skirmish\b/.test(window.location.search);
+const ROOM = new URLSearchParams(window.location.search).get('room'); // co-op join code -> auto-join as joiner
+const SKIRMISH = ROOM != null || /[?&]skirmish\b/.test(window.location.search); // co-op needs the lobby menu
 
 // Sound effects (explosions + engine hum) are opt-in for now — they still need work, so they're gated
 // behind ?sound and silent by default. Music (audio.js / track.mp3) is independent of this flag.
@@ -275,6 +279,7 @@ let waves = null;
 let debug = null;
 let quality = null;
 let attract = null;
+let net = null; // co-op netplay (null = single-player)
 
 // Re-arm a fresh fight after a mission ends (called by gameState.restart()).
 function restartWorld() {
@@ -374,8 +379,43 @@ function enterMenu() {
   if (hud) hud.setVisible(false);
   if (pregame) pregame.show();
 }
+// Start (or join) a co-op session from the lobby. role 'host' mints a room code; 'joiner' connects to
+// `code`. Returns the room code (host's own, or the joined one). The match itself begins on LAUNCH
+// (host broadcasts `start`; both peers run coopLaunch).
+function startCoop(role, code) {
+  if (net) net.end();
+  const transport = createPeerTransport({ role, code });
+  net = createNetGame(scene, {
+    transport, role, ship, enemyMgr, projectiles, vfx, combat, lighting,
+    getLocalPlayer: () => ({ pos: ship.pivot.position, quat: ship.pivot.quaternion, vel: playerVel }),
+    localName: (settings.livery && settings.livery.callsign) || 'Pilot',
+    localLivery: settings.livery,
+    getSettings: () => ({ difficulty: settings.difficulty, environment: settings.environment }),
+    getWave: () => (waves && typeof waves.wave === 'number' ? waves.wave : 0),
+    onSettings: (s) => { if (s) { settings.difficulty = s.difficulty; settings.environment = s.environment; applyEnvironment(settings); } },
+    onStart: (s) => coopLaunch(s),
+    onRoster: (r) => { if (pregame && pregame.setRoster) pregame.setRoster(r, net.isHost ? transport.code : code); },
+    onDisconnect: () => { if (gameState.mode === 'flying') gameState.toMenu(); },
+  });
+  transport.start();
+  return net.isHost ? transport.code : code;
+}
+// Co-op match start (host on LAUNCH, joiner on the host's `start` event): adopt the shared settings + fly.
+function coopLaunch(s) {
+  if (s) { settings.difficulty = s.difficulty || settings.difficulty; settings.environment = s.environment || settings.environment; }
+  applySettings(settings);
+  if (attract) attract.setVisible(false);
+  if (combat) combat.setFriendlies(null);
+  restartWorld();
+  if (pregame) pregame.hide();
+  if (hud) hud.setVisible(true);
+  firstGesture();
+  gameState.launch();
+}
 // Launch button: hide the attract clones, drop friendlies, apply settings, reset the world, fly.
 function launchSkirmish(s) {
+  if (net && net.isHost) { net.broadcastStart(s); coopLaunch(s); return; } // co-op host: tell joiners, then fly
+  if (net && !net.isHost) return; // co-op joiner: only the host can launch
   applySettings(s);
   if (attract) attract.setVisible(false); // the two ally clones leave; ally #1 becomes the player
   if (combat) combat.setFriendlies(null); // single-player: enemy bolts hit the PLAYER (not the menu-only allies)
@@ -461,7 +501,12 @@ async function init() {
   targetDisplay = createTargetDisplay(chigKit.template);
   // ?skirmish -> return to the menu after a mission; default -> drop straight back into flight.
   gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld, onMenu: SKIRMISH ? enterMenu : bootFlight });
-  if (SKIRMISH) pregame = createPregame({ settings, onLaunch: launchSkirmish, onChange: (s) => { applyEnvironment(s); applyLoadout(ship, s.loadout); } });
+  if (SKIRMISH) pregame = createPregame({
+    settings, onLaunch: launchSkirmish,
+    onChange: (s) => { applyEnvironment(s); applyLoadout(ship, s.loadout); },
+    onHost: () => startCoop('host'),
+    onJoin: (code) => { startCoop('joiner', code); },
+  });
   damage.setCallbacks({
     onEject: () => gameState.eject(),
     onDestroyed: () => gameState.destroyed(),
@@ -517,6 +562,7 @@ async function init() {
 
   if (SKIRMISH) enterMenu(); // open on the AI Skirmish setup screen (flight begins on Launch)
   else bootFlight();         // default: straight into flight with the saved settings (light load, no menu)
+  if (ROOM && pregame) { startCoop('joiner', ROOM.toUpperCase()); if (pregame.setRoster) pregame.setRoster([], ROOM.toUpperCase()); } // ?room -> auto-join
   startLoop();
   reveal();
 }
@@ -586,8 +632,12 @@ function startLoop() {
     const player = { pos: ship.pivot.position, quat: ship.pivot.quaternion, vel: playerVel };
     if (flying) updateAimHud(cannon.update(dt, input, player));
     else hud.setTarget(0, 0, false);
-    enemyMgr.update(dt, player);
-    if (gameState.mode === 'flying') waves.update(dt, player); // no spawns in the menu/cutscene
+    // co-op: send own ship state, then interpolate remote ships/enemies before AI/targeting reads them
+    if (net && flying) net.captureLocal(player, { dt, throttle: res.throttle, firing: (input.fire || 0) > 0.5 });
+    if (net) net.applyRemotes(dt);
+    if (net && !net.isHost) enemyMgr.stepDeaths(dt); // joiner: enemies are host-driven proxies, no local AI
+    else enemyMgr.update(dt, player, net ? net.targetFor : undefined);
+    if (gameState.mode === 'flying' && (!net || net.isHost)) waves.update(dt, player); // host owns waves
     projectiles.update(dt);
     combat.update(dt);
     if (flying) damage.update(dt, vfx);

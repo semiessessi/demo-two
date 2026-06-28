@@ -1,4 +1,5 @@
 import { DIFFICULTY, ENVIRONMENT, saveSettings } from './settings.js';
+import { peerJsWorksHere } from './net/webrtc-detect.js';
 
 // Pre-game / "AI Skirmish" setup screen — a self-building DOM overlay (same dark glassy style as the
 // HUD). Sections: Markings, Loadout, Environment, Difficulty, and Launch. Edits write through to the
@@ -29,7 +30,7 @@ const STATIONS = [
 ];
 const ORD_LABEL = { fuel: 'Fuel tank', 'missile-pair': 'Missile pair', 'lr-missile': 'LR missile', laser: 'Laser', empty: 'Empty' };
 
-export function createPregame({ settings, onLaunch, onChange }) {
+export function createPregame({ settings, onLaunch, onChange, onHost, onJoin }) {
   const fire = () => { saveSettings(settings); if (onChange) onChange(settings); };
 
   const root = el('div', 'position:fixed;inset:0;z-index:200;display:none;pointer-events:none;', document.body);
@@ -114,6 +115,25 @@ export function createPregame({ settings, onLaunch, onChange }) {
     paint();
   });
 
+  // ---- Co-op (beta) ----
+  let coopStatus = null;
+  if (peerJsWorksHere() && (onHost || onJoin)) {
+    const co = el('div', '', panel);
+    el('div', LABEL, co).textContent = 'Co-op (beta)';
+    const row = el('div', 'display:flex;gap:6px;', co);
+    const hostBtn = el('button', BTN + 'flex:1;', row);
+    hostBtn.textContent = 'Host';
+    const codeInp = el('input', `${FONT}flex:1;font-size:12px;padding:6px 8px;text-transform:uppercase;`
+      + 'background:rgba(255,255,255,0.06);border:1px solid rgba(150,180,255,0.2);border-radius:7px;', row);
+    codeInp.placeholder = 'CODE';
+    codeInp.maxLength = 5;
+    const joinBtn = el('button', BTN, row);
+    joinBtn.textContent = 'Join';
+    coopStatus = el('div', `${FONT}font-size:11px;color:#9fb0d0;margin:6px 2px 0;white-space:pre-line;`, co);
+    hostBtn.onclick = () => { if (onHost) { const code = onHost(); coopStatus.textContent = `Hosting — share code: ${code}\nwaiting for players… then LAUNCH`; } };
+    joinBtn.onclick = () => { const c = codeInp.value.trim().toUpperCase(); if (c && onJoin) { onJoin(c); coopStatus.textContent = `Joining ${c}…\nwait for the host to launch`; } };
+  }
+
   // ---- Launch ----
   const launch = el('button', `${FONT}font-size:16px;letter-spacing:0.14em;color:#eaeefc;cursor:pointer;`
     + 'margin-top:auto;padding:14px;background:rgba(120,200,140,0.18);border:1px solid rgba(140,230,170,0.55);'
@@ -127,5 +147,10 @@ export function createPregame({ settings, onLaunch, onChange }) {
     root,
     show() { root.style.display = 'block'; },
     hide() { root.style.display = 'none'; },
+    setRoster(list, code) {
+      if (!coopStatus) return;
+      const names = (list || []).map((p) => (p.self ? `${p.name || 'You'} (you)` : (p.name || 'Pilot'))).join(', ');
+      coopStatus.textContent = `${code ? 'Room ' + code + '\n' : ''}Players: ${names || '—'}`;
+    },
   };
 }
