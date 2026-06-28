@@ -11,8 +11,10 @@ export const DEFAULTS = {
   // Weapon mounts: per wing = 1 fuel (inner) + 3 outer (inner/mid/tip). Outer mounts choose
   // missile-pair | lr-missile | empty; a long-range missile auto-implies the (single) targeting laser.
   loadout: {
-    fuelL: 'fuel', L1: 'missile-pair', L2: 'missile-pair', L3: 'lr-missile',
-    fuelR: 'fuel', R1: 'missile-pair', R2: 'missile-pair', R3: 'lr-missile',
+    // no fuel tanks / no bombs by default; LR-missile (or laser) on the tip + a missile pair the next
+    // mount in. Inner stays empty for now (will become a missile pair once that's tested).
+    fuelL: 'empty', L1: 'empty', L2: 'missile-pair', L3: 'lr-missile',
+    fuelR: 'empty', R1: 'empty', R2: 'missile-pair', R3: 'lr-missile',
   },
 };
 
@@ -52,7 +54,8 @@ export const ENVIRONMENT = {
   tartarus: {
     label: 'Tartarus', body: 'cloudplanet', sunMult: 0.7, // distant white dwarf -> dim
     nebula: { uColorA: 0x05060f, uColorB: 0x182840, uColorC: 0x40342a, uBrightness: 0.05, uSaturation: 0.35, uMilkyWay: 0.10 },
-    sun: { disc: 130, glow: 260, halo: 0, color: 0xffffff, glowAlpha: 0.5, haloAlpha: 0.0, white: true, light: 0xdfe8ff }, // small white-dwarf (blue-white)
+    sun: { disc: 130, glow: 260, halo: 0, color: 0xffffff, glowAlpha: 0.5, haloAlpha: 0.0, white: true, light: 0xffffff }, // pure white sun (the blue cast is the environment, not the star)
+    companion: { color: 0xffffff, mult: 0.6, disc: 120, glow: 600 }, // plain white fill from the opposite side to counter the blue (tweak as we go)
   },
   achilles: {
     label: 'Achilles System Outer Edge', body: 'none', sunMult: 0.3, // very distant star, barely illuminating
