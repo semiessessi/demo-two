@@ -132,12 +132,15 @@ export function createRenderer(container) {
       tqTail = (tqTail + 1) % TQ.length; tqLen--;
     }
   };
+  // NOTE: the GPU timer query (gpuTimerBegin/End/Poll) is DISABLED — EXT_disjoint_timer_query_webgl2 can
+  // destabilise the GPU / drop the WebGL context under heavy load on some drivers, which exactly matched a
+  // regression where the two heaviest scenes (Cerberus black hole, Tartarus cloud planet) kept going black
+  // (independent of render scale — downscaling didn't help — which a timer-query fault explains and raw
+  // overload does not). gpuFrameMs() returns 0 -> the quality controller falls back to wall-clock.
   function render() {
-    gpuTimerPoll();
-    gpuTimerBegin();
     composer.render();
-    gpuTimerEnd();
   }
+  void gpuTimerPoll; void gpuTimerBegin; void gpuTimerEnd; // kept (unused) so re-enabling is a one-line change
 
   function setSize(w, h) {
     curW = w;
