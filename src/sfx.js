@@ -27,6 +27,7 @@ const MAX_DIST = 1400; // gentle fade to silence by here
 const ENGINE_LEVEL = 0.85; // overall jet-engine ceiling — present but sits under the action/music
 const GUN_LEVEL = 0.5;    // player's own cannon loop — prominent (NOT distance-attenuated; it's at the camera)
 const GUN_HOLD = 0.13;    // seconds one shot sustains the loop — bridges inter-shot gaps + leaves a short release tail
+const WHIZ_LEVEL = 0.75;  // synthesized bullet whiz-by ceiling
 const DEFAULT_MASTER = 1.0;
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
@@ -87,6 +88,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
   let engineGain = null;
   let gunSrc = null;
   let gunGain = null;
+  let noiseBuf = null; // shared white-noise buffer for synthesized whiz-bys
   let gunHold = 0; // counts down each gunTick; >0 keeps the gun loop audible (refreshed per shot by gunFiring)
   let voices = 0;
 
@@ -141,6 +143,9 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     comp.release.value = 0.18;
     busGain.connect(comp);
     comp.connect(ctx.destination);
+    // shared white-noise buffer for synthesized whiz-bys (built once on the live context)
+    noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.3), ctx.sampleRate);
+    { const nd = noiseBuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2.0 - 1.0; }
 
     await ready;
     expBuffers = (await Promise.all(rawExplosions.map(decode))).filter(Boolean);
@@ -231,6 +236,39 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     } catch (_) {}
   }
 
+  // Synthesized bullet WHIZ-BY: a bandpass-noise zip whose centre frequency sweeps high->low (the Doppler
+  // pass), panned to the bolt's side and scaled by how close it came. Main triggers it on a near-miss.
+  function whiz(pos, vel, close) {
+    if (!ctx || ctx.state !== 'running' || !noiseBuf) return;
+    if (voices >= MAX_VOICES) return;
+    _camPos.copy(camera.position);
+    _camRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
+    _toSrc.copy(pos).sub(_camPos); if (_toSrc.lengthSq() > 1e-6) _toSrc.normalize();
+    const pan = clamp(_camRight.dot(_toSrc), -1, 1) * 0.92;
+    const spd = vel ? vel.length() : 90.0;
+    const g = (0.2 + 0.55 * clamp01(close)) * WHIZ_LEVEL;
+    if (g < 0.01) return;
+    const now = ctx.currentTime, dur = 0.15;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf;
+    src.playbackRate.value = 0.9 + Math.random() * 0.3;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 7.0;
+    const fHi = 1700.0 + spd * 9.0;                                       // faster bolt -> higher pitch
+    bp.frequency.setValueAtTime(fHi, now);
+    bp.frequency.exponentialRampToValueAtTime(Math.max(140.0, fHi * 0.42), now + dur); // Doppler down-sweep
+    const gn = ctx.createGain();
+    gn.gain.setValueAtTime(0.0001, now);
+    gn.gain.exponentialRampToValueAtTime(g, now + 0.008);                // snap attack
+    gn.gain.exponentialRampToValueAtTime(0.0001, now + dur);             // quick tail
+    const pn = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    src.connect(bp).connect(gn);
+    if (pn) { pn.pan.value = pan; gn.connect(pn); pn.connect(busGain); } else gn.connect(busGain);
+    voices++;
+    src.onended = () => { voices--; try { src.disconnect(); bp.disconnect(); gn.disconnect(); if (pn) pn.disconnect(); } catch (_) {} };
+    try { src.start(now); src.stop(now + dur + 0.02); } catch (_) { voices--; }
+  }
+
   // silent until the user drops a /sfx/cannon.mp3 in — then it just works
   function weaponFire(pos) {
     try {
@@ -284,6 +322,7 @@ export function createSfx({ getContext, camera, masterGain = DEFAULT_MASTER, ena
     onExplosion,
     flyby,
     chigShot,
+    whiz,
     weaponFire,
     engine,
     gunFiring,
