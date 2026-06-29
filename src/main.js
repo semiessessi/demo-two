@@ -25,7 +25,7 @@ import { createCombat } from './combat.js';
 import { createDamageModel } from './damage.js';
 import { createHud } from './hud.js';
 import { createTargetDisplay } from './targetDisplay.js';
-import { createWeaponSelect } from './weaponSelect.js';
+import { createWeaponSelect, REAR_GUN_PORTS } from './weaponSelect.js';
 import { createGameState } from './gameState.js';
 import { createDebug } from './debug.js';
 import { createRcs } from './rcs.js';
@@ -1264,7 +1264,7 @@ function buildTweakGui() {
   df.close();
 
   // Visual placement editor: see/adjust damage zones + RCS ports, log values to bake back into code.
-  createEditor(gui, { scene, ship, damage, rcs });
+  createEditor(gui, { scene, ship, damage, rcs, rearPorts: REAR_GUN_PORTS });
 }
 
 init().catch((e) => {

@@ -40,7 +40,15 @@ function injectStyle() {
 }
 
 const MISSILE_SPEED = 240, MISSILE_TURN = 2.6, MISSILE_DAMAGE = 44;
-const REAR_SPEED = 340, REAR_RANGE = 260;
+const REAR_SPEED = 340, REAR_RANGE = 260, REAR_SPREAD = 5; // degrees — rear-gun scatter cone
+
+// Rear-gun muzzle ports (pivot-local frame: forward -Z, up +Y, right +X). Live-editable in
+// ?debug -> "Rear Gun Ports (edit)" — drag them, then "log ports -> console" and paste back here.
+// `dir` = the straight-back aim used when there's no rear target; fire scatters in a REAR_SPREAD cone.
+export const REAR_GUN_PORTS = [
+  { name: 'Rear Gun L', pos: [-1.0, -0.1, 2.4], dir: [0, 0, 1] },
+  { name: 'Rear Gun R', pos: [1.0, -0.1, 2.4], dir: [0, 0, 1] },
+];
 
 export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemies, settings, applyLoadout, vfx } = {}) {
   injectStyle();
@@ -59,6 +67,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
   // temps (no per-frame allocation)
   const _fwd = new THREE.Vector3(), _rear = new THREE.Vector3(), _mpos = new THREE.Vector3();
   const _dir = new THREE.Vector3(), _vel = new THREE.Vector3(), _to = new THREE.Vector3();
+  const _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3();
 
   // --- DOM ---
   const root = el('div', '', document.body);
@@ -148,18 +157,35 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     return best;
   }
 
+  // perturb `dir` (in place) to a random direction within a `deg`-degree cone around it
+  function scatterDir(dir, deg) {
+    const ang = THREE.MathUtils.degToRad(deg) * Math.sqrt(Math.random());
+    const az = Math.random() * Math.PI * 2;
+    _t1.set(0, 1, 0);
+    if (Math.abs(dir.dot(_t1)) > 0.95) _t1.set(1, 0, 0);
+    _t2.crossVectors(dir, _t1).normalize();
+    _t1.crossVectors(_t2, dir).normalize();
+    const s = Math.sin(ang);
+    dir.multiplyScalar(Math.cos(ang)).addScaledVector(_t1, Math.cos(az) * s).addScaledVector(_t2, Math.sin(az) * s).normalize();
+  }
+
+  // Fire from BOTH rear muzzle ports (REAR_GUN_PORTS, pivot-local), aiming at a rear target if there is one
+  // else straight back, scattering each bolt in a REAR_SPREAD-degree cone.
   function fireRear(ctx, item, auto) {
     if (item.cd > 0) return;
-    _rear.set(0, 0, 1).applyQuaternion(ship.pivot.quaternion);
-    _mpos.copy(ship.pivot.position).addScaledVector(_rear, ship.radius);
     const tgt = rearTarget();
-    if (tgt) { _dir.copy(tgt.pos).sub(_mpos).normalize(); }
-    else if (auto) return; // auto only fires when there's a rear threat
-    else _dir.copy(_rear);
-    _vel.copy(_dir).multiplyScalar(REAR_SPEED);
-    if (pvel) _vel.add(pvel);
-    projectiles.spawn({ pos: _mpos, vel: _vel, color: 0x9fd8ff, team: 'player', damage: 7, life: 1.8, radius: 0.4, scale: 0.5, glow: 1.2 });
-    item.cd = auto ? 0.12 : 0.14;
+    if (auto && !tgt) return; // auto only fires when something's behind us
+    const q = ship.pivot.quaternion, base = ship.pivot.position;
+    for (const port of REAR_GUN_PORTS) {
+      _mpos.set(port.pos[0], port.pos[1], port.pos[2]).applyQuaternion(q).add(base); // pivot-local muzzle -> world
+      if (tgt) { _dir.copy(tgt.pos).sub(_mpos).normalize(); }
+      else { _dir.set(port.dir[0], port.dir[1], port.dir[2]).applyQuaternion(q).normalize(); }
+      scatterDir(_dir, REAR_SPREAD);
+      _vel.copy(_dir).multiplyScalar(REAR_SPEED);
+      if (pvel) _vel.add(pvel);
+      projectiles.spawn({ pos: _mpos, vel: _vel, color: 0x9fd8ff, team: 'player', damage: 7, life: 1.8, radius: 0.4, scale: 0.5, glow: 1.2 });
+    }
+    item.cd = auto ? 0.14 : 0.16;
   }
 
   function fireMissile(ctx, item) {
