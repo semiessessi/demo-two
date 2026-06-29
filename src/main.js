@@ -36,6 +36,7 @@ import { applyLoadout } from './loadout.js';
 import { loadSettings, DIFFICULTY, ENVIRONMENT, markComplete } from './settings.js';
 import { createAttract } from './attract.js';
 import { createAttractMenu } from './attractMenu.js';
+import { createPilotBar } from './pilotbar.js';
 import { createOptions } from './options.js';
 import { createGamepadMenu } from './gamepadMenu.js';
 import { createComms } from './comms.js';
@@ -389,6 +390,7 @@ let debug = null;
 let quality = null;
 let attract = null;
 let attractMenu = null; // title-screen menu overlay (logo + New Game / Multiplayer / Controls / Options)
+let pilotBar = null; // top-right sign-in + leaderboard widget (shown during menus)
 let options = null; // audio-mix options overlay
 const menuGamepad = createGamepadMenu({ onFirstButton: () => firstGesture() }); // d-pad/stick menu nav + audio unlock
 let net = null; // co-op netplay (null = single-player)
@@ -506,6 +508,7 @@ function armMenuBattle() {
     if (combat) combat.setFriendlies(attract.friendlies); // enemy bolts hit the allies, not the player
   }
   if (hud) hud.setVisible(false);
+  if (pilotBar) pilotBar.show(); // sign-in + leaderboard, top-right, throughout the menu
   if (targetDisplay) targetDisplay.setVisible(false); // the TARGET panel is flight-only (don't leave a black square on the menu)
 }
 // In-page overlay swaps (no reload, battle keeps running):
@@ -541,6 +544,7 @@ function launchMission(def) {
   if (briefing) briefing.hide();
   if (campaignScreen) campaignScreen.hide();
   if (hud) hud.setVisible(true);
+  if (pilotBar) pilotBar.hide();
   missionHud.show();
   mission = createMission(def, { scene, camera, ship, enemyMgr, projectiles, vfx, lighting, hullDebris: playerDebris, comms, missionHud, onComplete, onFail });
   if (combat) combat.setFriendlies(mission.friendlies); // enemy bolts can hit wingmen (combat missions)
@@ -593,6 +597,7 @@ function coopLaunch(s) {
   restartWorld();
   if (pregame) pregame.hide();
   if (hud) hud.setVisible(true);
+  if (pilotBar) pilotBar.hide();
   if (targetDisplay) targetDisplay.setVisible(true);
   firstGesture();
   gameState.launch();
@@ -607,6 +612,7 @@ function launchSkirmish(s) {
   restartWorld();
   if (pregame) pregame.hide();
   if (hud) hud.setVisible(true);
+  if (pilotBar) pilotBar.hide();
   if (targetDisplay) targetDisplay.setVisible(true);
   firstGesture(); // the launch click is a user gesture -> unlock + start audio (autoplay policy)
   gameState.launch();
@@ -617,6 +623,7 @@ function bootFlight() {
   applySettings(settings);
   restartWorld();
   if (hud) hud.setVisible(true);
+  if (pilotBar) pilotBar.hide();
   if (targetDisplay) targetDisplay.setVisible(true);
   if (gameState.mode === 'menu') gameState.launch(); // menu -> flying (audio unlocks on first input)
 }
@@ -723,6 +730,7 @@ async function init() {
       onOptions: showOptions, // in-page: the audio-mix options pane
       onCampaign: SINGLEPLAYER ? showCampaign : undefined, // "Campaign" entry — only when ?singleplayer
     });
+    pilotBar = createPilotBar(); // top-right sign-in + leaderboard (out of the multiplayer pane)
     if (SINGLEPLAYER) {
       missionHud = createMissionHud();
       comms = createComms({ audio, missionHud, characters: CHARACTERS,
