@@ -40,7 +40,7 @@ function injectStyle() {
 }
 
 const MISSILE_SPEED = 240, MISSILE_TURN = 2.6, MISSILE_DAMAGE = 44;
-const REAR_SPEED = 340, REAR_RANGE = 260, REAR_SPREAD = 5; // degrees — rear-gun scatter cone
+const REAR_RANGE = 260, REAR_SPREAD = 5; // REAR_SPREAD = scatter-cone degrees; rate/speed/bolt come from the front gun
 
 // Rear-gun muzzle ports (pivot-local frame: forward -Z, up +Y, right +X). Live-editable in
 // ?debug -> "Rear Gun Ports (edit)" — drag them, then "log ports -> console" and paste back here.
@@ -175,17 +175,18 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     if (item.cd > 0) return;
     const tgt = rearTarget();
     if (auto && !tgt) return; // auto only fires when something's behind us
+    const P = cannon.params; // match the front gun: fire rate + bolt speed/colour/damage/scale (keep the scatter)
     const q = ship.pivot.quaternion, base = ship.pivot.position;
     for (const port of REAR_GUN_PORTS) {
       _mpos.set(port.pos[0], port.pos[1], port.pos[2]).applyQuaternion(q).add(base); // pivot-local muzzle -> world
       if (tgt) { _dir.copy(tgt.pos).sub(_mpos).normalize(); }
       else { _dir.set(port.dir[0], port.dir[1], port.dir[2]).applyQuaternion(q).normalize(); }
       scatterDir(_dir, REAR_SPREAD);
-      _vel.copy(_dir).multiplyScalar(REAR_SPEED);
+      _vel.copy(_dir).multiplyScalar(P.boltSpeed);
       if (pvel) _vel.add(pvel);
-      projectiles.spawn({ pos: _mpos, vel: _vel, color: 0x9fd8ff, team: 'player', damage: 7, life: 1.8, radius: 0.4, scale: 0.5, glow: 1.2 });
+      projectiles.spawn({ pos: _mpos, vel: _vel, color: P.color, team: 'player', damage: P.damage, life: 2.0, radius: 0.4, scale: P.boltScale });
     }
-    item.cd = auto ? 0.14 : 0.16;
+    item.cd = 1 / P.fireRate;
   }
 
   function fireMissile(ctx, item) {
@@ -283,9 +284,11 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
 
     // activation
     if (col === 2) {
-      if (input.selectFirePressed) {
-        const opt = items[weaponIdx] && items[weaponIdx].options[optionIdx];
-        if (opt) { if (opt.kind === 'mode') items[weaponIdx].modeIdx = optionIdx; if (opt.apply) opt.apply(ctx); }
+      const it = items[weaponIdx];
+      const opt = it && it.options[optionIdx];
+      if (opt) {
+        if (opt.kind === 'mode') it.modeIdx = optionIdx; // a mode is set just by HIGHLIGHTING it (no trigger; remembered)
+        else if (opt.kind === 'action' && input.selectFirePressed && opt.apply) opt.apply(ctx); // actions still need a deliberate press
       }
     } else {
       const it = items[weaponIdx];
