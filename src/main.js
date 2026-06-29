@@ -449,7 +449,7 @@ function applyEnvironment(s) {
 }
 // Lazily build the asteroid field (the ~14 displaced rock geometries are the cost, so defer to first need).
 function ensureAsteroids() {
-  if (!asteroidField) asteroidField = createAsteroidField(scene, { vfx, isMobile: IS_MOBILE, count: IS_MOBILE ? 70 : 200 });
+  if (!asteroidField) asteroidField = createAsteroidField(scene, { vfx, camera, isMobile: IS_MOBILE, count: IS_MOBILE ? 70 : 200, getQuality: () => quality });
   return asteroidField;
 }
 // Binary companion star: a dim second disc+glow on the opposite side of the sky + a fill light at its colour.
