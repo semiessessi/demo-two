@@ -39,7 +39,7 @@ function injectStyle() {
   document.head.appendChild(s);
 }
 
-const MISSILE_SPEED = 240, MISSILE_TURN = 2.6, MISSILE_DAMAGE = 44;
+const MISSILE_SPEED = 240, MISSILE_TURN = 2.6, MISSILE_DAMAGE = 44, LOCK_TIME = 3.0; // s to acquire a short-range missile lock
 const REAR_RANGE = 260, REAR_SPREAD = 5; // REAR_SPREAD = scatter-cone degrees; rate/speed/bolt come from the front gun
 
 // Rear-gun muzzle ports (pivot-local frame: forward -Z, up +Y, right +X). Live-editable in
@@ -61,7 +61,8 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
   let repeatT = 0;        // hold-repeat timer for up/down
   let pvel = null;        // player velocity (bolt momentum); refreshed each update — position comes from ship.pivot
   const prevNav = { up: false, dn: false, lf: false, rt: false };
-  const missilesLive = []; // { b, item, target } homing records
+  const missilesLive = []; // { b, item, target, homing, trail } in-flight missiles
+  let lockTime = 0, lockTarget = null; // missile lock: how long the current target has been held continuously
   let visible = false;
 
   // temps (no per-frame allocation)
@@ -108,8 +109,8 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     });
     // 3) Missiles, grouped by type (pairs hold 2 each; LR holds 1).
     const mp = countMounts('missile-pair'), lr = countMounts('lr-missile');
-    if (mp > 0) items.push(missileItem('missilePair', 'MISSILES', mp * 2));
-    if (lr > 0) items.push(missileItem('lrMissile', 'LR MISSILE', lr));
+    if (mp > 0) items.push(missileItem('missilePair', 'MISSILES', mp * 2, true));  // short-range: needs a 3s lock to track
+    if (lr > 0) items.push(missileItem('lrMissile', 'LR MISSILE', lr, false));     // long-range: tracks immediately
     // 4) Fuel tanks — jettison.
     for (const mount of ['fuelL', 'fuelR']) {
       if ((settings.loadout || {})[mount] === 'fuel') {
@@ -133,9 +134,9 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     buildOptionRows();
   }
 
-  function missileItem(key, label, ammo) {
+  function missileItem(key, label, ammo, shortRange) {
     return {
-      key, label, type: 'missile', modeIdx: 0, ammo, cd: 0,
+      key, label, type: 'missile', modeIdx: 0, ammo, cd: 0, shortRange,
       options: [{ label: 'Track', kind: 'mode' }, { label: 'No-track', kind: 'mode' }],
       activate(ctx, ev) { if (ev.pressed) fireMissile(ctx, this); },
     };
@@ -194,26 +195,44 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     _fwd.set(0, 0, -1).applyQuaternion(ship.pivot.quaternion);
     _mpos.copy(ship.pivot.position).addScaledVector(_fwd, ship.radius);
     const tgt = cannon.target && cannon.target.alive ? cannon.target : null;
-    if (tgt) { _dir.copy(tgt.pos).sub(_mpos).normalize(); } else { _dir.copy(_fwd); }
+    // Track mode + a target -> homing. SHORT-RANGE needs a 3s MISSILE LOCK (target held continuously);
+    // LONG-RANGE locks instantly. The missile pins the target it locked at launch.
+    let homing = false;
+    if (item.modeIdx === 0 && tgt) homing = item.shortRange ? (lockTarget === tgt && lockTime >= LOCK_TIME) : true;
+    if (homing) { _dir.copy(tgt.pos).sub(_mpos).normalize(); } else { _dir.copy(_fwd); }
     _vel.copy(_dir).multiplyScalar(MISSILE_SPEED);
     if (pvel) _vel.add(pvel);
-    const b = projectiles.spawn({ pos: _mpos, vel: _vel, color: 0xffa040, team: 'player', damage: MISSILE_DAMAGE, life: 4.0, radius: 0.8, scale: 1.2, width: 1.4, glow: 2.2, noise: 0.2 });
+    const b = projectiles.spawn({ pos: _mpos, vel: _vel, color: 0xffcaa0, team: 'player', damage: MISSILE_DAMAGE, life: 4.0, radius: 0.7, scale: 2.0, width: 0.5, glow: 2.4, noise: 0.15 });
     item.ammo--;
     item.cd = 0.5;
-    if (b && item.modeIdx === 0 && tgt) missilesLive.push({ b, item, target: tgt }); // Track mode -> homing
+    if (b) {
+      const trail = (vfx && vfx.createTrail) ? vfx.createTrail({ getPos: () => b.pos, getVel: () => b.vel, spawnDist: 3.5, spawnInterval: 0.09, life: 1.0, radius: 1.1, blobs: 1, density: 0.6 }) : null;
+      missilesLive.push({ b, item, target: homing ? tgt : null, homing, trail });
+    }
   }
 
-  function advanceHoming(dt) {
+  function updateMissiles(dt) {
     for (let i = missilesLive.length - 1; i >= 0; i--) {
       const r = missilesLive[i];
-      if (!r.b.alive) { missilesLive.splice(i, 1); continue; }
-      const t = (cannon.target && cannon.target.alive) ? cannon.target : (r.target && r.target.alive ? r.target : null);
-      if (!t) continue;
-      _dir.copy(t.pos).sub(r.b.pos);
-      const dist = _dir.length() || 1; _dir.multiplyScalar(1 / dist);
-      const speed = r.b.vel.length() || MISSILE_SPEED;
-      _vel.copy(r.b.vel).normalize().lerp(_dir, Math.min(1, MISSILE_TURN * dt)).normalize().multiplyScalar(speed);
-      r.b.vel.copy(_vel);
+      if (!r.b.alive) { // hit something or expired -> detonate
+        if (r.trail) r.trail.stop();
+        if (vfx && vfx.explosion) vfx.explosion(r.b.pos, 0.7);
+        missilesLive.splice(i, 1);
+        continue;
+      }
+      if (r.trail) r.trail.update(dt);
+      if (r.homing) {
+        const t = (r.target && r.target.alive) ? r.target : null;
+        if (t) {
+          const speed = r.b.vel.length() || MISSILE_SPEED;
+          const dist = r.b.pos.distanceTo(t.pos) || 1;
+          _to.copy(t.pos);
+          if (t.vel) _to.addScaledVector(t.vel, dist / speed); // lead the target's motion (intercept, not pursuit)
+          _to.sub(r.b.pos).normalize();
+          _vel.copy(r.b.vel).normalize().lerp(_to, Math.min(1, MISSILE_TURN * dt)).normalize().multiplyScalar(speed);
+          r.b.vel.copy(_vel);
+        }
+      }
     }
   }
 
@@ -297,14 +316,27 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     // auto-fire weapons run regardless of which item is selected
     for (const it of items) if (it.autoTick) it.autoTick(ctx);
 
-    advanceHoming(dt);
+    // missile lock: accumulate while the current target is held continuously (drives short-range tracking)
+    const ltg = cannon.target && cannon.target.alive ? cannon.target : null;
+    if (ltg && ltg === lockTarget) lockTime += dt; else { lockTarget = ltg; lockTime = 0; }
+
+    updateMissiles(dt);
     render();
   }
 
   // --- rendering ---
   function statusOf(it) {
     if (it.type === 'gun' || it.type === 'rear') return it.modeIdx === 0 ? 'AUTO' : 'MAN';
-    if (it.type === 'missile') return `×${it.ammo} · ${it.modeIdx === 0 ? 'TRK' : 'STR'}`;
+    if (it.type === 'missile') {
+      if (it.modeIdx !== 0) return `×${it.ammo} · STR`;                  // No-track -> always dumb-fire
+      let lk = 'TRK';                                                    // LR tracks immediately
+      if (it.shortRange) {                                              // short-range shows its lock countdown
+        if (lockTarget && lockTime >= LOCK_TIME) lk = 'LOCK';
+        else if (lockTarget) lk = (LOCK_TIME - lockTime).toFixed(1);
+        else lk = '--';
+      }
+      return `×${it.ammo} · ${lk}`;
+    }
     return '';
   }
 
