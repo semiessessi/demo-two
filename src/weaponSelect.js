@@ -102,7 +102,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     });
     // 2) Rear cannon — always (a working example). Auto = point-defence at rear threats; Manual = fires back.
     items.push({
-      key: 'rear', label: 'REAR CANNON', type: 'rear', modeIdx: 1, cd: 0,
+      key: 'rear', label: 'REAR CANNON', type: 'rear', modeIdx: 0, cd: 0, // default Auto (rear point-defence)
       options: [{ label: 'Auto-fire', kind: 'mode' }, { label: 'Manual-fire', kind: 'mode' }],
       autoTick(ctx) { if (this.modeIdx === 0) fireRear(ctx, this, true); },
       activate(ctx, ev) { if (ev.held) fireRear(ctx, this, false); },
@@ -264,7 +264,11 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
       optionIdx = 0;
       buildOptionRows();
     } else if (col === 0) {
-      cannon.cycleTarget(d);
+      const list = cannon.getTargetList ? cannon.getTargetList() : [];
+      let pos = (cannon.locked && cannon.target) ? list.indexOf(cannon.target) + 1 : 0; // 0 = AUTO (auto-acquire)
+      if (pos < 0) pos = 0;
+      pos = Math.max(0, Math.min(list.length, pos + d));
+      if (pos === 0) cannon.setTarget(null); else cannon.setTarget(list[pos - 1]); // AUTO unlocks -> auto-acquire; else pin
     } else if (col === 2) {
       const opts = items[weaponIdx] ? items[weaponIdx].options : [];
       if (opts.length) optionIdx = (optionIdx + d + opts.length) % opts.length;
@@ -381,16 +385,18 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
       row.classList.toggle('cur', i === optionIdx && col === 2);
     }
 
-    // target rows (rebuilt each frame; small N)
+    // target rows: AUTO (auto-acquire the nearest — the default) + the in-range enemies
     const list = cannon.getTargetList ? cannon.getTargetList() : [];
     targetRows.textContent = '';
-    if (!list.length) { const r = el('div', '', targetRows); r.className = 'ws-row dim'; r.textContent = '— no targets —'; }
+    const auto = !cannon.locked;
+    const aRow = el('div', '', targetRows); aRow.className = 'ws-row' + (auto ? '' : ' dim');
+    aRow.textContent = 'AUTO';
+    if (auto) { aRow.classList.add('sel'); if (col === 0) aRow.classList.add('cur'); }
     const pos = ship.pivot.position;
     for (const e of list) {
       const r = el('div', '', targetRows); r.className = 'ws-row';
-      const d = pos ? e.pos.distanceTo(pos) : 0;
-      r.textContent = `${e.name} #${e.hash}  ${d.toFixed(0)}`;
-      if (e === cannon.target) { r.classList.add('sel'); if (col === 0) r.classList.add('cur'); }
+      r.textContent = `${e.name} #${e.hash}  ${e.pos.distanceTo(pos).toFixed(0)}`;
+      if (!auto && e === cannon.target) { r.classList.add('sel'); if (col === 0) r.classList.add('cur'); }
     }
   }
 
