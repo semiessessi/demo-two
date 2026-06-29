@@ -146,7 +146,9 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     });
 
     col = 1;
-    weaponIdx = Math.min(weaponIdx, items.length - 1);
+    // default-select the Afterburner (LT/Ctrl = boost by default); the front gun is always RT/Space anyway
+    weaponIdx = items.findIndex((it) => it.type === 'afterburner');
+    if (weaponIdx < 0) weaponIdx = items.length - 1;
     optionIdx = 0;
     missilesLive.length = 0;
     fuelMax = BASE_FUEL + nTanks * TANK_FUEL;
@@ -180,9 +182,9 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     return best;
   }
 
-  // perturb `dir` (in place) to a random direction within a `deg`-degree cone around it
+  // perturb `dir` (in place) within a `deg`-degree FULL cone -> deviation is up to deg/2 off the aim
   function scatterDir(dir, deg) {
-    const ang = THREE.MathUtils.degToRad(deg) * Math.sqrt(Math.random());
+    const ang = THREE.MathUtils.degToRad(deg) * 0.5 * Math.sqrt(Math.random());
     const az = Math.random() * Math.PI * 2;
     _t1.set(0, 1, 0);
     if (Math.abs(dir.dot(_t1)) > 0.95) _t1.set(1, 0, 0);
