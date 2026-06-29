@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createSpatialGrid } from './spatialGrid.js';
 
 // Asteroid field for the Jupiter Trojans ("the Belt"): a cloud of ~200 procedurally-built cratered rocks
@@ -43,9 +44,12 @@ function randUnit(rng, out) {
 }
 
 // Build one displaced + cratered rock geometry on a unit sphere (instance scale sets real size).
+// Welds vertices + recomputes normals so shading is SMOOTH (not faceted), and bakes a crevice/crater
+// ambient-occlusion term into vertex colours (dark insides). Fine surface grain is added in the shader.
 function buildVariant(detail, rng) {
-  const geo = new THREE.IcosahedronGeometry(1, detail);
+  let geo = new THREE.IcosahedronGeometry(1, detail);
   geo.deleteAttribute('uv');
+  geo.deleteAttribute('normal'); // re-derived smooth after welding
   const pos = geo.attributes.position;
   const off = rng() * 100; // per-variant noise offset so each rock looks distinct
   const K = 3 + Math.floor(rng() * 5); // 3..7 craters
@@ -69,9 +73,62 @@ function buildVariant(detail, rng) {
     pos.setXYZ(i, v.x, v.y, v.z);
   }
   pos.needsUpdate = true;
-  geo.computeVertexNormals();
+  geo = mergeVertices(geo, 1e-4); // weld coincident verts -> indexed -> smooth shading
+  geo.computeVertexNormals();     // smooth normals across the welded surface
+  // bake crevice/crater AO to vertex colours: darker where the surface is pushed in (r < 1)
+  const p2 = geo.attributes.position;
+  const col = new Float32Array(p2.count * 3);
+  for (let i = 0; i < p2.count; i++) {
+    const x = p2.getX(i), y = p2.getY(i), z = p2.getZ(i);
+    const ao = 0.4 + 0.6 * smoothstep(0.72, 1.06, Math.sqrt(x * x + y * y + z * z));
+    col[i * 3] = ao; col[i * 3 + 1] = ao; col[i * 3 + 2] = ao;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.computeBoundingSphere();
   return geo;
+}
+
+// GLSL injected into the rock material for fine procedural surface detail (the "fancy" part): a derivative
+// bump (normal mapping without UVs/textures) + mottled albedo grain, both from object-space 3D FBM so the
+// detail sticks to each rock as it tumbles.
+const GLSL_NOISE = `
+float aHash(vec3 p){ p=fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+float aNoise(vec3 x){ vec3 i=floor(x),f=fract(x); f=f*f*(3.0-2.0*f);
+  return mix(mix(mix(aHash(i+vec3(0,0,0)),aHash(i+vec3(1,0,0)),f.x),mix(aHash(i+vec3(0,1,0)),aHash(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(aHash(i+vec3(0,0,1)),aHash(i+vec3(1,0,1)),f.x),mix(aHash(i+vec3(0,1,1)),aHash(i+vec3(1,1,1)),f.x),f.y),f.z); }
+float aFbm(vec3 p){ float a=0.0,amp=0.5; for(int i=0;i<4;i++){ a+=amp*aNoise(p); p*=2.03; amp*=0.5; } return a; }
+varying vec3 vDet;
+`;
+const GLSL_BUMP = `
+{
+  float hC = aFbm(vDet * 9.0) + 0.5 * aFbm(vDet * 24.0);
+  vec3 sp = -vViewPosition;
+  vec3 sx = dFdx(sp); vec3 sy = dFdy(sp);
+  vec3 R1 = cross(sy, normal); vec3 R2 = cross(normal, sx);
+  float det = dot(sx, R1);
+  vec3 grad = sign(det) * (dFdx(hC) * R1 + dFdy(hC) * R2);
+  normal = normalize(abs(det) * normal - 0.55 * grad);
+}
+`;
+const GLSL_ALBEDO = `
+{
+  float g = aFbm(vDet * 5.0);
+  diffuseColor.rgb *= 0.72 + 0.5 * g;                              // mottled light/dark rock
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(1.07, 0.99, 0.9), g);    // faint warm grain
+}
+`;
+function makeRockMaterial() {
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.96, metalness: 0.03 });
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vDet;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vDet = transformed;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', GLSL_NOISE + '\n#include <common>')
+      .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n' + GLSL_BUMP)
+      .replace('#include <color_fragment>', '#include <color_fragment>\n' + GLSL_ALBEDO);
+  };
+  return mat;
 }
 
 export function createAsteroidField(scene, opts = {}) {
@@ -80,9 +137,9 @@ export function createAsteroidField(scene, opts = {}) {
   const count = opts.count || (isMobile ? 70 : 200);
   const detail = opts.detail != null ? opts.detail : (isMobile ? 2 : 3);
   const nVariants = opts.variants || (isMobile ? 8 : 14);
-  const center = new THREE.Vector3().fromArray(opts.center || [0, 0, -700]);
-  const half = new THREE.Vector3().fromArray(opts.halfExtents || [1400, 500, 1600]);
-  const bias = opts.biasDir ? new THREE.Vector3().fromArray(opts.biasDir).normalize() : null; // push the cloud away from the planet
+  const center = new THREE.Vector3().fromArray(opts.center || [0, 0, -1500]); // well ahead of spawn (-Z)
+  const half = new THREE.Vector3().fromArray(opts.halfExtents || [1300, 450, 1000]);
+  const SPAWN_CLEAR = opts.spawnClear || 450; // keep a clear bubble around the origin so you don't spawn in a rock
   const seed = opts.seed || 1337;
 
   const group = new THREE.Group();
@@ -93,7 +150,7 @@ export function createAsteroidField(scene, opts = {}) {
   const rng = makeRng(seed);
   const geos = [];
   for (let i = 0; i < nVariants; i++) geos.push(buildVariant(detail, makeRng((seed * 2654435761 + i * 40503) >>> 0)));
-  const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0.04, flatShading: false });
+  const material = makeRockMaterial();
 
   // --- generate bodies, grouped by variant ---
   const bodies = [];            // { pos, vel, quat, axis, rate, radius, mass, variant, scale, inst, home, hitCd, color }
@@ -103,11 +160,11 @@ export function createAsteroidField(scene, opts = {}) {
     // size class: mostly small, some medium, few large
     const roll = rng();
     const scale = roll < 0.68 ? 6 + rng() * 12 : roll < 0.93 ? 18 + rng() * 22 : 40 + rng() * 30;
-    // position in an ellipsoid around `center` (biased away from the planet)
+    // position in an ellipsoid around `center` (ahead of spawn)
     const p = new THREE.Vector3((rng() * 2 - 1), (rng() * 2 - 1), (rng() * 2 - 1));
-    if (p.lengthSq() > 1) p.normalize().multiplyScalar(0.4 + 0.6 * rng()); // fill the volume, denser toward edges-ish
+    if (p.lengthSq() > 1) p.normalize().multiplyScalar(0.35 + 0.65 * rng()); // fill the volume
     p.multiply(half).add(center);
-    if (bias) p.addScaledVector(bias, -(0.25 + 0.4 * rng()) * half.length() * 0.0); // (bias hook; kept neutral by default — center already set away from the planet)
+    if (p.lengthSq() < SPAWN_CLEAR * SPAWN_CLEAR) p.setLength(SPAWN_CLEAR + rng() * 250); // clear the spawn bubble
     const variant = (rng() * nVariants) | 0;
     const tint = new THREE.Color().setHSL(0.07 + rng() * 0.04, 0.18 + rng() * 0.12, 0.32 + rng() * 0.16); // grey-brown
     bodies.push({
