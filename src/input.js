@@ -19,10 +19,11 @@ const clamp1 = (v) => (v < -1 ? -1 : v > 1 ? 1 : v);
 export function createInput(touchRead) {
   const keys = new Set();
   const isFormEl = (t) => t && (t.tagName === 'INPUT' || t.tagName === 'BUTTON' || t.tagName === 'TEXTAREA');
+  const NAV = new Set(['Minus', 'Equal', 'BracketLeft', 'BracketRight']); // weapon-select menu keys
   const onDown = (e) => {
     if (isFormEl(e.target)) return;
     keys.add(e.code);
-    if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault(); // no page scroll while firing
+    if (e.code === 'Space' || e.code.startsWith('Arrow') || NAV.has(e.code)) e.preventDefault(); // no scroll/zoom while firing or navigating the menu
   };
   const onUp = (e) => keys.delete(e.code);
   window.addEventListener('keydown', onDown);
@@ -38,6 +39,8 @@ export function createInput(touchRead) {
     gunAimX: 0,
     gunAimY: 0,
     lockPressed: false, // edge: target lock pressed this frame (X / right-stick click)
+    selectFire: false, // held: fire/activate the selected weapon-stack item (LT / Ctrl)
+    selectFirePressed: false, // edge: select-fire pressed this frame
     ejectHeld: false,
     gamepad: false,
     invertKeys: false, // invert keyboard pitch (W/S) — set from Options
@@ -47,6 +50,7 @@ export function createInput(touchRead) {
     dispose,
   };
   let lockPrev = false;
+  let selFirePrev = false;
 
   const axisKey = (neg, pos) => (keys.has(neg) ? -1 : 0) + (keys.has(pos) ? 1 : 0);
 
@@ -61,8 +65,9 @@ export function createInput(touchRead) {
     let pitch = axisKey('KeyW', 'KeyS') * (input.invertKeys ? -1 : 1); // W = nose down (-1); invertKeys flips it
     let yaw = axisKey('KeyD', 'KeyA'); // A = yaw left (+1)
     let roll = axisKey('KeyE', 'KeyQ'); // Q = roll left (+1)
-    let boost = keys.has('ShiftLeft') || keys.has('ShiftRight');
-    let brake = keys.has('ControlLeft') || keys.has('ControlRight');
+    let boost = false; // no direct boost key — boost is the Afterburner stack item (weaponSelect injects input.boost)
+    let brake = keys.has('ShiftLeft') || keys.has('ShiftRight'); // Shift now brakes (Ctrl freed for select-fire)
+    let selFire = keys.has('ControlLeft') || keys.has('ControlRight'); // Ctrl = fire/activate the selected stack item
     let fire = keys.has('Space') ? 1 : 0;
     let eject = keys.has('KeyJ');
     // arrow keys aim the front gun: left/right swing, down depresses (up is clamped out — gun is down-only)
@@ -80,7 +85,7 @@ export function createInput(touchRead) {
       yaw += dz(-(ax[0] || 0)); // stick left (negative) = yaw left (+1)
       roll += (btn(4) > 0.5 ? 1 : 0) + (btn(5) > 0.5 ? -1 : 0); // LB roll left, RB roll right
       fire = Math.max(fire, btn(7)); // right trigger
-      boost = boost || btn(6) > 0.3; // left trigger
+      selFire = selFire || btn(6) > 0.3; // left trigger = fire/activate the selected stack item
       brake = brake || btn(1) > 0.5; // B
       gunAimX = dz(ax[2] || 0) || gunAimX; // right stick X -> gun gimbal (yaw); falls back to arrows
       gunAimY = dz(ax[3] || 0) || gunAimY; // right stick Y -> gun gimbal (pitch)
@@ -112,6 +117,9 @@ export function createInput(touchRead) {
     input.gunAimY = clamp1(gunAimY);
     input.lockPressed = lock && !lockPrev; // rising edge only
     lockPrev = lock;
+    input.selectFire = selFire;
+    input.selectFirePressed = selFire && !selFirePrev; // rising edge
+    selFirePrev = selFire;
     input.ejectHeld = eject;
     return input;
   }

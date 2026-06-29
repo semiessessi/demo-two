@@ -25,6 +25,7 @@ import { createCombat } from './combat.js';
 import { createDamageModel } from './damage.js';
 import { createHud } from './hud.js';
 import { createTargetDisplay } from './targetDisplay.js';
+import { createWeaponSelect, REAR_GUN_PORTS } from './weaponSelect.js';
 import { createGameState } from './gameState.js';
 import { createDebug } from './debug.js';
 import { createRcs } from './rcs.js';
@@ -349,6 +350,7 @@ let combat = null;
 let damage = null;
 let hud = null;
 let targetDisplay = null;
+let weaponSelect = null;
 let gameState = null;
 const playerVel = new THREE.Vector3();
 const playerFwd = new THREE.Vector3();
@@ -510,6 +512,7 @@ function armMenuBattle() {
   if (hud) hud.setVisible(false);
   if (pilotBar) pilotBar.show(); // sign-in + leaderboard, top-right, throughout the menu
   if (targetDisplay) targetDisplay.setVisible(false); // the TARGET panel is flight-only (don't leave a black square on the menu)
+  if (weaponSelect) weaponSelect.setVisible(false);
 }
 // In-page overlay swaps (no reload, battle keeps running):
 function showTitle() { if (pregame) pregame.hide(); if (options) options.hide(); if (attractMenu) attractMenu.show(); menuGamepad.setMenu(attractMenu && attractMenu.el); }
@@ -544,6 +547,7 @@ function launchMission(def) {
   if (briefing) briefing.hide();
   if (campaignScreen) campaignScreen.hide();
   if (hud) hud.setVisible(true);
+  if (weaponSelect) { weaponSelect.rebuild(); weaponSelect.setVisible(true); } // campaign also gets the weapon stack
   if (pilotBar) pilotBar.hide();
   missionHud.show();
   mission = createMission(def, { scene, camera, ship, enemyMgr, projectiles, vfx, lighting, hullDebris: playerDebris, comms, missionHud, onComplete, onFail });
@@ -599,6 +603,7 @@ function coopLaunch(s) {
   if (hud) hud.setVisible(true);
   if (pilotBar) pilotBar.hide();
   if (targetDisplay) targetDisplay.setVisible(true);
+  if (weaponSelect) { weaponSelect.rebuild(); weaponSelect.setVisible(true); }
   firstGesture();
   gameState.launch();
 }
@@ -614,6 +619,7 @@ function launchSkirmish(s) {
   if (hud) hud.setVisible(true);
   if (pilotBar) pilotBar.hide();
   if (targetDisplay) targetDisplay.setVisible(true);
+  if (weaponSelect) { weaponSelect.rebuild(); weaponSelect.setVisible(true); }
   firstGesture(); // the launch click is a user gesture -> unlock + start audio (autoplay policy)
   gameState.launch();
 }
@@ -625,6 +631,7 @@ function bootFlight() {
   if (hud) hud.setVisible(true);
   if (pilotBar) pilotBar.hide();
   if (targetDisplay) targetDisplay.setVisible(true);
+  if (weaponSelect) { weaponSelect.rebuild(); weaponSelect.setVisible(true); }
   if (gameState.mode === 'menu') gameState.launch(); // menu -> flying (audio unlocks on first input)
 }
 // Fade to black, THEN hard-navigate. The next screen re-boots its whole stack (heavy), so masking it as a
@@ -706,6 +713,11 @@ async function init() {
 
   hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
   targetDisplay = createTargetDisplay(chigKit.template);
+  weaponSelect = createWeaponSelect({
+    scene, ship, projectiles, cannon,
+    getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
+    settings, applyLoadout, vfx,
+  });
   // ?skirmish -> return to the menu after a mission; default -> drop straight back into flight.
   gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld, onMenu: enterMenu, // mission over -> back to the title menu
     onOver: (t, r) => { if (mission) mission.onPlayerOut(r); else hud.showMissionOver(t, r); } }); // campaign routes the outcome to its own fail screen
@@ -927,6 +939,7 @@ function startLoop() {
     input.poll(); // keyboard + gamepad + touch -> shared signals (read by flight + cannon)
     const flying = gameState.mode === 'flying';
     touchControls.setVisible(flying); // show the on-screen stick/buttons only while actually flying
+    if (flying && weaponSelect) weaponSelect.update(dt, input, playerVel); // weapon-select nav + inject input.boost/fire BEFORE flight + cannon read them (playerVel is last frame's -> fine for bolt momentum)
     let res = { throttle: 0, speed: 0, boosting: false };
     if (flying) {
       flight.setSpeedScale(damage.speedScale()); // engine damage cuts top speed
@@ -1259,7 +1272,7 @@ function buildTweakGui() {
   df.close();
 
   // Visual placement editor: see/adjust damage zones + RCS ports, log values to bake back into code.
-  createEditor(gui, { scene, ship, damage, rcs });
+  createEditor(gui, { scene, ship, damage, rcs, rearPorts: REAR_GUN_PORTS });
 }
 
 init().catch((e) => {

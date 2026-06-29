@@ -42,6 +42,21 @@ export const RCS_PORTS = [
   { name: 'Wing down R', pos: [1.65, 0.3, 0.55], dir: [0, -1, 0] },
 ];
 
+// Shared soft-white radial glow texture for the little thruster lights (created once, reused by every ship).
+let _glowTex = null;
+function glowTex() {
+  if (_glowTex) return _glowTex;
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  _glowTex = new THREE.CanvasTexture(c);
+  return _glowTex;
+}
+
 export function createRcs(scene, ship, ports = RCS_PORTS) {
   const group = new THREE.Group();
   ship.pivot.add(group); // local frame -> tracks the ship
@@ -60,7 +75,13 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
     cone.frustumCulled = false;
     cone.visible = false;
     group.add(cone);
-    return { p, cone, level: 0, seed: Math.random() * 6.28 };
+    // a little white thruster light: a subtle additive glow sprite 0.15 along the jet (no real light -> cheap,
+    // no shadows, and being on this ship's hull it stays local to this hammerhead)
+    const light = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 }));
+    light.frustumCulled = false;
+    light.visible = false;
+    group.add(light);
+    return { p, cone, light, level: 0, seed: Math.random() * 6.28 };
   });
 
   const UP = new THREE.Vector3(0, 1, 0);
@@ -136,7 +157,7 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
       if (u.p.dir[2] < -0.5) cmd = Math.max(cmd, brakeFire); // forward-facing jets ALSO fire on deceleration (retro)
       u.level += (cmd - u.level) * (1 - Math.exp(-20 * dt)); // snappy attack/decay
       const cone = u.cone;
-      if (u.level <= 0.02) { cone.visible = false; continue; }
+      if (u.level <= 0.02) { cone.visible = false; u.light.visible = false; continue; }
       const flick = 0.85 + 0.15 * Math.sin(t * 40 + u.seed);
       q.setFromUnitVectors(UP, dir); // cone apex points along the exhaust direction
       cone.quaternion.copy(q);
@@ -146,6 +167,13 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
       cone.position.set(u.p.pos[0], u.p.pos[1], u.p.pos[2]).addScaledVector(dir, len * 0.5); // base at the port
       cone.material.opacity = Math.min(1, u.level * 1.4) * 0.9 * flick;
       cone.visible = true;
+      // little white thruster light: 0.15 along the jet from the port, subtle, pulses with the jet
+      const light = u.light;
+      const lsz = 0.3 + u.level * 0.25;
+      light.scale.set(lsz, lsz, lsz);
+      light.position.set(u.p.pos[0], u.p.pos[1], u.p.pos[2]).addScaledVector(dir, 0.15);
+      light.material.opacity = Math.min(0.38, u.level * 0.55) * flick;
+      light.visible = true;
     }
   }
 

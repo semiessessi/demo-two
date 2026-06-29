@@ -11,7 +11,7 @@ const KIND_COLOR = {
   cockpit: 0x66ccff, engine: 0xff8a3a, wing: 0x9f7dff, gun: 0xffe04a, fuel: 0xff4a4a, fuselage: 0x66ff8c, canard: 0x4ad0ff,
 };
 
-export function createEditor(gui, { scene, ship, damage, rcs }) {
+export function createEditor(gui, { scene, ship, damage, rcs, rearPorts }) {
   const pivot = ship.pivot;
   const sphereGeo = new THREE.SphereGeometry(1, 16, 12);
 
@@ -174,6 +174,75 @@ export function createEditor(gui, { scene, ship, damage, rcs }) {
       },
     }, 'log').name('log ports → console');
     pf.close();
+  }
+
+  // ---- Rear-gun muzzle gizmos -------------------------------------------------------------------
+  if (rearPorts) {
+    const rgGroup = new THREE.Group();
+    rgGroup.visible = false;
+    pivot.add(rgGroup);
+    const mGeo = new THREE.ConeGeometry(0.16, 0.7, 10); // small marker cone (apex +Y) pointing along the fire dir
+    const UP2 = new THREE.Vector3(0, 1, 0);
+    const _d = new THREE.Vector3(), _qq = new THREE.Quaternion();
+    const markers = rearPorts.map((p) => {
+      const mat = new THREE.MeshBasicMaterial({ color: 0xff7a3a, transparent: true, opacity: 0.85, depthWrite: false, depthTest: false });
+      const m = new THREE.Mesh(mGeo, mat);
+      m.frustumCulled = false; m.renderOrder = 999;
+      rgGroup.add(m);
+      return { p, m };
+    });
+    function syncRG() {
+      for (const { p, m } of markers) {
+        _d.set(p.dir[0], p.dir[1], p.dir[2]);
+        if (_d.lengthSq() < 1e-6) _d.set(0, 0, 1); else _d.normalize();
+        _qq.setFromUnitVectors(UP2, _d);
+        m.quaternion.copy(_qq);
+        m.position.set(p.pos[0], p.pos[1], p.pos[2]).addScaledVector(_d, 0.35); // base at the port, tip points the way it fires
+      }
+    }
+    syncRG();
+    const rf = gui.addFolder('Rear Gun Ports (edit)');
+    rf.add(rgGroup, 'visible').name('show muzzles');
+    const rgUi = { mirror: true };
+    rf.add(rgUi, 'mirror').name('mirror L/R edits');
+    const rgMirror = (n) => (n.endsWith(' L') ? n.slice(0, -2) + ' R' : n.endsWith(' R') ? n.slice(0, -2) + ' L' : null);
+    const rgMap = new Map();
+    rearPorts.forEach((p) => {
+      const f = rf.addFolder(p.name);
+      const proxy = { x: p.pos[0], y: p.pos[1], z: p.pos[2], dx: p.dir[0], dy: p.dir[1], dz: p.dir[2] };
+      const ctrls = [];
+      const sync = () => {
+        if (rgUi.mirror) {
+          const m = rgMap.get(rgMirror(p.name) || '');
+          if (m) {
+            m.p.pos[0] = -p.pos[0]; m.p.pos[1] = p.pos[1]; m.p.pos[2] = p.pos[2];
+            m.p.dir[0] = -p.dir[0]; m.p.dir[1] = p.dir[1]; m.p.dir[2] = p.dir[2];
+            m.proxy.x = m.p.pos[0]; m.proxy.y = m.p.pos[1]; m.proxy.z = m.p.pos[2];
+            m.proxy.dx = m.p.dir[0]; m.proxy.dy = m.p.dir[1]; m.proxy.dz = m.p.dir[2];
+            for (const c of m.ctrls) c.updateDisplay();
+          }
+        }
+        syncRG();
+      };
+      const wp = () => { p.pos[0] = proxy.x; p.pos[1] = proxy.y; p.pos[2] = proxy.z; sync(); };
+      const wd = () => { p.dir[0] = proxy.dx; p.dir[1] = proxy.dy; p.dir[2] = proxy.dz; sync(); };
+      ctrls.push(f.add(proxy, 'x', -8, 8, 0.05).onChange(wp));
+      ctrls.push(f.add(proxy, 'y', -8, 8, 0.05).onChange(wp));
+      ctrls.push(f.add(proxy, 'z', -8, 8, 0.05).onChange(wp));
+      ctrls.push(f.add(proxy, 'dx', -1, 1, 0.05).name('dir x').onChange(wd));
+      ctrls.push(f.add(proxy, 'dy', -1, 1, 0.05).name('dir y').onChange(wd));
+      ctrls.push(f.add(proxy, 'dz', -1, 1, 0.05).name('dir z').onChange(wd));
+      f.close();
+      rgMap.set(p.name, { p, proxy, ctrls });
+    });
+    rf.add({
+      log: () => {
+        const lines = rearPorts.map((p) =>
+          `  { name: '${p.name}', pos: [${p.pos.map((v) => +v.toFixed(2)).join(', ')}], dir: [${p.dir.map((v) => +v.toFixed(2)).join(', ')}] },`);
+        console.log('[rear gun ports]\nexport const REAR_GUN_PORTS = [\n' + lines.join('\n') + '\n];');
+      },
+    }, 'log').name('log ports → console');
+    rf.close();
   }
 
   return { syncZones };
