@@ -43,6 +43,7 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
     gimbalSpring: 16, // snappy tracking so it stays on a leading solution
     color: 0xffffff,
     boltScale: 0.5,
+    ammo: 2400, // front-gun magazine (rounds) — depletes as it fires
     autoTrack: true,
     lead: true, // aim ahead of the target to account for its motion
     maxLead: 0.6, // cap the intercept time (s) so a close jinker doesn't swing the aim wildly
@@ -58,6 +59,7 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
     muzzle: { x: 0, y: 0, z: -ship.radius * 0.95 }, // gun exit point
   };
   let cooldown = 0;
+  let rounds = params.ammo;
   let gimbalYaw = 0;
   let gimbalPitch = 0;
   let flashLife = 0;
@@ -239,8 +241,9 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
     aimDir.applyQuaternion(qPitch).normalize();
 
     cooldown -= dt;
-    if ((input?.fire || 0) > 0.5 && cooldown <= 0 && canFire()) {
+    if ((input?.fire || 0) > 0.5 && cooldown <= 0 && canFire() && rounds > 0) {
       cooldown = 1 / params.fireRate;
+      rounds--;
       muzzle();
       vel.copy(aimDir).multiplyScalar(params.boltSpeed);
       if (player?.vel) vel.add(player.vel);
@@ -268,6 +271,8 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
     cycleTarget,   // (dir) cycle the pinned target +1/-1 (weapon-select TARGET column)
     getTargetList, // () -> ordered in-range enemies (panel rows; read-only)
     setTarget,     // (e) pin a specific target
+    get ammo() { return rounds; },
+    reload() { rounds = params.ammo; }, // refill to full (new launch)
     get aimDir() {
       return aimDir;
     },

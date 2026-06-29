@@ -41,6 +41,8 @@ function injectStyle() {
 
 const MISSILE_SPEED = 240, MISSILE_TURN = 2.6, MISSILE_DAMAGE = 44, LOCK_TIME = 3.0; // s to acquire a short-range missile lock
 const REAR_RANGE = 260, REAR_SPREAD = 5; // REAR_SPREAD = scatter-cone degrees; rate/speed/bolt come from the front gun
+const REAR_AMMO = 800;                    // rear-cannon rounds
+const BASE_FUEL = 1000, TANK_FUEL = 1000, BOOST_BURN = 100; // afterburner fuel: ship base + per equipped tank; units burned/sec while boosting
 
 // Rear-gun muzzle ports (pivot-local frame: forward -Z, up +Y, right +X). Live-editable in
 // ?debug -> "Rear Gun Ports (edit)" — drag them, then "log ports -> console" and paste back here.
@@ -63,6 +65,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
   const prevNav = { up: false, dn: false, lf: false, rt: false };
   const missilesLive = []; // { b, item, target, homing, trail } in-flight missiles
   let lockTime = 0, lockTarget = null; // missile lock: how long the current target has been held continuously
+  let fuel = 0, fuelMax = 0;           // afterburner fuel (current / capacity = base + equipped tanks)
   let visible = false;
 
   // temps (no per-frame allocation)
@@ -91,7 +94,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     return n;
   }
 
-  function rebuild() {
+  function rebuild(keepFuel) {
     items = [];
     // 1) Front gun — always. Auto-fire / Manual-fire.
     items.push({
@@ -102,7 +105,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     });
     // 2) Rear cannon — always (a working example). Auto = point-defence at rear threats; Manual = fires back.
     items.push({
-      key: 'rear', label: 'REAR CANNON', type: 'rear', modeIdx: 0, cd: 0, // default Auto (rear point-defence)
+      key: 'rear', label: 'REAR CANNON', type: 'rear', modeIdx: 0, cd: 0, ammo: REAR_AMMO, // default Auto (rear point-defence)
       options: [{ label: 'Auto-fire', kind: 'mode' }, { label: 'Manual-fire', kind: 'mode' }],
       autoTick(ctx) { if (this.modeIdx === 0) fireRear(ctx, this, true); },
       activate(ctx, ev) { if (ev.held) fireRear(ctx, this, false); },
@@ -111,25 +114,30 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     const mp = countMounts('missile-pair'), lr = countMounts('lr-missile');
     if (mp > 0) items.push(missileItem('missilePair', 'MISSILES', mp * 2, true));  // short-range: needs a 3s lock to track
     if (lr > 0) items.push(missileItem('lrMissile', 'LR MISSILE', lr, false));     // long-range: tracks immediately
-    // 4) Fuel tanks — jettison.
+    // 4) Fuel tanks — jettison. Each equipped tank adds afterburner fuel (TANK_FUEL).
+    let nTanks = 0;
     for (const mount of ['fuelL', 'fuelR']) {
       if ((settings.loadout || {})[mount] === 'fuel') {
+        nTanks++;
         items.push({
           key: mount, label: `FUEL TANK ${mount === 'fuelL' ? 'L' : 'R'}`, type: 'fuel',
           options: [{ label: 'Jettison', kind: 'action', apply: (ctx) => jettison(ctx, mount) }],
         });
       }
     }
-    // 5) Afterburner — always; the only boost.
+    // 5) Afterburner — always; the only boost. Burns fuel while held; no fuel -> no boost.
     items.push({
       key: 'afterburner', label: 'AFTERBURNER', type: 'afterburner', options: [],
-      activate(ctx, ev) { if (ev.held) ctx.input.boost = true; },
+      activate(ctx, ev) { if (ev.held && fuel > 0) { ctx.input.boost = true; fuel = Math.max(0, fuel - BOOST_BURN * ctx.dt); } },
     });
 
     col = 1;
     weaponIdx = Math.min(weaponIdx, items.length - 1);
     optionIdx = 0;
     missilesLive.length = 0;
+    fuelMax = BASE_FUEL + nTanks * TANK_FUEL;
+    fuel = keepFuel ? Math.min(fuel, fuelMax) : fuelMax; // (re)launch refills; jettison keeps the reduced fuel
+    if (cannon && cannon.reload) cannon.reload();  // refill the front gun
     buildWeaponRows();
     buildOptionRows();
   }
@@ -173,12 +181,13 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
   // Fire from BOTH rear muzzle ports (REAR_GUN_PORTS, pivot-local), aiming at a rear target if there is one
   // else straight back, scattering each bolt in a REAR_SPREAD-degree cone.
   function fireRear(ctx, item, auto) {
-    if (item.cd > 0) return;
+    if (item.cd > 0 || item.ammo <= 0) return;
     const tgt = rearTarget();
     if (auto && !tgt) return; // auto only fires when something's behind us
     const P = cannon.params; // match the front gun: fire rate + bolt speed/colour/damage/scale (keep the scatter)
     const q = ship.pivot.quaternion, base = ship.pivot.position;
     for (const port of REAR_GUN_PORTS) {
+      if (item.ammo <= 0) break;
       _mpos.set(port.pos[0], port.pos[1], port.pos[2]).applyQuaternion(q).add(base); // pivot-local muzzle -> world
       if (tgt) { _dir.copy(tgt.pos).sub(_mpos).normalize(); }
       else { _dir.set(port.dir[0], port.dir[1], port.dir[2]).applyQuaternion(q).normalize(); }
@@ -186,6 +195,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
       _vel.copy(_dir).multiplyScalar(P.boltSpeed);
       if (pvel) _vel.add(pvel);
       projectiles.spawn({ pos: _mpos, vel: _vel, color: P.color, team: 'player', damage: P.damage, life: 2.0, radius: 0.4, scale: P.boltScale });
+      item.ammo--;
     }
     item.cd = 1 / P.fireRate;
   }
@@ -239,7 +249,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
   function jettison(ctx, mount) {
     settings.loadout[mount] = 'empty';
     applyLoadout(ship, settings.loadout);
-    rebuild(); // the fuel item leaves the stack
+    rebuild(true); // recompute capacity (one less tank), keep current fuel; the fuel item leaves the stack
   }
 
   // --- navigation ---
@@ -330,7 +340,9 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
 
   // --- rendering ---
   function statusOf(it) {
-    if (it.type === 'gun' || it.type === 'rear') return it.modeIdx === 0 ? 'AUTO' : 'MAN';
+    if (it.type === 'gun') return `${it.modeIdx === 0 ? 'AUTO' : 'MAN'} · ${cannon.ammo != null ? cannon.ammo : '--'}`;
+    if (it.type === 'rear') return `${it.modeIdx === 0 ? 'AUTO' : 'MAN'} · ${it.ammo}`;
+    if (it.type === 'afterburner') return `FUEL ${Math.round(fuel)}`;
     if (it.type === 'missile') {
       if (it.modeIdx !== 0) return `×${it.ammo} · STR`;                  // No-track -> always dumb-fire
       let lk = 'TRK';                                                    // LR tracks immediately
