@@ -12,10 +12,10 @@ shown (e.g. `house.checkin.mp3`). Reload the game and it just plays — no code 
 
 **Mission:** Your first sortie — a recon sweep through the Groombridge gate. Command is nervous the Chigs
 might be staging here, so the flight forms up and runs three nav marks. **The system is completely empty —
-nothing here at all.** Then **flash traffic breaks in: the Chigs slipped past, and they're inbound on
-EARTH.** The recon is scrubbed — race back to the wormhole and jump out. (This cliffhanger leads straight
-into Mission 2, "Battle of the Belt.") **Tone: quiet, slightly anticlimactic recon → the floor drops out
-when the intel hits → urgent dash for the gate.** No combat in this one.
+nothing here at all.** Then **flash traffic breaks in: the 58th "Wild Cards" have been bounced hard at the
+Belt and are going under — and the 88th is the closest help.** Recon scrubbed — race back to the wormhole
+and jump to the rescue. (Leads straight into Mission 2, "Battle of the Belt.") **Tone: quiet, slightly
+anticlimactic recon → the floor drops out when the intel hits → urgent dash for the gate.** No combat here.
 
 ---
 
@@ -30,8 +30,8 @@ won't always be this quiet.
 | `house.checkin.mp3` | "Longshot flight, House. We're through the Groombridge gate — recon sweep. Command thinks the Chigs might be staging here; we go and find out. Form on Hardway, weapons cold." | 7.5s |
 | `house.recon1.mp3` | "First mark... clear. Nothing on the scope — no reactors, no traffic, nothing at all." | 5.5s |
 | `house.recon3.mp3` | "Last mark's clear too. Whole system's a ghost — no build-up, no Chigs, nothing. That's our recon: there's nothing here." | 7.5s |
-| `house.flash.mp3` | "Longshot flight — flash traffic, priority one. The Chigs slipped past us; they're inbound on Earth. Recon's scrubbed — get back to the gate and jump, NOW." | 8s |
-| `house.jump.mp3` | "Gate's hot. Punch through, Longshot — Earth won't wait. See you on the other side." | 6s |
+| `house.flash.mp3` | "Longshot flight — flash traffic. The 58th just got bounced hard at the Belt; they're going under, and we're the closest thing to help. Recon's scrubbed — back to the gate and jump, now." | 8.5s |
+| `house.jump.mp3` | "Gate's hot. Punch through, Longshot — the 58th can't hold much longer. See you on the other side." | 6s |
 
 *(`house.flash` is the turn — calm CO suddenly all business and urgent. `house.jump` is clipped, driving.)*
 
@@ -42,7 +42,7 @@ By-the-book grinder, the steady moral centre. Calm, patient — talks you throug
 |---|---|---|
 | `hardway.formup.mp3` | "Comeout — your slot's the blue box. Slide in nice and easy and hold it. Stay off the gas." | 5.5s |
 | `hardway.in.mp3` | "Good, you're in the pocket. Flight, pushing up. Let's see what's out here." | 4.5s |
-| `hardway.burn.mp3` | "You heard her — firewall it for the wormhole. Form on me, we jump together." | 5s |
+| `hardway.burn.mp3` | "You heard her — the Wild Cards are out of time. Firewall it for the gate; we jump together." | 5s |
 
 ## BOXCARS — hotshot wingman  (files `boxcars.*`)
 Cocky glory-hound, itching for a fight — here he's just let down/bored that there's nothing to shoot.
