@@ -83,7 +83,8 @@ export function createJupiter(renderer, sunDir) {
   // --- Galilean moons (Io, Ganymede): realistic relative sizes + orbit radii (in Jupiter radii) +
   // period ratio, time-compressed so they're visible. Orbits in Jupiter's ~equatorial plane (low 3.1deg
   // axial tilt). Circular (mean Kepler). ---
-  const DAY = 130; // in-game seconds per Jovian "day" -> Io ~3.8 min/orbit, Ganymede ~15.5 min (real 1:4 ratio)
+  const DAY = 130; // in-game seconds per EARTH day -> Io ~3.8 min/orbit, Ganymede ~15.5 min (real 1:4 ratio)
+  const PLANET_SPIN = (2 * Math.PI) / ((9.925 / 24) * DAY); // Jupiter's real ~9h55m rotation, same time-compression (~54s/turn -> clearly visible in minutes)
   const moonDefs = [
     { col: 0xd8b24a, rough: 0.9, rr: 6.03, sz: 0.0260, period: 1.769, ang: 0.6 }, // Io (sulfur)
     { col: 0x8f8c83, rough: 1.0, rr: 15.3, sz: 0.0377, period: 7.155, ang: 2.4 }, // Ganymede (grey/icy)
@@ -100,7 +101,7 @@ export function createJupiter(renderer, sunDir) {
   });
 
   function update(dt) {
-    planet.rotateY(0.02 * dt); // Jupiter's fast spin (bands ~horizontal -> low tilt)
+    planet.rotateY(PLANET_SPIN * dt); // Jupiter's real ~9h55m spin (time-compressed with the moons)
     for (const mn of moons) {
       mn.ang += mn.w * dt;
       mn.mesh.position.copy(orbU).multiplyScalar(Math.cos(mn.ang) * mn.rr).addScaledVector(orbV, Math.sin(mn.ang) * mn.rr);

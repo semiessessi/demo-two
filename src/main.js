@@ -37,6 +37,7 @@ import { applyLoadout } from './loadout.js';
 import { loadSettings, DIFFICULTY, ENVIRONMENT, markComplete } from './settings.js';
 import { createAttract } from './attract.js';
 import { createAttractMenu } from './attractMenu.js';
+import { createPilotBar } from './pilotbar.js';
 import { createOptions } from './options.js';
 import { createGamepadMenu } from './gamepadMenu.js';
 import { createComms } from './comms.js';
@@ -391,6 +392,7 @@ let debug = null;
 let quality = null;
 let attract = null;
 let attractMenu = null; // title-screen menu overlay (logo + New Game / Multiplayer / Controls / Options)
+let pilotBar = null; // top-right sign-in + leaderboard widget (shown during menus)
 let options = null; // audio-mix options overlay
 const menuGamepad = createGamepadMenu({ onFirstButton: () => firstGesture() }); // d-pad/stick menu nav + audio unlock
 let net = null; // co-op netplay (null = single-player)
@@ -446,12 +448,12 @@ function applyEnvironment(s) {
   ensureBody(e.body2);
   if (saturn) saturn.group.visible = !NOBODIES && e.body2 === 'saturn';
   // the Trojan asteroid field — built lazily on first Jupiter-Trojans selection, hidden in every other env
-  if (e.asteroids && !NOBODIES) ensureAsteroids().setVisible(true);
-  else if (asteroidField) asteroidField.setVisible(false);
+  if (e.asteroids && !NOBODIES) { ensureAsteroids().setVisible(true); if (enemyMgr) enemyMgr.setAvoid(asteroidField.avoidSteer); }
+  else { if (asteroidField) asteroidField.setVisible(false); if (enemyMgr) enemyMgr.setAvoid(null); }
 }
 // Lazily build the asteroid field (the ~14 displaced rock geometries are the cost, so defer to first need).
 function ensureAsteroids() {
-  if (!asteroidField) asteroidField = createAsteroidField(scene, { vfx, isMobile: IS_MOBILE, count: IS_MOBILE ? 70 : 200 });
+  if (!asteroidField) asteroidField = createAsteroidField(scene, { vfx, camera, isMobile: IS_MOBILE, count: IS_MOBILE ? 70 : 200, getQuality: () => quality });
   return asteroidField;
 }
 // Binary companion star: a dim second disc+glow on the opposite side of the sky + a fill light at its colour.
@@ -508,6 +510,7 @@ function armMenuBattle() {
     if (combat) combat.setFriendlies(attract.friendlies); // enemy bolts hit the allies, not the player
   }
   if (hud) hud.setVisible(false);
+  if (pilotBar) pilotBar.show(); // sign-in + leaderboard, top-right, throughout the menu
   if (targetDisplay) targetDisplay.setVisible(false); // the TARGET panel is flight-only (don't leave a black square on the menu)
   if (weaponSelect) weaponSelect.setVisible(false);
 }
@@ -545,6 +548,7 @@ function launchMission(def) {
   if (campaignScreen) campaignScreen.hide();
   if (hud) hud.setVisible(true);
   if (weaponSelect) { weaponSelect.rebuild(); weaponSelect.setVisible(true); } // campaign also gets the weapon stack
+  if (pilotBar) pilotBar.hide();
   missionHud.show();
   mission = createMission(def, { scene, camera, ship, enemyMgr, projectiles, vfx, lighting, hullDebris: playerDebris, comms, missionHud, onComplete, onFail });
   if (combat) combat.setFriendlies(mission.friendlies); // enemy bolts can hit wingmen (combat missions)
@@ -597,6 +601,7 @@ function coopLaunch(s) {
   restartWorld();
   if (pregame) pregame.hide();
   if (hud) hud.setVisible(true);
+  if (pilotBar) pilotBar.hide();
   if (targetDisplay) targetDisplay.setVisible(true);
   if (weaponSelect) { weaponSelect.rebuild(); weaponSelect.setVisible(true); }
   firstGesture();
@@ -612,6 +617,7 @@ function launchSkirmish(s) {
   restartWorld();
   if (pregame) pregame.hide();
   if (hud) hud.setVisible(true);
+  if (pilotBar) pilotBar.hide();
   if (targetDisplay) targetDisplay.setVisible(true);
   if (weaponSelect) { weaponSelect.rebuild(); weaponSelect.setVisible(true); }
   firstGesture(); // the launch click is a user gesture -> unlock + start audio (autoplay policy)
@@ -623,6 +629,7 @@ function bootFlight() {
   applySettings(settings);
   restartWorld();
   if (hud) hud.setVisible(true);
+  if (pilotBar) pilotBar.hide();
   if (targetDisplay) targetDisplay.setVisible(true);
   if (weaponSelect) { weaponSelect.rebuild(); weaponSelect.setVisible(true); }
   if (gameState.mode === 'menu') gameState.launch(); // menu -> flying (audio unlocks on first input)
@@ -735,6 +742,7 @@ async function init() {
       onOptions: showOptions, // in-page: the audio-mix options pane
       onCampaign: SINGLEPLAYER ? showCampaign : undefined, // "Campaign" entry — only when ?singleplayer
     });
+    pilotBar = createPilotBar(); // top-right sign-in + leaderboard (out of the multiplayer pane)
     if (SINGLEPLAYER) {
       missionHud = createMissionHud();
       comms = createComms({ audio, missionHud, characters: CHARACTERS,

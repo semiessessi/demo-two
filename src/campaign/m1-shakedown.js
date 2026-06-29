@@ -69,7 +69,7 @@ export const m1 = {
     { id: 'b_jump', when: { or: [ { waypoint: 'GATE', radius: 90 }, { after: 'b_flash', delay: 240 } ] },
       do: [ { comms: 'house.jump' }, { objective: { id: 'rtb', state: 'complete' } } ] },
     { id: 'b_end', when: { commsDone: 'house.jump' },
-      do: [ { complete: { title: 'JUMPING OUT', sub: 'Groombridge was empty because the Chigs are already at Earth. The Longshots jump out one step behind them — into the Belt.' } } ] },
+      do: [ { complete: { title: 'JUMPING OUT', sub: 'Groombridge was a feint. The Wild Cards are dying at the Belt — and the 88th is the only thing close enough to matter.' } } ] },
   ],
 
   lines: {
@@ -80,8 +80,8 @@ export const m1 = {
     'boxcars.empty':  { speaker: 'boxcars',   text: "Boss, there's nothing out here. Where's this build-up they dragged us out for?", dur: 4.5 },
     'snakeeyes.quiet':{ speaker: 'snakeeyes', text: "Empty suits me fine. Nobody out here to roll snake-eyes on me.", dur: 4.0 },
     'house.recon3':   { speaker: 'house',     text: "Last mark's clear too. Whole system's a ghost — no build-up, no Chigs, nothing. That's our recon: there's nothing here.", dur: 7.5 },
-    'house.flash':    { speaker: 'house',     text: "Longshot flight — flash traffic, priority one. The Chigs slipped past us; they're inbound on Earth. Recon's scrubbed — get back to the gate and jump, NOW.", dur: 8.0 },
-    'hardway.burn':   { speaker: 'hardway',   text: "You heard her — firewall it for the wormhole. Form on me, we jump together.", dur: 5.0 },
-    'house.jump':     { speaker: 'house',     text: "Gate's hot. Punch through, Longshot — Earth won't wait. See you on the other side.", dur: 6.0 },
+    'house.flash':    { speaker: 'house',     text: "Longshot flight — flash traffic. The 58th just got bounced hard at the Belt; they're going under, and we're the closest thing to help. Recon's scrubbed — back to the gate and jump, now.", dur: 8.5 },
+    'hardway.burn':   { speaker: 'hardway',   text: "You heard her — the Wild Cards are out of time. Firewall it for the gate; we jump together.", dur: 5.0 },
+    'house.jump':     { speaker: 'house',     text: "Gate's hot. Punch through, Longshot — the 58th can't hold much longer. See you on the other side.", dur: 6.0 },
   },
 };

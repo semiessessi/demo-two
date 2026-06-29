@@ -20,10 +20,10 @@ export const m2 = {
   briefing: {
     location: 'JUPITER TROJANS · THE BELT',
     body: [
-      "You came through the gate into a fight. The Chigs that skipped Groombridge are pushing through the Belt — the Trojan fields at Jupiter's Lagrange point — driving for the inner system.",
-      "This is where the line gets drawn. Hold formation, then break and engage. The tale of the tape: their fighters are faster and climb harder, but you turn tighter and hit heavier. Don't chase them — make them come to you.",
+      "You came out of the gate into someone else's disaster. The 58th — the Wild Cards, off the Saratoga — got bounced in the Belt and they're being torn apart. The 88th is the only flight close enough to reach them.",
+      "Form up, then break and pull the Chigs off them. Their fighters are faster and climb harder, but you turn tighter and hit heavier — out-fly them, don't chase. Get the Wild Cards out alive.",
     ],
-    objectives: ['Hold the line', 'Destroy the raiders'],
+    objectives: ['Reach the Wild Cards', 'Clear the Chigs off the 58th'],
   },
 
   player: { callsign: 'COMEOUT', start: { pos: [0, 0, 0], heading: [0, 0, -1] } },
@@ -36,9 +36,9 @@ export const m2 = {
 
   script: [
     { id: 'b_open', when: { t: 1.0 },
-      do: [ { comms: 'house.arrive' }, { objective: { id: 'hold', state: 'active', label: 'Hold the line' } }, { formation: { move: true } } ] },
+      do: [ { comms: 'house.arrive' }, { objective: { id: 'hold', state: 'active', label: 'Reach the Wild Cards' } }, { formation: { move: true } } ] },
     { id: 'b_engage', when: { commsDone: 'house.arrive' },
-      do: [ { comms: 'hardway.break' }, { objective: { id: 'kill', state: 'active', label: 'Destroy the raiders' } }, { formation: { engage: true } },
+      do: [ { comms: 'hardway.break' }, { objective: { id: 'kill', state: 'active', label: 'Clear the Chigs off the 58th' } }, { formation: { engage: true } },
             { spawn: { count: 4, at: [180, 20, -520], heading: [0, 0, 1], difficulty: 0.3 } },
             { spawn: { count: 3, at: [-220, -10, -560], heading: [0, 0, 1], difficulty: 0.3 } } ] },
     { id: 'b_w2', when: { and: [ { after: 'b_engage', delay: 2 }, { allEnemiesDead: true } ] },
@@ -52,15 +52,15 @@ export const m2 = {
     { id: 'b_clear', when: { and: [ { after: 'b_w3', delay: 2 }, { allEnemiesDead: true } ] },
       do: [ { comms: 'house.holds' }, { objective: { id: 'kill', state: 'complete' } }, { objective: { id: 'hold', state: 'complete' } } ] },
     { id: 'b_end', when: { commsDone: 'house.holds' },
-      do: [ { complete: { title: 'THE LINE HOLDS', sub: 'The Belt is yours — for now. But the Chigs are still driving on Earth, and the 88th is going in after them.' } } ] },
+      do: [ { complete: { title: 'WILD CARDS CLEAR', sub: 'The 58th lives to fight another day — and no one up the chain will ever know the 88th was the reason.' } } ] },
   ],
 
   lines: {
-    'house.arrive':  { speaker: 'house',     text: "Longshot flight, House. Welcome to the Belt — the Chigs are pushing through the Trojans for the inner system. This is the line. Hold formation till they commit.", dur: 7.5 },
-    'hardway.break': { speaker: 'hardway',   text: "Here they come. Break and engage — weapons free! Turn with them, don't chase. Pick your shots.", dur: 5.5 },
-    'boxcars.splash':{ speaker: 'boxcars',   text: "Splash one! Hah — told you I'd open the book. Who's next?", dur: 4.5 },
-    'house.push':    { speaker: 'house',     text: "Second wave, heavier. Hold your spacing and keep the line, Longshot.", dur: 5.0 },
-    'snakeeyes.odds':{ speaker: 'snakeeyes', text: "Count's climbing. Just the odds I like — terrible.", dur: 4.0 },
-    'house.holds':   { speaker: 'house',     text: "That's the last of them. The line holds. Good flying, Comeout — maybe you'll last after all.", dur: 6.5 },
+    'house.arrive':  { speaker: 'house',     text: "Longshot flight, House. The Wild Cards are down in the rocks, swarmed — Saratoga's lost contact. We are the rescue. Form on Hardway, then we go in.", dur: 7.5 },
+    'hardway.break': { speaker: 'hardway',   text: "There they are — 58th, taking a beating. Break and engage, weapons free! Pull the Chigs off them; don't chase the runners.", dur: 6.0 },
+    'boxcars.splash':{ speaker: 'boxcars',   text: "Splash one! Hold on, Wild Cards — the Longshots are buying you out.", dur: 4.5 },
+    'house.push':    { speaker: 'house',     text: "More inbound — they want the 58th dead. Keep your spacing, stay between them and the Wild Cards.", dur: 5.5 },
+    'snakeeyes.odds':{ speaker: 'snakeeyes', text: "Whole sky full of teeth. Just the odds I like — terrible.", dur: 4.0 },
+    'house.holds':   { speaker: 'house',     text: "That's the last of them. The Wild Cards are clear — they'll make the Saratoga. Good flying, Comeout. Form up, we're going home.", dur: 7.0 },
   },
 };

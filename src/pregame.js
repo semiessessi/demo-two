@@ -1,14 +1,14 @@
 import { DIFFICULTY, ENVIRONMENT, saveSettings } from './settings.js';
 import { peerJsWorksHere } from './net/webrtc-detect.js';
-import { getConfig, getPlayer, isSignedIn, signInWithGoogle, signInWithFacebook, signOut, onSessionChange } from './social/auth.js';
+import { isSignedIn, onSessionChange } from './social/auth.js';
 import * as friends from './social/friends.js';
-import { getLeaderboard } from './social/leaderboard.js';
 import { quickMatch, cancelQuickMatch } from './social/automatch.js';
 
-// Pre-game / "AI Skirmish" setup screen — a self-building DOM overlay (same dark glassy style as the
-// HUD). Sections: Markings, Loadout, Environment, Difficulty, and Launch. Edits write through to the
-// `settings` object + localStorage and fire onChange (so main can live-preview livery/loadout/env on
-// the ship behind the panel). Launch hands the finished settings back to main.
+// Pre-game / Multiplayer setup screen — a self-building DOM overlay (dark glassy style, matching the title
+// menu). A WIDE two-column panel: ship setup (markings / difficulty / loadout) on the left, the match +
+// social side (environment / co-op / friends) on the right, with LAUNCH across the bottom. Sign-in and the
+// leaderboard live in the top-right pilot bar (pilotbar.js), NOT here. Edits write through to `settings` +
+// localStorage and fire onChange (live preview on the ship behind the panel).
 
 function el(tag, css, parent) {
   const e = document.createElement(tag);
@@ -23,9 +23,16 @@ const LABEL = `${FONT}font-size:10px;letter-spacing:0.16em;color:#9fb0d0;margin:
 const BTN = `${FONT}font-size:12px;cursor:pointer;padding:7px 12px;background:rgba(150,180,255,0.08);`
   + 'border:1px solid rgba(150,180,255,0.22);border-radius:8px;transition:all 0.12s;';
 const BTN_ON = 'background:rgba(120,170,255,0.32);border-color:rgba(170,210,255,0.7);color:#fff;box-shadow:0 0 10px rgba(120,170,255,0.3);';
+const SECT = 'background:rgba(255,255,255,0.02);border:1px solid rgba(150,180,255,0.08);border-radius:11px;padding:13px 14px;';
 
-// Weapon mounts are MIRRORED L<->R: one control per station sets BOTH wings. Per wing = 1 fuel (inner)
-// + 3 outer (inner/mid/tip). The tip is the long-range station: an LR missile OR the targeting laser.
+// thin, subtle scrollbar for the panel (inline CSS can't do ::-webkit-scrollbar, so inject once)
+function injectStyle() {
+  if (document.getElementById('pg-css')) return;
+  const s = document.createElement('style'); s.id = 'pg-css';
+  s.textContent = '#pg-panel::-webkit-scrollbar{width:7px}#pg-panel::-webkit-scrollbar-thumb{background:rgba(150,180,255,0.22);border-radius:4px}#pg-panel::-webkit-scrollbar-thumb:hover{background:rgba(150,180,255,0.38)}#pg-panel::-webkit-scrollbar-track{background:transparent}';
+  document.head.appendChild(s);
+}
+
 const STATIONS = [
   { l: 'fuelL', r: 'fuelR', label: 'Fuel', opts: ['fuel', 'empty'] },
   { l: 'L1', r: 'R1', label: 'Inner', opts: ['missile-pair', 'lr-missile', 'empty'] },
@@ -35,53 +42,33 @@ const STATIONS = [
 const ORD_LABEL = { fuel: 'Fuel tank', 'missile-pair': 'Missile pair', 'lr-missile': 'LR missile', laser: 'Laser', empty: 'Empty' };
 
 export function createPregame({ settings, onLaunch, onChange, onHost, onJoin, onQuickMatch, onBack }) {
+  injectStyle();
   const fire = () => { saveSettings(settings); if (onChange) onChange(settings); };
 
   const root = el('div', 'position:fixed;inset:0;z-index:200;display:none;pointer-events:none;', document.body);
-  // centred console panel (clicks land here; the cinematic shows behind) — matches the title-menu placement
   const panel = el('div', `position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);`
-    + `width:min(400px,calc(100vw - 32px));max-height:calc(100vh - 48px);padding:24px 24px;overflow-y:auto;`
-    + `pointer-events:auto;${PANEL}${FONT}border-radius:18px;`
-    + 'display:flex;flex-direction:column;gap:18px;box-shadow:0 0 50px rgba(0,0,0,0.55);', root);
+    + `width:min(780px,calc(100vw - 32px));max-height:calc(100vh - 40px);padding:22px 24px;overflow-y:auto;`
+    + `pointer-events:auto;${PANEL}${FONT}border-radius:18px;box-shadow:0 0 50px rgba(0,0,0,0.55);`
+    + 'scrollbar-width:thin;scrollbar-color:rgba(150,180,255,0.25) transparent;'
+    + 'display:flex;flex-direction:column;gap:16px;', root);
+  panel.id = 'pg-panel';
 
-  if (onBack) { // return to the title screen
-    const back = el('button', BTN + 'align-self:flex-start;', panel);
-    back.textContent = '‹ Main Menu';
-    back.onclick = () => onBack();
-  }
-  el('div', `${FONT}font-size:22px;letter-spacing:0.22em;color:#eaeefc;text-shadow:0 0 16px rgba(120,170,255,0.4);`, panel)
-    .textContent = 'MULTIPLAYER';
-  el('div', `${FONT}font-size:11px;color:#8a96b4;margin-top:-12px;`, panel)
-    .textContent = 'SA-43: Hammerhead · configure & launch';
+  // header (full width)
+  const head = el('div', 'display:flex;align-items:center;gap:14px;', panel);
+  if (onBack) { const back = el('button', BTN, head); back.textContent = '‹ Main Menu'; back.onclick = () => onBack(); }
+  const titles = el('div', 'flex:1;', head);
+  el('div', `${FONT}font-size:22px;letter-spacing:0.22em;color:#eaeefc;text-shadow:0 0 16px rgba(120,170,255,0.4);`, titles).textContent = 'MULTIPLAYER';
+  el('div', `${FONT}font-size:11px;color:#8a96b4;margin-top:2px;`, titles).textContent = 'SA-43: Hammerhead · configure & launch';
 
-  // ---- Pilot (sign-in) ----
-  const pilot = el('div', '', panel);
-  el('div', LABEL, pilot).textContent = 'Pilot';
-  const pilotBody = el('div', '', pilot);
-  let cfg = {};
-  getConfig().then((c) => { cfg = c || {}; renderPilot(); });
-  function renderPilot() {
-    pilotBody.innerHTML = '';
-    if (isSignedIn()) {
-      const p = getPlayer() || {};
-      const row = el('div', 'display:flex;align-items:center;gap:8px;', pilotBody);
-      el('span', `${FONT}flex:1;font-size:12px;color:#cdd6ea;`, row).textContent = `${p.callsign || p.display_name || 'Pilot'}`;
-      const out = el('button', BTN, row); out.textContent = 'Sign out'; out.onclick = () => signOut();
-    } else {
-      const row = el('div', 'display:flex;gap:6px;', pilotBody);
-      if (cfg.googleClientId) { const g = el('button', BTN + 'flex:1;', row); g.textContent = 'Google'; g.onclick = () => signInWithGoogle().catch((e) => { msg.textContent = e.message; }); }
-      if (cfg.facebookAppId) { const f = el('button', BTN + 'flex:1;', row); f.textContent = 'Facebook'; f.onclick = () => signInWithFacebook().catch((e) => { msg.textContent = e.message; }); }
-      if (!cfg.googleClientId && !cfg.facebookAppId) el('span', `${FONT}font-size:11px;color:#8a96b4;`, row).textContent = 'sign-in offline';
-    }
-  }
-  const msg = el('div', `${FONT}font-size:11px;color:#c98;margin:4px 2px 0;`, pilot);
-  renderPilot();
-  onSessionChange(() => { msg.textContent = ''; renderPilot(); });
+  // two columns
+  const cols = el('div', 'display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;', panel);
+  const colL = el('div', 'flex:1;min-width:280px;display:flex;flex-direction:column;gap:14px;', cols);
+  const colR = el('div', 'flex:1;min-width:280px;display:flex;flex-direction:column;gap:14px;', cols);
 
-  // ---- a segmented single-choice row ----
-  function segmented(title, options, getCur, setCur) {
-    const wrap = el('div', '', panel);
-    el('div', LABEL, wrap).textContent = title;
+  const section = (parent, title) => { const w = el('div', SECT, parent); el('div', LABEL, w).textContent = title; return w; };
+
+  function segmented(parent, title, options, getCur, setCur) {
+    const wrap = section(parent, title);
     const row = el('div', 'display:flex;flex-wrap:wrap;gap:6px;', wrap);
     const btns = [];
     options.forEach((o) => {
@@ -90,35 +77,20 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin, on
       b.onclick = () => { setCur(o.key); paint(); fire(); };
       btns.push({ b, key: o.key });
     });
-    function paint() {
-      const cur = getCur();
-      btns.forEach(({ b, key }) => { b.style.cssText = BTN + (key === cur ? BTN_ON : ''); });
-    }
+    function paint() { const cur = getCur(); btns.forEach(({ b, key }) => { b.style.cssText = BTN + (key === cur ? BTN_ON : ''); }); }
     paint();
     return { paint };
   }
 
-  // ---- Difficulty ----
-  segmented('Difficulty',
-    Object.keys(DIFFICULTY).map((k) => ({ key: k, label: DIFFICULTY[k].label })),
-    () => settings.difficulty, (k) => { settings.difficulty = k; });
-
-  // ---- Environment ----
-  segmented('Environment',
-    Object.keys(ENVIRONMENT).map((k) => ({ key: k, label: ENVIRONMENT[k].label })),
-    () => settings.environment, (k) => { settings.environment = k; });
-
-  // ---- Markings (livery) ----
-  const mk = el('div', '', panel);
-  el('div', LABEL, mk).textContent = 'Markings';
+  // ---- LEFT: Markings, Difficulty, Loadout ----
+  const mk = section(colL, 'Markings');
   const mkRow = (labelText, key, placeholder) => {
     const r = el('div', 'display:flex;align-items:center;gap:8px;margin:4px 0;', mk);
     el('span', 'width:78px;font-size:11px;color:#aeb9d4;', r).textContent = labelText;
-    const inp = el('input', `${FONT}flex:1;font-size:12px;padding:6px 8px;background:rgba(255,255,255,0.06);`
+    const inp = el('input', `${FONT}flex:1;min-width:0;font-size:12px;padding:6px 8px;background:rgba(255,255,255,0.06);`
       + 'border:1px solid rgba(150,180,255,0.2);border-radius:7px;', r);
     inp.value = settings.livery[key] || '';
-    inp.maxLength = 12;
-    inp.placeholder = placeholder;
+    inp.maxLength = 12; inp.placeholder = placeholder;
     inp.oninput = () => { settings.livery[key] = inp.value.toUpperCase(); inp.value = settings.livery[key]; fire(); };
     return inp;
   };
@@ -127,54 +99,48 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin, on
   const colorRow = el('div', 'display:flex;align-items:center;gap:8px;margin:4px 0;', mk);
   el('span', 'width:78px;font-size:11px;color:#aeb9d4;', colorRow).textContent = 'Livery';
   const color = el('input', 'width:40px;height:28px;padding:0;border:1px solid rgba(150,180,255,0.2);border-radius:6px;background:none;cursor:pointer;', colorRow);
-  color.type = 'color';
-  color.value = settings.livery.color || '#7a8694';
+  color.type = 'color'; color.value = settings.livery.color || '#7a8694';
   color.oninput = () => { settings.livery.color = color.value; fire(); };
 
-  // ---- Loadout (visual mounts) ----
-  const lo = el('div', '', panel);
-  el('div', LABEL, lo).textContent = 'Weapon mounts (mirrored L/R)';
+  segmented(colL, 'Difficulty',
+    Object.keys(DIFFICULTY).map((k) => ({ key: k, label: DIFFICULTY[k].label })),
+    () => settings.difficulty, (k) => { settings.difficulty = k; });
+
+  const lo = section(colL, 'Weapon mounts (mirrored L/R)');
   STATIONS.forEach((m) => {
     const r = el('div', 'display:flex;align-items:center;gap:8px;margin:3px 0;', lo);
     el('span', 'width:66px;font-size:11px;color:#aeb9d4;', r).textContent = m.label;
     const b = el('button', BTN + 'flex:1;text-align:left;', r);
     const paint = () => { b.textContent = ORD_LABEL[settings.loadout[m.l]] || 'Empty'; };
-    b.onclick = () => { // cycle this station's options, applied to BOTH wings
-      const i = m.opts.indexOf(settings.loadout[m.l]);
-      const next = m.opts[(i + 1) % m.opts.length];
-      settings.loadout[m.l] = next;
-      settings.loadout[m.r] = next; // mirror to the other wing
-      paint(); fire();
-    };
+    b.onclick = () => { const i = m.opts.indexOf(settings.loadout[m.l]); const next = m.opts[(i + 1) % m.opts.length]; settings.loadout[m.l] = next; settings.loadout[m.r] = next; paint(); fire(); };
     paint();
   });
 
-  // ---- Co-op (beta) ----
+  // ---- RIGHT: Environment, Co-op, Friends ----
+  segmented(colR, 'Environment',
+    Object.keys(ENVIRONMENT).map((k) => ({ key: k, label: ENVIRONMENT[k].label })),
+    () => settings.environment, (k) => { settings.environment = k; });
+
   let coopStatus = null;
-  let hostCode = null; // set when hosting -> lets Friends "Invite" target this room
+  let hostCode = null;
   if (peerJsWorksHere() && (onHost || onJoin)) {
-    const co = el('div', '', panel);
-    el('div', LABEL, co).textContent = 'Co-op (beta)';
+    const co = section(colR, 'Co-op (beta)');
     const row = el('div', 'display:flex;gap:6px;', co);
-    const hostBtn = el('button', BTN + 'flex:1;', row);
-    hostBtn.textContent = 'Host';
-    const codeInp = el('input', `${FONT}flex:1;font-size:12px;padding:6px 8px;text-transform:uppercase;`
+    const hostBtn = el('button', BTN + 'flex:1;', row); hostBtn.textContent = 'Host';
+    const codeInp = el('input', `${FONT}flex:1;min-width:0;font-size:12px;padding:6px 8px;text-transform:uppercase;`
       + 'background:rgba(255,255,255,0.06);border:1px solid rgba(150,180,255,0.2);border-radius:7px;', row);
-    codeInp.placeholder = 'CODE';
-    codeInp.maxLength = 5;
-    const joinBtn = el('button', BTN, row);
-    joinBtn.textContent = 'Join';
+    codeInp.placeholder = 'CODE'; codeInp.maxLength = 5;
+    const joinBtn = el('button', BTN, row); joinBtn.textContent = 'Join';
     coopStatus = el('div', `${FONT}font-size:11px;color:#9fb0d0;margin:6px 2px 0;white-space:pre-line;`, co);
     hostBtn.onclick = () => { if (onHost) { hostCode = onHost(); coopStatus.textContent = `Hosting — share code: ${hostCode}\nwaiting for players… then LAUNCH`; renderFriends(); } };
     joinBtn.onclick = () => { const c = codeInp.value.trim().toUpperCase(); if (c && onJoin) { onJoin(c); coopStatus.textContent = `Joining ${c}…\nwait for the host to launch`; } };
     if (onQuickMatch) {
       const qmRow = el('div', 'display:flex;margin-top:6px;', co);
-      const qmBtn = el('button', BTN + 'flex:1;', qmRow);
-      qmBtn.textContent = 'Quick Match';
+      const qmBtn = el('button', BTN + 'flex:1;', qmRow); qmBtn.textContent = 'Quick Match';
       let searching = false;
       qmBtn.onclick = async () => {
         if (searching) { searching = false; cancelQuickMatch(); qmBtn.textContent = 'Quick Match'; coopStatus.textContent = ''; return; }
-        if (!isSignedIn()) { coopStatus.textContent = 'sign in to use Quick Match'; return; }
+        if (!isSignedIn()) { coopStatus.textContent = 'sign in (top-right) to use Quick Match'; return; }
         searching = true; qmBtn.textContent = 'Cancel'; coopStatus.textContent = 'Searching for a match…';
         const m = await quickMatch('coop:' + settings.difficulty, { onWaiting: (n) => { if (searching) coopStatus.textContent = `Searching… (${n} waiting)`; } });
         searching = false; qmBtn.textContent = 'Quick Match';
@@ -184,12 +150,10 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin, on
     }
   }
 
-  // ---- Friends + invites (signed-in only) ----
-  const fr = el('div', '', panel);
-  const frLabel = el('div', LABEL, fr); frLabel.textContent = 'Friends';
+  const fr = section(colR, 'Friends');
   const frBody = el('div', '', fr);
   const addRow = el('div', 'display:flex;gap:6px;margin-top:4px;', fr);
-  const addInp = el('input', `${FONT}flex:1;font-size:12px;padding:6px 8px;text-transform:uppercase;`
+  const addInp = el('input', `${FONT}flex:1;min-width:0;font-size:12px;padding:6px 8px;text-transform:uppercase;`
     + 'background:rgba(255,255,255,0.06);border:1px solid rgba(150,180,255,0.2);border-radius:7px;', addRow);
   addInp.placeholder = 'add by callsign';
   const addBtn = el('button', BTN, addRow); addBtn.textContent = 'Add';
@@ -201,7 +165,7 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin, on
   };
   function frRow(label, actions) {
     const r = el('div', 'display:flex;align-items:center;gap:6px;margin:3px 0;', frBody);
-    el('span', `${FONT}flex:1;font-size:12px;color:#cdd6ea;`, r).textContent = label;
+    el('span', `${FONT}flex:1;min-width:0;font-size:12px;color:#cdd6ea;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;`, r).textContent = label;
     for (const [txt, fn] of actions) { const b = el('button', BTN + 'padding:4px 8px;', r); b.textContent = txt; b.onclick = fn; }
   }
   async function renderFriends() {
@@ -210,7 +174,7 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin, on
     if (!on) return;
     frBody.innerHTML = '';
     const [list, reqs, invs] = await Promise.all([friends.listFriends(), friends.listRequests('in'), friends.listInvites()]);
-    for (const inv of invs) frRow(`✉ ${inv.from_callsign} invited you → ${inv.room_code}`, [['Join', async () => { await friends.actInvite(inv.id, 'accept'); if (onJoin) onJoin(inv.room_code); renderFriends(); }], ['✕', async () => { await friends.actInvite(inv.id, 'decline'); renderFriends(); }]]);
+    for (const inv of invs) frRow(`✉ ${inv.from_callsign} → ${inv.room_code}`, [['Join', async () => { await friends.actInvite(inv.id, 'accept'); if (onJoin) onJoin(inv.room_code); renderFriends(); }], ['✕', async () => { await friends.actInvite(inv.id, 'decline'); renderFriends(); }]]);
     for (const rq of reqs) frRow(`${rq.callsign || rq.display_name} wants to be friends`, [['✓', async () => { await friends.actRequest(rq.id, 'accept'); renderFriends(); }], ['✕', async () => { await friends.actRequest(rq.id, 'decline'); renderFriends(); }]]);
     for (const f of list) {
       const actions = [];
@@ -222,43 +186,11 @@ export function createPregame({ settings, onLaunch, onChange, onHost, onJoin, on
   }
   renderFriends();
   onSessionChange(() => renderFriends());
-  const frPoll = setInterval(() => { if (isSignedIn() && root.style.display !== 'none') renderFriends(); }, 15000); // surface incoming invites/requests
-  void frPoll;
+  setInterval(() => { if (isSignedIn() && root.style.display !== 'none') renderFriends(); }, 15000);
 
-  // ---- Leaderboard ----
-  const lb = el('div', '', panel);
-  el('div', LABEL, lb).textContent = 'Leaderboard';
-  const lbToggles = el('div', 'display:flex;gap:6px;margin-bottom:4px;', lb);
-  const lbList = el('div', '', lb);
-  let lbMetric = 'wave', lbScope = 'global';
-  function mkToggle(text, on, fn) { const b = el('button', BTN + 'padding:4px 9px;' + (on() ? BTN_ON : ''), lbToggles); b.textContent = text; b.onclick = () => { fn(); paintToggles(); renderLb(); }; return b; }
-  let tWave, tKills, tGlobal, tFriends;
-  function paintToggles() {
-    tWave.style.cssText = BTN + 'padding:4px 9px;' + (lbMetric === 'wave' ? BTN_ON : '');
-    tKills.style.cssText = BTN + 'padding:4px 9px;' + (lbMetric === 'kills' ? BTN_ON : '');
-    tGlobal.style.cssText = BTN + 'padding:4px 9px;' + (lbScope === 'global' ? BTN_ON : '');
-    tFriends.style.cssText = BTN + 'padding:4px 9px;' + (lbScope === 'friends' ? BTN_ON : '');
-  }
-  tWave = mkToggle('Wave', () => lbMetric === 'wave', () => { lbMetric = 'wave'; });
-  tKills = mkToggle('Kills', () => lbMetric === 'kills', () => { lbMetric = 'kills'; });
-  tGlobal = mkToggle('Global', () => lbScope === 'global', () => { lbScope = 'global'; });
-  tFriends = mkToggle('Friends', () => lbScope === 'friends', () => { lbScope = 'friends'; });
-  async function renderLb() {
-    lbList.innerHTML = '';
-    const rows = await getLeaderboard(lbMetric, lbScope);
-    if (!rows.length) { el('div', `${FONT}font-size:11px;color:#8a96b4;`, lbList).textContent = 'no scores yet'; return; }
-    rows.forEach((r, i) => {
-      const row = el('div', 'display:flex;gap:8px;margin:2px 0;', lbList);
-      el('span', `${FONT}font-size:11px;color:#8a96b4;width:18px;`, row).textContent = `${i + 1}.`;
-      el('span', `${FONT}flex:1;font-size:12px;color:#cdd6ea;`, row).textContent = r.callsign || r.display_name || 'Pilot';
-      el('span', `${FONT}font-size:12px;color:#9ec7ff;`, row).textContent = lbMetric === 'kills' ? `${r.total_kills}` : `wave ${r.best_wave}`;
-    });
-  }
-  renderLb();
-
-  // ---- Launch ----
+  // ---- Launch (full width) ----
   const launch = el('button', `${FONT}font-size:16px;letter-spacing:0.14em;color:#eaeefc;cursor:pointer;`
-    + 'margin-top:auto;padding:14px;background:rgba(120,200,140,0.18);border:1px solid rgba(140,230,170,0.55);'
+    + 'padding:14px;background:rgba(120,200,140,0.18);border:1px solid rgba(140,230,170,0.55);'
     + 'border-radius:10px;box-shadow:0 0 16px rgba(120,220,150,0.25);', panel);
   launch.textContent = '▶  LAUNCH';
   launch.onmouseenter = () => { launch.style.background = 'rgba(120,220,150,0.34)'; };
