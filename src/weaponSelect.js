@@ -46,8 +46,8 @@ const REAR_SPEED = 340, REAR_RANGE = 260, REAR_SPREAD = 5; // degrees — rear-g
 // ?debug -> "Rear Gun Ports (edit)" — drag them, then "log ports -> console" and paste back here.
 // `dir` = the straight-back aim used when there's no rear target; fire scatters in a REAR_SPREAD cone.
 export const REAR_GUN_PORTS = [
-  { name: 'Rear Gun L', pos: [-1.0, -0.1, 2.4], dir: [0, 0, 1] },
-  { name: 'Rear Gun R', pos: [1.0, -0.1, 2.4], dir: [0, 0, 1] },
+  { name: 'Rear Gun L', pos: [0.15, 0.5, 1.85], dir: [0, 0, 1] },
+  { name: 'Rear Gun R', pos: [-0.15, 0.5, 1.85], dir: [0, 0, 1] },
 ];
 
 export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemies, settings, applyLoadout, vfx } = {}) {
