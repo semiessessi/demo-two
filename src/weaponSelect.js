@@ -35,14 +35,18 @@ function injectStyle() {
     `#weapon-select .ws-row.sel { background:rgba(120,170,255,0.16); }` +
     `#weapon-select .ws-row.cur { outline:2px solid #9ec7ff; outline-offset:-1px; }` +
     `#weapon-select .ws-row.dim { color:#7a86a0; }` +
-    `#weapon-select .ws-dot { color:#7fd08a; }`;
+    `#weapon-select .ws-dot { color:#7fd08a; }` +
+    `#weapon-select .ws-row.low { color:#ff6a5a; font-weight:600; animation: ws-low 0.85s ease-in-out infinite; }` +
+    `@keyframes ws-low { 0%,100%{opacity:1;} 50%{opacity:0.4;} }`;
   document.head.appendChild(s);
 }
 
 const MISSILE_SPEED = 240, MISSILE_TURN = 2.6, MISSILE_DAMAGE = 44, LOCK_TIME = 3.0; // s to acquire a short-range missile lock
 const REAR_RANGE = 260, REAR_SPREAD = 5; // REAR_SPREAD = scatter-cone degrees; rate/speed/bolt come from the front gun
 const REAR_AMMO = 800;                    // rear-cannon rounds
-const BASE_FUEL = 1000, TANK_FUEL = 1000, BOOST_BURN = 100; // afterburner fuel: ship base + per equipped tank; units burned/sec while boosting
+// Fuel: ship base + per equipped tank. CRUISE_BURN drains always while flying (~16-17 min on base);
+// boosting adds BOOST_BURN/sec on top. Warn under LOW_FUEL_FRAC of capacity.
+const BASE_FUEL = 1000, TANK_FUEL = 1000, CRUISE_BURN = 1.0, BOOST_BURN = 20, LOW_FUEL_FRAC = 0.2;
 
 // Rear-gun muzzle ports (pivot-local frame: forward -Z, up +Y, right +X). Live-editable in
 // ?debug -> "Rear Gun Ports (edit)" — drag them, then "log ports -> console" and paste back here.
@@ -334,6 +338,8 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     const ltg = cannon.target && cannon.target.alive ? cannon.target : null;
     if (ltg && ltg === lockTarget) lockTime += dt; else { lockTarget = ltg; lockTime = 0; }
 
+    if (fuel > 0) fuel = Math.max(0, fuel - CRUISE_BURN * dt); // cruise consumption (boost adds BOOST_BURN on top)
+
     updateMissiles(dt);
     render();
   }
@@ -382,6 +388,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
       row.textContent = s ? `${it.label} · ${s}` : it.label;
       row.classList.toggle('sel', i === weaponIdx);
       row.classList.toggle('cur', i === weaponIdx && col === 1);
+      row.classList.toggle('low', it.type === 'afterburner' && fuelMax > 0 && fuel < LOW_FUEL_FRAC * fuelMax); // low-fuel warning (red pulse)
     }
 
     // option rows
