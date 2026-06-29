@@ -37,7 +37,13 @@ function injectStyle() {
     `#weapon-select .ws-row.dim { color:#7a86a0; }` +
     `#weapon-select .ws-dot { color:#7fd08a; }` +
     `#weapon-select .ws-row.low { color:#ff6a5a; font-weight:600; animation: ws-low 0.85s ease-in-out infinite; }` +
-    `@keyframes ws-low { 0%,100%{opacity:1;} 50%{opacity:0.4;} }`;
+    `@keyframes ws-low { 0%,100%{opacity:1;} 50%{opacity:0.4;} }` +
+    `#ws-eject { position:fixed; left:50%; top:15%; transform:translateX(-50%); z-index:60; display:none; text-align:center;` +
+    ` ${FONT} color:#ff6a5a; background:rgba(24,6,6,0.6); border:1px solid rgba(255,90,90,0.45); border-radius:12px;` +
+    ` padding:9px 18px; letter-spacing:0.1em; pointer-events:none; animation: ws-low 0.8s ease-in-out infinite; }` +
+    `#ws-eject.show { display:block; }` +
+    `#ws-eject .eh { font-size:15px; font-weight:700; }` +
+    `#ws-eject .es { font-size:11px; color:#ffb0a0; margin-top:3px; letter-spacing:0.05em; }`;
   document.head.appendChild(s);
 }
 
@@ -89,6 +95,10 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
   const targetRows = el('div', '', colTarget);
   const weaponRows = el('div', '', colWeapon);
   const optionRows = el('div', '', colOptions);
+  // centre-screen prompt shown when combat-ineffective (out of ammo or fuel)
+  const ejectPrompt = el('div', '', document.body);
+  ejectPrompt.id = 'ws-eject';
+  ejectPrompt.innerHTML = '<div class="eh">&#9888; EJECT RECOMMENDED</div><div class="es"></div>';
 
   // --- build the stack from the loadout ---
   function countMounts(type) {
@@ -417,14 +427,27 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
       r.textContent = `${e.name} #${e.hash}  ${e.pos.distanceTo(pos).toFixed(0)}`;
       if (!auto && e === cannon.target) { r.classList.add('sel'); if (col === 0) r.classList.add('cur'); }
     }
+
+    // combat-ineffective -> recommend ejection (out of ammo OR out of fuel)
+    let anyAmmo = false;
+    for (const it of items) {
+      if (it.type === 'gun') { if (cannon.ammo > 0) anyAmmo = true; }
+      else if (it.type === 'rear' || it.type === 'missile') { if (it.ammo > 0) anyAmmo = true; }
+    }
+    const outAmmo = !anyAmmo, outFuel = fuel <= 0;
+    const show = outAmmo || outFuel;
+    ejectPrompt.classList.toggle('show', show);
+    if (show) ejectPrompt.querySelector('.es').textContent =
+      (outAmmo && outFuel ? 'no ammo · no fuel' : outAmmo ? 'no ammo' : 'no fuel') + ' — hold J to eject';
   }
 
   function setVisible(on) {
     visible = !!on;
     root.classList.toggle('show', visible);
+    if (!visible) ejectPrompt.classList.remove('show');
   }
 
-  function dispose() { root.remove(); }
+  function dispose() { root.remove(); ejectPrompt.remove(); }
 
   return { update, rebuild, setVisible, dispose };
 }
