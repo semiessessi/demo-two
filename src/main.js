@@ -30,6 +30,7 @@ import { createDebug } from './debug.js';
 import { createRcs } from './rcs.js';
 import { createEditor } from './editor.js';
 import { createDebris } from './debris.js';
+import { createAsteroidField } from './asteroids.js';
 import { createPregame } from './pregame.js';
 import { applyLoadout } from './loadout.js';
 import { loadSettings, DIFFICULTY, ENVIRONMENT, markComplete } from './settings.js';
@@ -260,6 +261,7 @@ scene.add(nebula.mesh);
 // compiled 4+ shaders (incl. the heavy black-hole raymarch) + loaded the 2 MB Jupiter texture up front,
 // which slowed the load badly. ensureBody() creates + caches on first selection.
 let jupiter = null, blackhole = null, cloudplanet = null, habitable = null, saturn = null;
+let asteroidField = null; // Trojan rock field (built lazily, shown only in jupiterTrojans)
 function ensureBody(kind) {
   if (kind === 'jupiter' && !jupiter) { jupiter = createJupiter(renderer, sunDir); scene.add(jupiter.group); }
   else if (kind === 'blackhole' && !blackhole) { blackhole = createBlackHole(); scene.add(blackhole.group); }
@@ -441,6 +443,14 @@ function applyEnvironment(s) {
   // optional SECOND background body (Tartarus pairs the cyan cloud planet with a grey ringed planet)
   ensureBody(e.body2);
   if (saturn) saturn.group.visible = !NOBODIES && e.body2 === 'saturn';
+  // the Trojan asteroid field — built lazily on first Jupiter-Trojans selection, hidden in every other env
+  if (e.asteroids && !NOBODIES) ensureAsteroids().setVisible(true);
+  else if (asteroidField) asteroidField.setVisible(false);
+}
+// Lazily build the asteroid field (the ~14 displaced rock geometries are the cost, so defer to first need).
+function ensureAsteroids() {
+  if (!asteroidField) asteroidField = createAsteroidField(scene, { vfx, isMobile: IS_MOBILE, count: IS_MOBILE ? 70 : 200 });
+  return asteroidField;
 }
 // Binary companion star: a dim second disc+glow on the opposite side of the sky + a fill light at its colour.
 function applyCompanion(e) {
@@ -937,6 +947,7 @@ function startLoop() {
     if (flying) damage.update(dt, vfx);
     vfx.update(dt);
     if (debris) debris.update(dt, debrisPlayer, enemyMgr.enemies); // enemy debris: drift, bounce, cull
+    if (asteroidField) asteroidField.update(dt, { player: debrisPlayer, enemies: enemyMgr.enemies, projectiles, damage, enemyMgr, mode: gameState.mode }); // Trojan rocks: drift + collide with ships/bolts
     if (playerDebris) playerDebris.update(dt, null, enemyMgr.enemies); // player wreck debris (no self-collide)
     enemyMgr.prune();
     gameState.update(dt, input);

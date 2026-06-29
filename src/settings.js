@@ -44,7 +44,8 @@ export const ENVIRONMENT = {
     companion: { color: 0xe07a44, mult: 0.1, disc: 230, glow: 1500 },
   },
   jupiterTrojans: {
-    label: 'Jupiter Trojans', body: 'jupiter', sunMult: 1, // ~5 AU from Sol -> much dimmer scene light
+    label: 'Jupiter Trojans', body: 'jupiter', sunMult: 1, asteroids: true, // ~5 AU from Sol -> much dimmer scene light; the Trojan rock field
+
     nebula: { uColorA: 0x03040c, uColorB: 0x14224a, uColorC: 0x6a4a30, uBrightness: 0.05, uSaturation: 0.28, uMilkyWay: 0.11 },
     // Sol seen from ~5 AU: small, white, and producing far less corona/halo glow.
     sun: { disc: 280, glow: 620, halo: 0, color: 0xffffff, glowAlpha: 0.4, haloAlpha: 0.0, white: true, light: 0xfff2da },
