@@ -132,8 +132,11 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
   // Manual lock/cycle: pick the enemy nearest the crosshair (within a generous cone/range) and pin
   // it; pressing again cycles to the next. Falls back to the nearest enemy anywhere if none are near
   // the crosshair. The pinned target is held until it dies (auto-acquire is suppressed while locked).
-  function cycleLock() {
+  // Ordered in-range targets (crosshair cone + range), nearest-the-crosshair first. Computes a fresh forward
+  // so it never depends on update()'s call order (the weapon-select TARGET column reads it before update runs).
+  function targetOrder() {
     const shipPos = ship.pivot.position;
+    fwd.set(0, 0, -1).applyQuaternion(ship.pivot.quaternion);
     lockList.length = 0;
     for (const e of getEnemies()) {
       if (!e.alive) continue;
@@ -143,25 +146,29 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
       const dot = fwd.dot(toE.multiplyScalar(1 / d));
       if (dot >= Math.cos(params.lockCone)) lockList.push({ e, dot });
     }
-    if (lockList.length === 0) {
-      // nothing near the crosshair — lock the nearest enemy anywhere
-      let best = null;
-      let bd = Infinity;
-      for (const e of getEnemies()) {
-        if (!e.alive) continue;
-        const d = e.pos.distanceToSquared(shipPos);
-        if (d < bd) { bd = d; best = e; }
-      }
-      target = best;
-      locked = !!best;
-      return;
-    }
     lockList.sort((a, b) => b.dot - a.dot); // nearest the crosshair first
-    const order = lockList.map((c) => c.e);
+    return lockList.map((c) => c.e);
+  }
+  // TARGET-column / lock list: falls back to the single nearest enemy anywhere if none are near the crosshair
+  // (mirrors the old fallback). Does NOT mutate target/locked.
+  function getTargetList() {
+    const order = targetOrder();
+    if (order.length) return order;
+    let best = null, bd = Infinity;
+    const shipPos = ship.pivot.position;
+    for (const e of getEnemies()) { if (!e.alive) continue; const d = e.pos.distanceToSquared(shipPos); if (d < bd) { bd = d; best = e; } }
+    return best ? [best] : [];
+  }
+  // Cycle the pinned target by dir (+1 next, -1 prev). Held until it dies (auto-acquire suppressed while locked).
+  function cycleTarget(dir) {
+    const order = getTargetList();
+    if (order.length === 0) { target = null; locked = false; return; }
     const idx = order.indexOf(target);
-    target = order[(idx + 1) % order.length]; // idx === -1 -> first; otherwise cycle to next
+    target = order[(idx + dir + order.length) % order.length];
     locked = true;
   }
+  function cycleLock() { cycleTarget(1); } // X / R3 = cycle to the next
+  function setTarget(e) { target = e; locked = !!e; }
 
   function update(dt, input, player) {
     const shipQ = ship.pivot.quaternion;
@@ -258,6 +265,9 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
   return {
     update,
     params,
+    cycleTarget,   // (dir) cycle the pinned target +1/-1 (weapon-select TARGET column)
+    getTargetList, // () -> ordered in-range enemies (panel rows; read-only)
+    setTarget,     // (e) pin a specific target
     get aimDir() {
       return aimDir;
     },
