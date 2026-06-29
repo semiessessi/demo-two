@@ -18,6 +18,7 @@ import { createInput } from './input.js';
 import { createTouchControls } from './touch.js';
 import { createProjectiles } from './projectiles.js';
 import { createPlayerCannon } from './weapons.js';
+import { createFrontGun } from './frontGun.js';
 import { createEnemyManager } from './enemies.js';
 import { createWaveManager } from './waves.js';
 import { createVfx } from './vfx.js';
@@ -351,6 +352,7 @@ let damage = null;
 let hud = null;
 let targetDisplay = null;
 let weaponSelect = null;
+let frontGun = null;
 let gameState = null;
 const playerVel = new THREE.Vector3();
 const playerFwd = new THREE.Vector3();
@@ -679,6 +681,7 @@ async function init() {
       canFire: () => !damage || damage.canFire(), // gun subsystem destroyed -> cannon offline
       onFire: (pos) => { lighting.muzzleFlash(pos); sfx.weaponFire(pos); sfx.gunFiring(); }, // muzzle-flash light pulse + cannon loop sustain (+ optional one-shot if /sfx/cannon.* exists)
     });
+    frontGun = await createFrontGun(ship); // visible gun barrel — pivots to cannon.aimDir (muzzle/bolts leave its tip)
   }
 
   chigKit = await loadChig();
@@ -954,6 +957,7 @@ function startLoop() {
     const player = { pos: ship.pivot.position, quat: ship.pivot.quaternion, vel: playerVel };
     if (flying) updateAimHud(cannon.update(dt, input, player));
     else hud.setTarget(0, 0, false);
+    if (flying && frontGun) frontGun.update(cannon); // swing the gun mesh to match the cannon's aim
     // co-op: send own ship state, then interpolate remote ships/enemies before AI/targeting reads them
     if (net && flying) net.captureLocal(player, { dt, throttle: res.throttle, firing: (input.fire || 0) > 0.5 });
     if (net) net.applyRemotes(dt);
@@ -1272,7 +1276,7 @@ function buildTweakGui() {
   df.close();
 
   // Visual placement editor: see/adjust damage zones + RCS ports, log values to bake back into code.
-  createEditor(gui, { scene, ship, damage, rcs, rearPorts: REAR_GUN_PORTS });
+  createEditor(gui, { scene, ship, damage, rcs, rearPorts: REAR_GUN_PORTS, frontGun });
 }
 
 init().catch((e) => {

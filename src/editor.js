@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FRONT_GUN } from './frontGun.js';
 
 // Debug-only visual editor for placement data that has no on-screen representation otherwise:
 //   • DAMAGE ZONES — drawn as wireframe spheres (colour-coded by kind) at each zone's centre/radius.
@@ -11,7 +12,7 @@ const KIND_COLOR = {
   cockpit: 0x66ccff, engine: 0xff8a3a, wing: 0x9f7dff, gun: 0xffe04a, fuel: 0xff4a4a, fuselage: 0x66ff8c, canard: 0x4ad0ff,
 };
 
-export function createEditor(gui, { scene, ship, damage, rcs, rearPorts }) {
+export function createEditor(gui, { scene, ship, damage, rcs, rearPorts, frontGun }) {
   const pivot = ship.pivot;
   const sphereGeo = new THREE.SphereGeometry(1, 16, 12);
 
@@ -243,6 +244,55 @@ export function createEditor(gui, { scene, ship, damage, rcs, rearPorts }) {
       },
     }, 'log').name('log ports → console');
     rf.close();
+  }
+
+  // ---- Front-gun mesh calibration ---------------------------------------------------------------
+  // Tames the "substandard mesh cutting": dial in where the gun pivots (mount), how long the barrel is
+  // (muzzle distance), and the mesh's own rest orientation / origin offset / scale, all live, then bake
+  // the FRONT_GUN block. The mount marker (green) is the pivot; the muzzle marker (yellow) rides the
+  // gimbal to the barrel tip where the flash + bolts come from.
+  if (frontGun) {
+    const FG = FRONT_GUN;
+    const mkMat = (c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false });
+    const mountMk = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), mkMat(0x66ff8c));
+    mountMk.frustumCulled = false; mountMk.renderOrder = 999; mountMk.visible = false;
+    pivot.add(mountMk);
+    const muzzleMk = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 8), mkMat(0xffe04a));
+    muzzleMk.frustumCulled = false; muzzleMk.renderOrder = 999; muzzleMk.visible = false;
+    frontGun.gunAim.add(muzzleMk); // child of gunAim -> rides the gimbal out to the barrel tip
+    function syncFG() {
+      mountMk.position.set(FG.mount[0], FG.mount[1], FG.mount[2]);
+      muzzleMk.position.set(0, 0, -FG.barrel); // gunAim-local -Z*barrel == mount + aimDir*barrel
+      frontGun.applyConfig();
+    }
+    syncFG();
+
+    const gf = gui.addFolder('Front Gun (calibrate)');
+    gf.add({ markers: false }, 'markers').name('show mount/muzzle').onChange((v) => { mountMk.visible = v; muzzleMk.visible = v; });
+    const mProxy = { x: FG.mount[0], y: FG.mount[1], z: FG.mount[2] };
+    gf.add(mProxy, 'x', -8, 8, 0.02).name('mount x').onChange(() => { FG.mount[0] = mProxy.x; syncFG(); });
+    gf.add(mProxy, 'y', -8, 8, 0.02).name('mount y').onChange(() => { FG.mount[1] = mProxy.y; syncFG(); });
+    gf.add(mProxy, 'z', -8, 8, 0.02).name('mount z').onChange(() => { FG.mount[2] = mProxy.z; syncFG(); });
+    gf.add(FG, 'barrel', 0, 6, 0.02).name('barrel length').onChange(syncFG);
+    const rProxy = { x: FG.rest[0] * 180 / Math.PI, y: FG.rest[1] * 180 / Math.PI, z: FG.rest[2] * 180 / Math.PI };
+    const writeRest = (axis, key) => () => { FG.rest[axis] = rProxy[key] * Math.PI / 180; syncFG(); };
+    gf.add(rProxy, 'x', -180, 180, 1).name('rest pitch°').onChange(writeRest(0, 'x'));
+    gf.add(rProxy, 'y', -180, 180, 1).name('rest yaw°').onChange(writeRest(1, 'y'));
+    gf.add(rProxy, 'z', -180, 180, 1).name('rest roll°').onChange(writeRest(2, 'z'));
+    const oProxy = { x: FG.offset[0], y: FG.offset[1], z: FG.offset[2] };
+    gf.add(oProxy, 'x', -8, 8, 0.02).name('offset x').onChange(() => { FG.offset[0] = oProxy.x; syncFG(); });
+    gf.add(oProxy, 'y', -8, 8, 0.02).name('offset y').onChange(() => { FG.offset[1] = oProxy.y; syncFG(); });
+    gf.add(oProxy, 'z', -8, 8, 0.02).name('offset z').onChange(() => { FG.offset[2] = oProxy.z; syncFG(); });
+    gf.add(FG, 'scale', 0.05, 5, 0.01).name('scale (×hull)').onChange(syncFG);
+    gf.add({
+      log: () => {
+        const a = (arr) => '[' + arr.map((v) => +v.toFixed(3)).join(', ') + ']';
+        console.log('[front gun]\nexport const FRONT_GUN = {\n' +
+          `  mount: ${a(FG.mount)},\n  barrel: ${+FG.barrel.toFixed(3)},\n` +
+          `  rest: ${a(FG.rest)},\n  offset: ${a(FG.offset)},\n  scale: ${+FG.scale.toFixed(3)},\n};`);
+      },
+    }, 'log').name('log FRONT_GUN → console');
+    gf.close();
   }
 
   return { syncZones };
