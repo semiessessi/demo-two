@@ -20,6 +20,7 @@ const ENEMY_MASS = 22;
 const MAX_SPIN = 3.0;
 const LOD_HI_R = 16;  // dist/radius below this -> hi-poly
 const LOD_MED_R = 52; // ...below this -> med; beyond -> lo
+const AVOID_LOOK = 150; // how far ahead AI ships start steering around rocks
 
 function makeRng(seed) {
   let s = seed >>> 0;
@@ -236,7 +237,7 @@ export function createAsteroidField(scene, opts = {}) {
   const grid = createSpatialGrid(90);
   const _m = new THREE.Matrix4(), _s = new THREE.Vector3(), _dq = new THREE.Quaternion(), _axis = new THREE.Vector3();
   const _n = new THREE.Vector3(), _rel = new THREE.Vector3(), _imp = new THREE.Vector3(), _rr = new THREE.Vector3(), _tq = new THREE.Vector3();
-  const _cp = new THREE.Vector3(), _bs = new THREE.Vector3(), _seg = new THREE.Vector3(), _toC = new THREE.Vector3(), _cl = new THREE.Vector3();
+  const _cp = new THREE.Vector3(), _bs = new THREE.Vector3(), _seg = new THREE.Vector3(), _toC = new THREE.Vector3(), _cl = new THREE.Vector3(), _av = new THREE.Vector3();
   let MAXR = 0; for (const b of bodies) MAXR = Math.max(MAXR, b.radius);
 
   function segDistSq(a, end, c) {
@@ -264,6 +265,24 @@ export function createAsteroidField(scene, opts = {}) {
   }
 
   // distance-bucket every rock into its variant's hi/med/lo InstancedMesh + write matrix + colour
+  // AI steering help: a repulsion away from nearby rocks (so Chigs/allies fly AROUND them, not into them
+  // when the player hides behind one). Fills `out` with a steering offset to add to the ship's target point.
+  // Uses last frame's grid (1-frame stale is fine). Returns `out`.
+  function avoidSteer(pos, shipRadius, out) {
+    out.set(0, 0, 0);
+    if (!group.visible) return out;
+    const sr = shipRadius || 5;
+    grid.query(pos.x, pos.y, pos.z, sr + MAXR + AVOID_LOOK, (b) => {
+      _av.copy(pos).sub(b.pos); const d = _av.length();
+      const safe = b.radius + sr + 12;
+      if (d > 1e-3 && d < safe + AVOID_LOOK) {
+        const push = 1 - (d - safe) / AVOID_LOOK; // ~1 near the surface, >1 inside, 0 at the look range
+        if (push > 0) out.addScaledVector(_av.multiplyScalar(1 / d), Math.min(2, push) * safe);
+      }
+    });
+    return out;
+  }
+
   function writeMatrices() {
     if (camera) _camPos.copy(camera.position);
     for (const c of counters) { c[0] = 0; c[1] = 0; c[2] = 0; }
@@ -402,5 +421,5 @@ export function createAsteroidField(scene, opts = {}) {
     scene.remove(group);
   }
 
-  return { group, setVisible, update, reset, dispose, setHiDetail, get count() { return bodies.length; }, get hiDetail() { return hiDetail; } };
+  return { group, setVisible, update, reset, dispose, setHiDetail, avoidSteer, get count() { return bodies.length; }, get hiDetail() { return hiDetail; } };
 }

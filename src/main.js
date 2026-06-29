@@ -444,8 +444,8 @@ function applyEnvironment(s) {
   ensureBody(e.body2);
   if (saturn) saturn.group.visible = !NOBODIES && e.body2 === 'saturn';
   // the Trojan asteroid field — built lazily on first Jupiter-Trojans selection, hidden in every other env
-  if (e.asteroids && !NOBODIES) ensureAsteroids().setVisible(true);
-  else if (asteroidField) asteroidField.setVisible(false);
+  if (e.asteroids && !NOBODIES) { ensureAsteroids().setVisible(true); if (enemyMgr) enemyMgr.setAvoid(asteroidField.avoidSteer); }
+  else { if (asteroidField) asteroidField.setVisible(false); if (enemyMgr) enemyMgr.setAvoid(null); }
 }
 // Lazily build the asteroid field (the ~14 displaced rock geometries are the cost, so defer to first need).
 function ensureAsteroids() {

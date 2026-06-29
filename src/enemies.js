@@ -72,6 +72,8 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
   const UP = new THREE.Vector3(0, 1, 0);
   const ZERO = new THREE.Vector3();
   const desired = new THREE.Vector3();
+  const _avoid = new THREE.Vector3(); // asteroid-avoidance steering offset
+  let avoidFn = null; // set by main when the asteroid field is active -> Chigs steer around rocks
   const look = new THREE.Vector3();
   const mat = new THREE.Matrix4();
   const rollQ = new THREE.Quaternion();
@@ -346,6 +348,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
       // Move + orient FIRST, then decide aiming with the CURRENT nose, so the firing test and the
       // bolt direction use the same forward (otherwise bolts appear to fire off the line of travel).
       e.fireCd -= dt;
+      if (avoidFn) st.add(avoidFn(e.pos, e.radius, _avoid)); // steer around asteroids instead of ramming them
       steer(e, st, dt, e.mode === 'formation' ? params.speed : params.speed * 1.05, inGunRange ? params.aimTurnRate : params.turnRate);
       orient(e);
       efwd.copy(FWD).applyQuaternion(e.obj.quaternion);
@@ -490,6 +493,7 @@ export function createEnemyManager(scene, chigKit, projectiles, opts = {}) {
     kill,
     setVfx(v) { vfx = v; },
     setDebris(d) { debris = d; },
+    setAvoid(fn) { avoidFn = fn; }, // asteroid-avoidance provider (null = off)
     enemies,
     formations,
     params,
