@@ -322,6 +322,7 @@ function updateBackdropBodies(dt) {
     u.uCamPos.value.copy(camera.position);
     u.uCenter.value.copy(camera.position).addScaledVector(BH_DIR, 7200); // the hole sits in the BH_DIR sky direction (2x farther -> ~half the apparent size)
     u.uTime.value += dt;
+    u.uFlowTime.value += dt * 0.06; // slow nebula flow / accretion drift on the skybox
   }
 }
 // Backdrop bodies sit at infinity (3000+ units); the foreground smoke is always nearer, so they NEVER
@@ -446,6 +447,7 @@ function applyEnvironment(s) {
     if (u.uPatchColor) u.uPatchColor.value.setHex(e.patch.color);
     if (u.uPatchColor2) u.uPatchColor2.value.setHex(e.patch.color2 != null ? e.patch.color2 : e.patch.color);
     if (u.uPatchWarp) u.uPatchWarp.value = e.patch.warp != null ? e.patch.warp : 0.6;
+    if (u.uPatchSpeed) u.uPatchSpeed.value = e.patch.speed != null ? e.patch.speed : 0.006;
     if (u.uPatchDir) u.uPatchDir.value.copy(e.patch.dir ? new THREE.Vector3(e.patch.dir[0], e.patch.dir[1], e.patch.dir[2]).normalize() : BH_DIR);
   }
   lighting.setSunIntensity(e.sunMult != null ? e.sunMult : 7); // intensity matches the star (Sol@5AU dim, etc.)

@@ -60,7 +60,7 @@ export const ENVIRONMENT = {
   tartarus: {
     label: 'Tartarus', body: 'cloudplanet', sunMult: 0.7, // just the one big cyan cloud planet; distant white dwarf -> dim
     nebula: { uColorA: 0x05060f, uColorB: 0x182840, uColorC: 0x40342a, uBrightness: 0.05, uSaturation: 0.35, uMilkyWay: 0.10 },
-    patch: { bright: 0.5, color: 0x123f57, color2: 0x3fa0a8, warp: 0.7, dir: [-0.35, 0.12, 0.93] }, // big teal/cyan procgen nebula (matches the cyan cloud planet)
+    patch: { bright: 0.5, color: 0x123f57, color2: 0x3fa0a8, warp: 0.06, speed: 0.0005, dir: [-0.35, 0.12, 0.93] }, // teal/cyan procgen nebula — gentle, slow swirls
     sun: { disc: 130, glow: 260, halo: 0, color: 0xffffff, glowAlpha: 0.5, haloAlpha: 0.0, white: true, light: 0xffffff }, // pure white sun (the blue cast is the environment, not the star)
     companion: { color: 0xffffff, mult: 0.6, disc: 120, glow: 600 }, // plain white fill from the opposite side to counter the blue (tweak as we go)
   },

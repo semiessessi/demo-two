@@ -26,6 +26,7 @@ uniform float uPatchBright; // 0 = off; >0 fills a broad swathe of sky around uP
 uniform vec3 uPatchColor;  // patch tint (blue/purple)
 uniform vec3 uPatchColor2; // hotter/contrasting tint in the densest cores
 uniform float uPatchWarp;  // domain-warp strength -> swirly, organic nebulosity
+uniform float uPatchSpeed; // how fast the patch clouds drift / evolve
 uniform vec3 uColorA; // deep base
 uniform vec3 uColorB; // mid clouds
 uniform vec3 uColorC; // hot cores
@@ -113,7 +114,7 @@ void main() {
     // DOMAIN WARP: offset the cloud lookup by a low-freq noise field -> flowing, swirly nebulosity (not blobs)
     vec3 wb = dir * 1.3 + 9.0;
     vec3 warp = vec3(fbmDetail(wb) - 0.5, fbmDetail(wb + 17.0) - 0.5, fbmDetail(wb + 31.0) - 0.5) * uPatchWarp;
-    vec3 pp = dir * 1.9 + warp + vec3(0.0, 0.0, uTime * 0.006);
+    vec3 pp = dir * 1.9 + warp + vec3(0.0, 0.0, uTime * uPatchSpeed);
     float nb = fbm(pp) * 0.7 + fbmDetail(pp * 3.0 + 5.0) * 0.4; // big cloud + finer wisps, both warped
     float dens = cov * smoothstep(0.30, 0.92, nb);
     vec3 pc = mix(uPatchColor, uPatchColor2, smoothstep(0.55, 0.95, nb)); // two-tone: hotter cores in the densest parts
@@ -137,6 +138,7 @@ export function createNebula() {
     uPatchColor: { value: new THREE.Color(0x4d2d8c) }, // blue/purple
     uPatchColor2: { value: new THREE.Color(0x9f3753) }, // hotter cores in the densest nebulosity
     uPatchWarp: { value: 0.6 }, // domain-warp strength -> swirly, organic clouds
+    uPatchSpeed: { value: 0.006 }, // patch cloud drift speed (per-env)
     uColorA: { value: new THREE.Color(0x04050f) }, // deep blue-black base
     uColorB: { value: new THREE.Color(0x223080) }, // blue clouds (dominant)
     uColorC: { value: new THREE.Color(0xd8401f) }, // red hot cores (accent touches)

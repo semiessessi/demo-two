@@ -132,6 +132,14 @@ export function createBlackHole(bhDir) {
     new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(_bh, new THREE.Vector3(1, 0, 0))),
   );
   const SKY_AMT = 0.05; // 5% additive
+  // Flow map (RG = a 2D flow field per face): animates the skybox so the nebula drifts/swirls, and near the
+  // hole it also drags the sample inward (accretion suck). Flow data is LINEAR, not colour.
+  const flowTex = new THREE.CubeTextureLoader().setPath('/skyboxes/').load(
+    ['cerberus_flow_right.png', 'cerberus_flow_left.png', 'cerberus_flow_up.png', 'cerberus_flow_down.png', 'cerberus_flow_front.png', 'cerberus_flow_back.png'],
+  );
+  flowTex.colorSpace = THREE.LinearSRGBColorSpace;
+  const flowTimeU = { value: 0 }; // shared between the lensing shader + the base sky-sphere layer
+  const FLOW_AMT = 0.06;
 
   const Rs = 90; // event-horizon (Schwarzschild) radius in world units
   const DISK_IN = 2.2 * Rs;
@@ -154,6 +162,10 @@ export function createBlackHole(bhDir) {
       uSkybox: { value: skyTex },
       uSkyboxRot: { value: skyRot },
       uSkyboxAmt: { value: SKY_AMT },
+      uSkyFlow: { value: flowTex },
+      uFlowTime: flowTimeU,
+      uFlowAmt: { value: FLOW_AMT },
+      uSuck: { value: 0.22 },
     },
     transparent: true,
     depthWrite: false,
@@ -168,11 +180,27 @@ export function createBlackHole(bhDir) {
       uniform float uRs, uDiskIn, uDiskOut, uTime, uSpokeBright;
       uniform int uSteps;
       uniform samplerCube uSkybox; uniform mat3 uSkyboxRot; uniform float uSkyboxAmt;
+      uniform samplerCube uSkyFlow; uniform float uFlowTime, uFlowAmt, uSuck;
 
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
         return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
       float fbm(vec2 p){ float v=0.0, a=0.5; for(int i=0;i<5;i++){ v+=a*vnoise(p); p*=2.03; a*=0.5; } return v; }
+
+      // flow-map animated cube sample: the flow field perturbs the sample direction over time (two cross-faded
+      // phases), and `suck` drags it toward the hole (holeLocal) -> the nebula drifts AND gets pulled inward.
+      vec3 flowCube(vec3 dir, float amt, vec3 holeLocal, float suck){
+        vec2 fl = (textureCube(uSkyFlow, dir).rg * 2.0 - 1.0) * amt;
+        vec3 up = abs(dir.y) < 0.95 ? vec3(0.0,1.0,0.0) : vec3(1.0,0.0,0.0);
+        vec3 tx = normalize(cross(up, dir)); vec3 bx = cross(dir, tx);
+        vec3 off = tx*fl.x + bx*fl.y;
+        vec3 inward = holeLocal - dir * dot(holeLocal, dir);  // tangential direction toward the hole
+        if (dot(inward, inward) > 1e-6) off += normalize(inward) * suck;
+        float p1 = fract(uFlowTime), p2 = fract(uFlowTime + 0.5);
+        vec3 c1 = textureCube(uSkybox, normalize(dir + off*p1)).rgb;
+        vec3 c2 = textureCube(uSkybox, normalize(dir + off*p2)).rgb;
+        return mix(c1, c2, abs(2.0*p1 - 1.0));
+      }
 
       // procedural sky (nebula tint + Milky Way band + sparse stars) sampled in a (lensed) direction
       vec3 backgroundSky(vec3 dir){
@@ -286,7 +314,7 @@ export function createBlackHole(bhDir) {
         acc += bg * (1.0 - alpha);
         // the hole DISTORTS the additive skybox: sample the cube map along the LENSED ray and add the warped
         // extra where the ray is actually bent (the flat 5% everywhere is the sky-sphere layer below).
-        vec3 skb = textureCube(uSkybox, uSkyboxRot * d).rgb;
+        vec3 skb = flowCube(uSkyboxRot * d, uFlowAmt, uSkyboxRot * axis, uSuck * zone); // flow + accretion suck (strongest near the hole)
         float skLens = uSkyboxAmt * (0.4 + 2.2 * smoothstep(0.05, 0.5, bend)) * zone;
         acc += skb * skLens * (1.0 - alpha);
         alpha = max(alpha, skLens * 0.6);
@@ -327,11 +355,21 @@ export function createBlackHole(bhDir) {
   // occludes it). The black-hole pass above adds the LENSED version near the hole on top of this. The group
   // is re-centred on the camera each frame, so the sphere's object-space dir IS the world view dir.
   const skyMat = new THREE.ShaderMaterial({
-    uniforms: { uSkybox: { value: skyTex }, uSkyboxRot: { value: skyRot }, uAmt: { value: SKY_AMT } },
+    uniforms: { uSkybox: { value: skyTex }, uSkyboxRot: { value: skyRot }, uAmt: { value: SKY_AMT }, uSkyFlow: { value: flowTex }, uFlowTime: flowTimeU, uFlowAmt: { value: FLOW_AMT } },
     transparent: true, depthWrite: false, depthTest: true, side: THREE.BackSide, blending: THREE.AdditiveBlending,
     vertexShader: /* glsl */`varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: /* glsl */`precision highp float; uniform samplerCube uSkybox; uniform mat3 uSkyboxRot; uniform float uAmt; varying vec3 vDir;
-      void main(){ vec3 c = textureCube(uSkybox, uSkyboxRot * normalize(vDir)).rgb; gl_FragColor = vec4(c * uAmt, 1.0); }`,
+    fragmentShader: /* glsl */`precision highp float; uniform samplerCube uSkybox, uSkyFlow; uniform mat3 uSkyboxRot; uniform float uAmt, uFlowTime, uFlowAmt; varying vec3 vDir;
+      vec3 flowCube(vec3 dir){
+        vec2 fl = (textureCube(uSkyFlow, dir).rg * 2.0 - 1.0) * uFlowAmt;
+        vec3 up = abs(dir.y) < 0.95 ? vec3(0.0,1.0,0.0) : vec3(1.0,0.0,0.0);
+        vec3 tx = normalize(cross(up, dir)); vec3 bx = cross(dir, tx);
+        vec3 off = tx*fl.x + bx*fl.y;
+        float p1 = fract(uFlowTime), p2 = fract(uFlowTime + 0.5);
+        vec3 c1 = textureCube(uSkybox, normalize(dir + off*p1)).rgb;
+        vec3 c2 = textureCube(uSkybox, normalize(dir + off*p2)).rgb;
+        return mix(c1, c2, abs(2.0*p1 - 1.0));
+      }
+      void main(){ vec3 c = flowCube(uSkyboxRot * normalize(vDir)); gl_FragColor = vec4(c * uAmt, 1.0); }`,
   });
   const skySphere = new THREE.Mesh(new THREE.SphereGeometry(4200, 32, 24), skyMat);
   skySphere.renderOrder = -19; // additive base layer (order-independent); just after the nebula
@@ -505,7 +543,7 @@ export function createRingedPlanet(renderer, sunDir) {
 
   // faint grey fresnel limb
   const atmoMat = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color(0xb8b4ac) }, uSunDir: { value: SUN.clone() }, uPower: { value: 3.2 }, uStrength: { value: 4.2 } }, // 3x denser atmosphere rim
+    uniforms: { uColor: { value: new THREE.Color(0xb8b4ac) }, uSunDir: { value: SUN.clone() }, uPower: { value: 3.2 }, uStrength: { value: 2.1 } }, // denser rim than the original 1.4, but ~50% of the too-bright 4.2
     vertexShader: /* glsl */`varying vec3 vN; varying vec3 vWorld; void main(){ vec4 wp=modelMatrix*vec4(position,1.0); vWorld=wp.xyz; vN=normalize(mat3(modelMatrix)*normal); gl_Position=projectionMatrix*viewMatrix*wp; }`,
     fragmentShader: /* glsl */`uniform vec3 uColor; uniform vec3 uSunDir; uniform float uPower, uStrength; varying vec3 vN; varying vec3 vWorld;
       void main(){ vec3 V=normalize(cameraPosition-vWorld); float f=pow(1.0-max(dot(normalize(vN),V),0.0),uPower);
