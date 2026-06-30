@@ -670,7 +670,7 @@ async function init() {
   thrusters = createThrusters(ship.pivot, ship.nozzles, ship.rearDir, ship.radius);
   lighting.attachThrusters(ship.pivot, ship.nozzles, ship.rearDir, ship.radius); // real engine light spill
   if (!ATTRACT) {
-    rcs = createRcs(scene, ship);
+    rcs = createRcs(scene, ship, undefined, { lights: IS_MOBILE ? 2 : 4 }); // real RCS point lights on the player's hull
     flight = createFlight(ship.pivot, camera, renderer.domElement, input);
   }
 

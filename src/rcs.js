@@ -57,7 +57,7 @@ function glowTex() {
   return _glowTex;
 }
 
-export function createRcs(scene, ship, ports = RCS_PORTS) {
+export function createRcs(scene, ship, ports = RCS_PORTS, opts = {}) {
   const group = new THREE.Group();
   ship.pivot.add(group); // local frame -> tracks the ship
 
@@ -83,6 +83,20 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
     group.add(light);
     return { p, cone, light, level: 0, seed: Math.random() * 6.28 };
   });
+
+  // Optional REAL local point lights (opts.lights = pool size). A small pool that hops to the strongest-
+  // firing jets each frame so the hull genuinely lights up — without one-light-per-jet cost. Parented to
+  // the ship-local group so they move with it (no per-frame world transform); parked at intensity 0 idle.
+  const RCS_LIGHT_PEAK = 22;
+  const rcsLights = [];
+  for (let i = 0; i < (opts.lights || 0); i++) {
+    const pl = new THREE.PointLight(0xbfe0ff, 0, ship.radius * 1.6, 2); // cool-white, short range, no shadow
+    pl.castShadow = false;
+    group.add(pl);
+    rcsLights.push(pl);
+  }
+  const litUnits = [];
+  const _ld = new THREE.Vector3();
 
   const UP = new THREE.Vector3(0, 1, 0);
   const dir = new THREE.Vector3();
@@ -174,6 +188,21 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
       light.position.set(u.p.pos[0], u.p.pos[1], u.p.pos[2]).addScaledVector(dir, 0.15);
       light.material.opacity = Math.min(0.85, u.level * 1.1) * flick;
       light.visible = true;
+    }
+
+    // hop the real-light pool to the strongest-firing jets — the hull lights up where it's thrusting
+    if (rcsLights.length) {
+      litUnits.length = 0;
+      for (const u of units) if (u.level > 0.05) litUnits.push(u);
+      litUnits.sort((a, b) => b.level - a.level);
+      for (let i = 0; i < rcsLights.length; i++) {
+        const u = litUnits[i], pl = rcsLights[i];
+        if (u) {
+          _ld.set(u.p.dir[0], u.p.dir[1], u.p.dir[2]); if (_ld.lengthSq() > 1e-6) _ld.normalize();
+          pl.position.set(u.p.pos[0], u.p.pos[1], u.p.pos[2]).addScaledVector(_ld, 0.2);
+          pl.intensity = u.level * RCS_LIGHT_PEAK;
+        } else pl.intensity = 0;
+      }
     }
   }
 
