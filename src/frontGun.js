@@ -23,6 +23,7 @@ const _X = new THREE.Vector3(1, 0, 0);
 export async function createFrontGun(ship) {
   const alignScale = (ship.align && ship.align.scale && ship.align.scale.x) || 1;
   const center = ship.center || new THREE.Vector3(); // the ship's recenter (model is drawn at scale*(V - center))
+  const hullMaterial = ship.hullMaterial || null; // the hull's textured SA43 skin — applied to the gun (it kept matching UVs)
 
   const gunMount = new THREE.Group(); // at FRONT_GUN.mount (ship-local) — the pivot point
   const gunAim = new THREE.Group(); //  rotated each frame to the cannon's aim
@@ -60,7 +61,8 @@ export async function createFrontGun(ship) {
     gunModel = gltf.scene;
     gunModel.traverse((o) => {
       if (!o.isMesh) return;
-      if (o.material) o.material.side = THREE.DoubleSide; // match the hull (inconsistent winding)
+      if (hullMaterial) o.material = hullMaterial; // reuse the hull's textured skin (the gun kept matching UVs)
+      else if (o.material) o.material.side = THREE.DoubleSide;
       o.castShadow = o.receiveShadow = false;
       o.frustumCulled = false; // tiny + always near the camera
     });

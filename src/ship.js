@@ -26,6 +26,7 @@ export async function loadShip() {
 
   const engineMaterials = [];
   const ordnance = {}; // detachable loadout meshes keyed by mount id (e.g. fuelL -> Tank_L mesh)
+  let hullMaterial = null; // the SA43 textured hull skin — reused by the front-gun mesh (it kept matching UVs)
   const log = [];
   // Blender renamed the meshes generically (Mesh001, Mesh005, …) but kept the MATERIAL names, so we
   // branch on the material name (with a mesh-name fallback for the ones Blender preserved).
@@ -35,6 +36,7 @@ export async function loadShip() {
     const mat = (m && m.name) || '';
     log.push(`${o.name} [${mat}]`);
     if (m) m.side = THREE.DoubleSide; // fix winding holes
+    if (mat === 'SA43' && !hullMaterial) hullMaterial = m; // grab the hull skin for the front-gun mesh
     o.castShadow = o.receiveShadow = false;
 
     // detachable ordnance (separated from the hull in scripts/cut_ordnance.py) -> show/hide per loadout
@@ -188,5 +190,5 @@ export async function loadShip() {
     rearDir.toArray().map((v) => +v.toFixed(2)),
   );
 
-  return { pivot, align, model, engineMaterials, nozzles, ordnance, rearDir, radius: TARGET_RADIUS, center };
+  return { pivot, align, model, engineMaterials, nozzles, ordnance, rearDir, radius: TARGET_RADIUS, center, hullMaterial };
 }
