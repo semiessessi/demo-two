@@ -76,6 +76,15 @@ export const ENVIRONMENT = {
     patch: { bright: 0.5, color: 0x352866, color2: 0x9a4f72, warp: 0.6, dir: [0.62, 0.18, 0.76] }, // big violet/rose procgen nebula across the sky
     sun: { disc: 480, glow: 2200, halo: 5200, color: 0xfff6e8, glowAlpha: 0.85, haloAlpha: 0.7, light: 0xfff0d8 }, // warm-white G-type
   },
+  proxima: {
+    label: 'Proxima Centauri', body: 'habitable', sunMult: 4.5, moon: true, cityAmount: 0.4, // Earth-like world + a moon; fewer city lights than Ixion
+    nebula: { uColorA: 0x05040c, uColorB: 0x201848, uColorC: 0x55190f, uBrightness: 0.07, uSaturation: 0.34, uMilkyWay: 0.12 },
+    // red-dwarf primary: small deep-orange disc; the CAST light is kept warm (not blood-red) so the world still reads
+    sun: { disc: 360, glow: 1500, halo: 3400, color: 0xff5a30, glowAlpha: 0.85, haloAlpha: 0.45, light: 0xffa070 },
+    // distant Alpha-Centauri-like pair — bright star-points, not suns (companion 2 is visual only)
+    companion: { color: 0xffffff, mult: 0.02, disc: 70, glow: 360 },  // white companion (Alpha Cen A-ish)
+    companion2: { color: 0xffe18a, mult: 0.0, disc: 56, glow: 300 },  // yellow companion (Alpha Cen B-ish)
+  },
 };
 
 const clone = (o) => JSON.parse(JSON.stringify(o));

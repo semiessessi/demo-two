@@ -636,6 +636,10 @@ export function createHabitablePlanet() {
       uSunDir: { value: new THREE.Vector3(-55, 30, -30).normalize() },
       uExposure: { value: 0.95 },
       uAmbient: { value: 0.05 },
+      uBump: { value: 0.6 },         // terrain relief strength (derivative normal mapping)
+      uCityScale: { value: 24.0 },   // city-cluster frequency (2x the old 12 -> sharper, less blurry)
+      uCityDetail: { value: 170.0 }, // individual-city frequency (2x the old 85)
+      uCityAmount: { value: 1.0 },   // per-env light density (proxima dials this down)
     },
     vertexShader: /* glsl */`
       varying vec3 vN; varying vec3 vP; varying vec3 vW;
@@ -643,7 +647,7 @@ export function createHabitablePlanet() {
     fragmentShader: /* glsl */`
       precision highp float;
       varying vec3 vN; varying vec3 vP; varying vec3 vW;
-      uniform float uTime, uExposure, uAmbient; uniform vec3 uSunDir;
+      uniform float uTime, uExposure, uAmbient, uBump, uCityScale, uCityDetail, uCityAmount; uniform vec3 uSunDir;
       float hash(vec3 p){ p = fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
       float noise(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.0-2.0*f);
         return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
@@ -678,6 +682,15 @@ export function createHabitablePlanet() {
 
         // lighting
         vec3 N = normalize(vN), L = normalize(uSunDir), V = normalize(cameraPosition - vW);
+        // terrain relief: perturb the normal from the continent height field via screen-space derivatives
+        // (Mikkelsen surface-gradient bump — no tangent frame needed), land only.
+        {
+          vec3 dpx = dFdx(vW), dpy = dFdy(vW);
+          vec3 r1 = cross(dpy, N), r2 = cross(N, dpx);
+          float det = dot(dpx, r1);
+          vec3 sg = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+          N = normalize(abs(det) * N - uBump * land * sg);
+        }
         float ndl = dot(N, L);
         float day = smoothstep(-0.06, 0.30, ndl);
         float diff = max(ndl, 0.0);
@@ -692,10 +705,10 @@ export function createHabitablePlanet() {
         col *= 1.0 - 0.25 * clouds;                              // cloud shadow
         col = mix(col, vec3(1.0) * (uAmbient + (1.0 - uAmbient) * diff), clouds * 0.85);
 
-        // night-side city lights (clustered on habitable land)
-        float pop = smoothstep(0.58, 0.80, fbm(p*12.0));
-        float cities = land * (1.0 - snow) * (1.0 - clouds) * pop * smoothstep(0.55, 0.82, noise(p*85.0));
-        col += vec3(1.0, 0.72, 0.36) * cities * 2.4 * (1.0 - day);
+        // night-side city lights (clustered on habitable land) — frequency + density env-tunable
+        float pop = smoothstep(0.58, 0.80, fbm(p*uCityScale));
+        float cities = land * (1.0 - snow) * (1.0 - clouds) * pop * smoothstep(0.62, 0.85, noise(p*uCityDetail));
+        col += vec3(1.0, 0.72, 0.36) * cities * 2.4 * uCityAmount * (1.0 - day);
 
         gl_FragColor = vec4(col * uExposure, 1.0);
       }`,
@@ -715,6 +728,20 @@ export function createHabitablePlanet() {
   const atmo = new THREE.Mesh(new THREE.SphereGeometry(R * 1.045, 128, 80), atmoMat);
   atmo.renderOrder = -2;
 
-  group.add(planet, atmo);
-  return { group, mat, planet, atmoMat, radius: R };
+  // optional moon (toggled per env via setMoon) — a plain grey sphere lit by the scene sun, on a slow orbit
+  const moonMat = new THREE.MeshStandardMaterial({ color: 0x9a958c, roughness: 1.0, metalness: 0.0 });
+  const moon = new THREE.Mesh(new THREE.SphereGeometry(R * 0.23, 48, 32), moonMat);
+  moon.renderOrder = -3; moon.visible = false;
+  const MOON_ORBIT = R * 1.9, MOON_U = new THREE.Vector3(1, 0, 0), MOON_V = new THREE.Vector3(0, 0.95, 0.3).normalize();
+  let moonAng = 0.6;
+  function updateMoon(dt) {
+    if (!moon.visible) return;
+    moonAng += 0.025 * dt; // slow orbit
+    moon.position.copy(MOON_U).multiplyScalar(Math.cos(moonAng) * MOON_ORBIT).addScaledVector(MOON_V, Math.sin(moonAng) * MOON_ORBIT);
+    moon.rotation.y += 0.01 * dt;
+  }
+  function setMoon(on) { moon.visible = !!on; }
+
+  group.add(planet, atmo, moon);
+  return { group, mat, planet, atmoMat, radius: R, setMoon, updateMoon };
 }

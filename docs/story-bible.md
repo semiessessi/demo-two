@@ -58,8 +58,13 @@ sortie is a roll you might not survive."
   (Tartarus); the off-the-books strike is a **trap** — AeroTech flagged the 88th to a waiting Chig ambush to
   bury what they know. Confirms the contractor is dealing with the enemy; the war grows a second front, at
   our backs. *(Built, gated `?singleplayer`.)*
-- **M5+** — TBD. Beats to draw on: Escort (protect a hauler), the costly Proxima set-piece, a Silicate-run
-  prison-mine rescue (Kazbek), a named enemy ace, the AeroTech cover-up going public.
+- **M5 "All In"** — the Proxima gut-punch (act climax). The fleet's stand at Proxima; the 88th flies the
+  screen over the carriers, and despite holding the line the **USS Lexington is lost** with most of her crew
+  — a Pyrrhic survival. Emotional nadir of Act 1. New **`proxima`** env: red-dwarf primary + two distant
+  companions (white + yellow, Alpha-Centauri-like), an Earth-like world (atmosphere + normal map) with a
+  moon. *(Built, gated `?singleplayer`.)*
+- **M6+** — TBD. Escort (protect a hauler), a Silicate-run prison-mine rescue (Kazbek), a named enemy ace,
+  the AeroTech cover-up going public.
 
 ## Production notes
 

@@ -193,6 +193,14 @@ const companionDir = sunDir.clone().negate(); // opposite side of the sky from t
 const companionLight = new THREE.DirectionalLight(0xffffff, 0);
 companionLight.position.copy(companionDir).multiplyScalar(200);
 scene.add(companionLight);
+// a SECOND distant companion (Proxima's Alpha-Centauri-like pair): a small bright star-point near
+// companion 1, visual only (negligible light from that far). Off in every env except proxima.
+const companion2Disc = makeSprite(sunGradientWhite, 60, -5);
+const companion2Glow = makeSprite(glowGradient, 300, -6);
+companion2Disc.visible = companion2Glow.visible = false;
+scene.add(companion2Glow);
+scene.add(companion2Disc);
+const companion2Dir = companionDir.clone().add(new THREE.Vector3(0.10, 0.07, 0.0)).normalize(); // a touch off companion 1 -> a close pair
 
 function makeCanvasTex(paint, size = 1024) {
   // The sun sprites are HUGE on screen (the halo fills the view), so a small texture magnified that much
@@ -298,6 +306,10 @@ function updateBackdropBodies(dt) {
     companionDisc.position.copy(camera.position).addScaledVector(companionDir, 3600);
     companionGlow.position.copy(camera.position).addScaledVector(companionDir, 3650);
   }
+  if (companion2Disc.visible) { // the second distant companion (proxima)
+    companion2Disc.position.copy(camera.position).addScaledVector(companion2Dir, 3600);
+    companion2Glow.position.copy(camera.position).addScaledVector(companion2Dir, 3650);
+  }
   if (jupiter && jupiter.group.visible) {
     jupiter.group.position.copy(camera.position).addScaledVector(JUP_DIR, 3400);
     jupiter.update(dt); // spin Jupiter + orbit Io/Ganymede
@@ -315,6 +327,7 @@ function updateBackdropBodies(dt) {
     habitable.group.position.copy(camera.position).addScaledVector(IXION_DIR, 2500); // big + close
     habitable.mat.uniforms.uTime.value += dt;
     habitable.planet.rotation.y += 0.005 * dt; // spin under the fixed crescent terminator
+    if (habitable.updateMoon) habitable.updateMoon(dt);
   }
   if (blackhole && blackhole.group.visible) {
     blackhole.group.position.copy(camera.position); // sky-pass sphere centred on the camera (no billboard)
@@ -455,6 +468,10 @@ function applyEnvironment(s) {
   applySun(e.sun);
   applyCompanion(e); // binary second star (Groombridge), else off
   applyBody(e.body);
+  if (habitable) { // per-env city-light density + moon (the 2x city frequency is baked into the uniforms)
+    if (habitable.mat.uniforms.uCityAmount) habitable.mat.uniforms.uCityAmount.value = e.cityAmount != null ? e.cityAmount : 1.0;
+    if (habitable.setMoon) habitable.setMoon(!!e.moon);
+  }
   // optional SECOND background body (Tartarus pairs the cyan cloud planet with a grey ringed planet)
   ensureBody(e.body2);
   if (saturn) saturn.group.visible = !NOBODIES && e.body2 === 'saturn';
@@ -477,6 +494,14 @@ function applyCompanion(e) {
     companionDisc.scale.setScalar(c.disc); companionGlow.scale.setScalar(c.glow);
     companionDisc.material.color.setHex(c.color); companionGlow.material.color.setHex(c.color);
     companionLight.color.setHex(c.color);
+  }
+  // second companion star (proxima): visual only, no fill light
+  const c2 = e.companion2;
+  const on2 = !!c2;
+  companion2Disc.visible = companion2Glow.visible = on2;
+  if (on2) {
+    companion2Disc.scale.setScalar(c2.disc); companion2Glow.scale.setScalar(c2.glow);
+    companion2Disc.material.color.setHex(c2.color); companion2Glow.material.color.setHex(c2.color);
   }
 }
 // Retune the existing sun sprites per environment (size/tint/glow/whiteness) — not the light direction.
