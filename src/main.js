@@ -28,6 +28,7 @@ import { createHud } from './hud.js';
 import { createTargetDisplay } from './targetDisplay.js';
 import { createWeaponSelect, REAR_GUN_PORTS } from './weaponSelect.js';
 import { createWeaponHud } from './weaponHud.js';
+import { createGamepadTester } from './gamepadTester.js';
 import { createGameState } from './gameState.js';
 import { createDebug } from './debug.js';
 import { createRcs } from './rcs.js';
@@ -83,6 +84,8 @@ const SINGLEPLAYER = new URLSearchParams(window.location.search).has('singleplay
 // (?sound is still accepted as a harmless no-op so old links keep working.) The engine synth is the lone
 // exception — still rough — so it stays gated behind ?engine below. Music (audio.js / track.mp3) is separate.
 const SOUND = !/[?&]nosound\b/.test(window.location.search);
+// ?gamepad -> on-screen gamepad tester (id/mapping + live button/axis readout) for diagnosing controllers
+if (/[?&]gamepad\b/.test(window.location.search)) { if (document.body) createGamepadTester(); else window.addEventListener('DOMContentLoaded', createGamepadTester); }
 // The engine synth still sounds rough, so it's gated SEPARATELY behind ?engine — off by default even though
 // the rest of the SFX are now on.
 const ENGINE_SFX = /[?&]engine\b/.test(window.location.search);
