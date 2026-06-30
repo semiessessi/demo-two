@@ -38,14 +38,17 @@ const BOLT_FRAG = `
   void main() {
     float zN = vLocal.z / 1.3;                            // -1..1 along the bolt
     if (uRound > 0.5) {
-      // Chig shot: a small CONTIGUOUS string of round blobs along the travel axis = a motion-blur streak.
+      // Chig shot: a round glowing TUBE + a string of bright blobs along the travel axis (motion-blur streak).
       float head = smoothstep(-1.0, 1.0, zN);             // bright leading head, fading tail behind it
-      float lobes = 0.55 + 0.45 * sin(zN * 14.0 + uSeed * 30.0); // ~4-6 round blobs; stays > 0 so it reads contiguous
-      float tip = 1.0 - smoothstep(0.86, 1.0, abs(zN));   // soft ends (no hard cut)
-      float fn = fbm3(vLocal * vec3(6.0, 6.0, 2.4) + vec3(uSeed * 40.0) + vec3(0.0, 0.0, uTime * 7.0));
+      float blobs = 0.5 + 0.5 * sin(zN * 16.0 + uSeed * 30.0);
+      blobs = 0.28 + 0.72 * blobs * blobs;                // distinct, rounder blobs; soft floor keeps it contiguous
+      float tip = 1.0 - smoothstep(0.9, 1.0, abs(zN));    // soft ends (no hard cut)
+      // bright centerline on every box face -> a round cross-section (under the additive bloom it reads spherical)
+      float tube = 1.0 - smoothstep(0.1, 1.0, min(abs(vLocal.x), abs(vLocal.y)) / 0.11);
+      float fn = fbm3(vLocal * vec3(5.0, 5.0, 1.8) + vec3(uSeed * 40.0) + vec3(0.0, 0.0, uTime * 7.0));
       fn = smoothstep(0.2, 0.85, fn);                     // contrast -> clearer fractal patches
       float bright = mix(1.0 - uNoise, 1.0, fn);          // WHITE broken up by fractal noise
-      float a = lobes * mix(0.22, 1.0, head) * tip * bright;
+      float a = blobs * mix(0.25, 1.0, head) * tip * bright * tube;
       gl_FragColor = vec4(uColor * uGlow * bright, a);
       return;
     }
