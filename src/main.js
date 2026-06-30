@@ -23,7 +23,7 @@ import { createEnemyManager } from './enemies.js';
 import { createWaveManager } from './waves.js';
 import { createVfx } from './vfx.js';
 import { createCombat } from './combat.js';
-import { createDamageModel } from './damage.js';
+import { createDamageModel, WING_ZONES } from './damage.js';
 import { createHud } from './hud.js';
 import { createTargetDisplay } from './targetDisplay.js';
 import { createWeaponSelect, REAR_GUN_PORTS } from './weaponSelect.js';
@@ -33,7 +33,7 @@ import { createGameState } from './gameState.js';
 import { createDebug } from './debug.js';
 import { createRcs } from './rcs.js';
 import { createEditor } from './editor.js';
-import { createDebris } from './debris.js';
+import { createDebris, collectWingHullPoints } from './debris.js';
 import { createAsteroidField } from './asteroids.js';
 import { createPregame } from './pregame.js';
 import { applyLoadout } from './loadout.js';
@@ -700,6 +700,18 @@ async function init() {
   enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
   debris = createDebris(scene, { template: chigKit.template, material: chigKit.material, vfx, count: IS_MOBILE ? 24 : 64, cap: IS_MOBILE ? 96 : 240 });
   enemyMgr.setDebris(debris); // ship-fracture chunks on death
+  // Wing-fracture debris: a slice of the ship (whole aileron + the fuselage root inside the wing collision
+  // ellipsoid) cut into a handful of plates by the same Voronoi-CSG worker. Shared L/R pools serve the player
+  // AND every AI Hammerhead via vfx.fractureWing; attached to vfx so it drives update/clear/quality for free.
+  try {
+    // Hierarchical chunks like the Chig fracture: most top cells detach as whole plates, ~half can re-break
+    // into finer pieces (at burst + mid-flight via reBreakAt) — so a wing OFTEN shatters but sometimes just
+    // sheds a couple of big plates. Variety per loss, same as the enemy ships.
+    const WING_FX = { cellCount: 8, anisotropy: [1.6, 0.5, 1.0], voidCount: 1, voidSize: 0.22, maxDepth: 1, childCount: 4, splitProb: 0.45 };
+    const mkWing = (zone) => createDebris(scene, { template: ship.pivot, hullPoints: collectWingHullPoints(ship.pivot, zone),
+      material: ship.hullMaterial, vfx, count: IS_MOBILE ? 6 : 10, cap: IS_MOBILE ? 40 : 64, fragLife: [3, 5], label: 'wing', fractureOpts: WING_FX });
+    vfx.attachWingDebris({ L: mkWing(WING_ZONES.L), R: mkWing(WING_ZONES.R) });
+  } catch (e) { console.warn('[wing] fracture debris unavailable — wings stay intact-clone', e); }
   if (!ATTRACT) {
     debrisPlayer = { pos: ship.pivot.position, radius: ship.radius, vel: playerVel };
     playerDebris = createDebris(scene, { template: ship.pivot, convex: true, vfx, count: IS_MOBILE ? 6 : 12, cap: IS_MOBILE ? 72 : 160 }); // player Hammerhead (171k verts/45 meshes) -> convex-hull proxy, shatters when destroyed
@@ -777,14 +789,18 @@ async function init() {
       vfx.spark(pt, 0xcfe8ff);
     },
     onWingLost: (zone, node, pt) => {
-      // tear the wing off as tumbling debris (bigger kick than a canard) + a meaty burst, then the ship
-      // snaps into an uncontrollable tumble — the only out is to eject.
-      const sign = zone.center.x < 0 ? -1 : 1;
-      const out = new THREE.Vector3(sign, 0, 0).applyQuaternion(ship.pivot.quaternion);
-      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(ship.pivot.quaternion);
-      const vel = playerVel.clone().addScaledVector(out, 18).addScaledVector(up, 6);
-      const angVel = new THREE.Vector3((Math.random() * 2 - 1) * 9, (Math.random() * 2 - 1) * 9, (Math.random() * 2 - 1) * 9);
-      vfx.spawnDebris(node, { vel, angVel, life: 2.6 });
+      // tear the wing off: fracture it into chunks at the ship's transform (intact-clone fallback if the
+      // pool isn't ready / on 'low'), + a meaty burst, then the ship snaps into an uncontrollable tumble.
+      const side = zone.center.x < 0 ? 'L' : 'R';
+      const fractured = vfx.fractureWing(side, { pos: ship.pivot.position, obj: ship.pivot, vel: playerVel });
+      if (!fractured) {
+        const sign = zone.center.x < 0 ? -1 : 1;
+        const out = new THREE.Vector3(sign, 0, 0).applyQuaternion(ship.pivot.quaternion);
+        const up = new THREE.Vector3(0, 1, 0).applyQuaternion(ship.pivot.quaternion);
+        const vel = playerVel.clone().addScaledVector(out, 18).addScaledVector(up, 6);
+        const angVel = new THREE.Vector3((Math.random() * 2 - 1) * 9, (Math.random() * 2 - 1) * 9, (Math.random() * 2 - 1) * 9);
+        vfx.spawnDebris(node, { vel, angVel, life: 2.6 });
+      }
       vfx.firework(pt, 0.8);
       vfx.spark(pt, 0xffd27a);
       gameState.tumble('WING TORN OFF — EJECTED');

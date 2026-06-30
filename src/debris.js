@@ -46,9 +46,53 @@ function extractHull(template, convex = false) {
   };
 }
 
-export function createDebris(scene, { template, material, convex = false, vfx = null, count = 64, cap = 240 } = {}) {
-  const hull = extractHull(template, convex);
-  const tag = convex ? 'player' : 'enemy';
+// Build a CSG hull from a caller-supplied point cloud (template/pivot-local space) — used for the wing
+// fracture, where the source is a slice of the ship rather than a whole template.
+function hullFromPoints(points, mat) {
+  const g = new ConvexGeometry(points);
+  return { pos: Float32Array.from(g.attributes.position.array), index: null, material: mat || null };
+}
+
+// Gather the wing-region vertices (pivot-local) for a side's collision ellipsoid `zone` ({center, radii}
+// arrays): the WHOLE aileron (the L_/R_Aileron node + its descendant meshes) plus the slice of the
+// fuselage (material 'SA43') that falls INSIDE the ellipsoid — so the chunk hull = wing + a bite of the
+// hull root, clipped to the same volume that decides the wing is lost. Returns THREE.Vector3[].
+const _dInv = new THREE.Matrix4(), _dRel = new THREE.Matrix4(), _dv = new THREE.Vector3();
+export function collectWingHullPoints(shipRoot, zone) {
+  shipRoot.updateMatrixWorld(true);
+  _dInv.copy(shipRoot.matrixWorld).invert(); // mesh world -> pivot-local (pose-independent)
+  const cx = zone.center[0], cy = zone.center[1], cz = zone.center[2];
+  const rx = zone.radii[0], ry = zone.radii[1], rz = zone.radii[2];
+  const aileronRe = cx < 0 ? /^L_Aileron$/i : /^R_Aileron$/i;
+  let aileronRoot = null;
+  shipRoot.traverse((o) => { if (!aileronRoot && aileronRe.test(o.name)) aileronRoot = o; });
+  const aileronMeshes = new Set();
+  if (aileronRoot) aileronRoot.traverse((o) => { if (o.isMesh) aileronMeshes.add(o); });
+  const pts = [];
+  shipRoot.traverse((o) => {
+    if (!(o.isMesh && o.visible && o.geometry && o.geometry.attributes.position)) return;
+    const isAileron = aileronMeshes.has(o);
+    const mat = Array.isArray(o.material) ? o.material[0] : o.material;
+    const isFuselage = mat && mat.name === 'SA43';
+    if (!isAileron && !isFuselage) return;
+    _dRel.multiplyMatrices(_dInv, o.matrixWorld);
+    const p = o.geometry.attributes.position;
+    const step = Math.max(1, Math.floor(p.count / 4000)); // hull only needs extreme points
+    for (let i = 0; i < p.count; i += step) {
+      _dv.fromBufferAttribute(p, i).applyMatrix4(_dRel);
+      if (!isAileron) { // fuselage: keep only the wing-root slice inside the ellipsoid (whole aileron always kept)
+        const dx = (_dv.x - cx) / rx, dy = (_dv.y - cy) / ry, dz = (_dv.z - cz) / rz;
+        if (dx * dx + dy * dy + dz * dz > 1) continue;
+      }
+      pts.push(_dv.clone());
+    }
+  });
+  return pts;
+}
+
+export function createDebris(scene, { template, material, convex = false, vfx = null, count = 64, cap = 240, hullPoints = null, fractureOpts = null, fragLife = null, label = null } = {}) {
+  const hull = hullPoints ? hullFromPoints(hullPoints, material) : extractHull(template, convex);
+  const tag = label || (convex ? 'player' : 'enemy');
   // fragment materials: reuse the source hull look (no vertex colors, faceted) + a dark torn interior
   const srcMat = material || hull.material;
   const hullMat = srcMat ? srcMat.clone() : new THREE.MeshStandardMaterial({ color: 0x3a423c, metalness: 0.45, roughness: 0.45 });
@@ -89,7 +133,7 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
       if (roots.length) variations.push(roots); // each variation = array of root tree-nodes
     };
     worker.postMessage(
-      { type: 'gen', pos: hull.pos, index: hull.index, count, opts: { kNeighbors: 8 } },
+      { type: 'gen', pos: hull.pos, index: hull.index, count, opts: { kNeighbors: 8, ...(fractureOpts || {}) } },
       hull.index ? [hull.pos.buffer, hull.index.buffer] : [hull.pos.buffer],
     );
   } catch (e) {
@@ -167,7 +211,7 @@ export function createDebris(scene, { template, material, convex = false, vfx = 
     const mover = {
       mesh, vel,
       ang: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8),
-      life: 11 + Math.random() * 6, // backstop; drifts off in vacuum, mostly culled by distance
+      life: fragLife ? fragLife[0] + Math.random() * (fragLife[1] - fragLife[0]) : 11 + Math.random() * 6, // backstop; drifts off in vacuum, mostly culled by distance (wing chunks: shorter, no player ref to distance-cull)
       node: null, reBreakAt: 0,
       noCollideT: 0.4, // ignore collisions for a beat so chunks clear the wreck/ships before they can bounce
       // big (depth-0) wreckage trails cheap sprite smoke as it tumbles away (-1 = no trail)

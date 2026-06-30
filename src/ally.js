@@ -96,11 +96,15 @@ export function createAlly(scene, opts) {
   function blowOff(zone, node, pt, color, fwScale, outKick, upKick) {
     if (node) node.visible = false;
     const sign = zone.center.x < 0 ? -1 : 1;
-    _out.set(sign, 0, 0).applyQuaternion(quat);
-    _up.set(0, 1, 0).applyQuaternion(quat);
-    const v = vel.clone().addScaledVector(_out, outKick).addScaledVector(_up, upKick);
-    const av = new THREE.Vector3((Math.random() * 2 - 1) * 8, (Math.random() * 2 - 1) * 8, (Math.random() * 2 - 1) * 8);
-    if (node) vfx.spawnDebris(node, { vel: v, angVel: av, life: 2.4 });
+    // wings fracture into chunks (shared pools, burst at this ally's transform); intact clone is the fallback
+    const fractured = zone.kind === 'wing' && vfx.fractureWing && vfx.fractureWing(sign < 0 ? 'L' : 'R', { pos, obj: pivot, vel });
+    if (!fractured) {
+      _out.set(sign, 0, 0).applyQuaternion(quat);
+      _up.set(0, 1, 0).applyQuaternion(quat);
+      const v = vel.clone().addScaledVector(_out, outKick).addScaledVector(_up, upKick);
+      const av = new THREE.Vector3((Math.random() * 2 - 1) * 8, (Math.random() * 2 - 1) * 8, (Math.random() * 2 - 1) * 8);
+      if (node) vfx.spawnDebris(node, { vel: v, angVel: av, life: 2.4 });
+    }
     vfx.firework(pt, fwScale);
     vfx.spark(pt, color);
   }

@@ -238,6 +238,10 @@ export function createVfx(scene, camera, opts = {}) {
   // and tumble it away. NEVER dispose the geometry/material (shared with the live ship) and never touch
   // material.opacity — fade by shrinking the Object3D's scale only.
   const debrisLive = [];
+  // Wing-fracture debris pools (createDebris, one per side), attached by main once the ship is loaded.
+  // Shared by EVERY Hammerhead (player + AI allies in attract/campaign/co-op) since they share geometry —
+  // fractureWing(side, e) just re-aims a burst at the losing ship's transform.
+  let wingDebris = null;
   const _dEuler = new THREE.Euler();
   const _dQuat = new THREE.Quaternion();
   function spawnDebris(node, { vel, angVel, life = 2.0 } = {}) {
@@ -264,6 +268,15 @@ export function createVfx(scene, camera, opts = {}) {
   function clearDebris() {
     for (const d of debrisLive) scene.remove(d.obj);
     debrisLive.length = 0;
+    if (wingDebris) { wingDebris.L.reset(); wingDebris.R.reset(); }
+  }
+
+  // ---- wing fracture: the wing comes apart into chunks (replaces the intact-clone tumble) ------------
+  function attachWingDebris(pools) { wingDebris = pools; } // { L, R } createDebris instances
+  // Burst the losing side's wing chunks at the ship's live transform. `e` = { pos, obj:{quaternion}, vel }.
+  // Returns false when the pool isn't ready or quality is 'low' so the caller can fall back to spawnDebris.
+  function fractureWing(side, e) {
+    return !!(wingDebris && wingDebris[side] && wingDebris[side].burst(e, 1.0));
   }
 
   function update(dt) {
@@ -271,14 +284,16 @@ export function createVfx(scene, camera, opts = {}) {
     step(smokeLive, dt);
     stepStreaks(dt);
     stepDebris(dt);
+    if (wingDebris) { wingDebris.L.update(dt, null, null); wingDebris.R.update(dt, null, null); } // drift/spin/heat/shrink-fade (no ship-bounce needed)
     vol.update(dt);
   }
 
   function setQuality(q) {
     quality = q;
     vol.setQuality(q);
+    if (wingDebris) { wingDebris.L.setQuality(q); wingDebris.R.setQuality(q); } // 'low' -> burst no-ops -> fractureWing falls back to the intact clone
   }
   function setLoad(p) { vol.setLoad(p); } // per-frame autoscaler pressure -> trims volumetric raymarch cost
 
-  return { explosion, firework, spark, ember, smoke, spawnDebris, clearDebris, update, setQuality, setLoad, setSmokeShadows: vol.setSmokeShadows, createTrail: vol.createTrail, setOcclusion: vol.setOcclusion, updateOcclusion: vol.updateOcclusion, setHiddenForDepth: vol.setHiddenForDepth, get quality() { return quality; }, _vol: vol };
+  return { explosion, firework, spark, ember, smoke, spawnDebris, attachWingDebris, fractureWing, clearDebris, update, setQuality, setLoad, setSmokeShadows: vol.setSmokeShadows, createTrail: vol.createTrail, setOcclusion: vol.setOcclusion, updateOcclusion: vol.updateOcclusion, setHiddenForDepth: vol.setHiddenForDepth, get quality() { return quality; }, _vol: vol };
 }

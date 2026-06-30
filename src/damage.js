@@ -6,6 +6,13 @@ import * as THREE from 'three';
 // read from speedScale()); cockpit destroyed -> onEject; fuselage destroyed -> onDestroyed. Hurt
 // zones emit embers/sparks. `zones` is exposed for the HUD.
 
+// Wing collision ellipsoids (pivot-local). Exported so the wing-fracture debris clips its chunk hull to
+// the SAME volume that decides a wing is lost — "use the existing collision ellipsoids to constrain it".
+export const WING_ZONES = {
+  L: { center: [-2.00, 0.11, 1.25], radii: [1.70, 0.45, 1.00] },
+  R: { center: [2.00, 0.11, 1.25], radii: [1.70, 0.45, 1.00] },
+};
+
 export function createDamageModel(ship, opts = {}) {
   const pivot = ship.pivot;
   pivot.updateMatrixWorld(true);
@@ -21,8 +28,8 @@ export function createDamageModel(ship, opts = {}) {
   add('Cockpit', new THREE.Vector3(0.00, 0.20, -2.30), new THREE.Vector3(0.35, 0.45, 0.70), 55, 'cockpit');
   add('L Engine', new THREE.Vector3(-0.45, 0.00, 3.20), new THREE.Vector3(0.30, 0.30, 0.30), 20, 'engine'); // ~2 enemy pulses
   add('R Engine', new THREE.Vector3(0.45, 0.00, 3.20), new THREE.Vector3(0.30, 0.30, 0.30), 20, 'engine');
-  add('L Wing', new THREE.Vector3(-2.00, 0.11, 1.25), new THREE.Vector3(1.70, 0.45, 1.00), 20, 'wing');
-  add('R Wing', new THREE.Vector3(2.00, 0.11, 1.25), new THREE.Vector3(1.70, 0.45, 1.00), 20, 'wing');
+  add('L Wing', new THREE.Vector3(...WING_ZONES.L.center), new THREE.Vector3(...WING_ZONES.L.radii), 20, 'wing');
+  add('R Wing', new THREE.Vector3(...WING_ZONES.R.center), new THREE.Vector3(...WING_ZONES.R.radii), 20, 'wing');
   add('Gun', new THREE.Vector3(0.00, -0.60, -2.45), new THREE.Vector3(0.20, 0.15, 0.45), 20, 'gun'); // front; destroyed -> can't fire
   add('L Fuel', new THREE.Vector3(-1.25, -0.05, 1.05), new THREE.Vector3(0.20, 0.20, 1.30), 25, 'fuel'); // rupture -> catastrophic
   add('R Fuel', new THREE.Vector3(1.25, -0.05, 1.05), new THREE.Vector3(0.20, 0.20, 1.30), 25, 'fuel');
