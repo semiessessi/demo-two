@@ -10,6 +10,8 @@
 // Sign conventions match flight.js: pitch -1 = nose down (W), yaw +1 = yaw left (A), roll +1 = roll
 // left (Q).
 
+import { activePad, padSummary } from './gamepad.js';
+
 const DEADZONE = 0.12;
 const dz = (v) => (Math.abs(v) < DEADZONE ? 0 : v);
 const clamp1 = (v) => (v < -1 ? -1 : v > 1 ? 1 : v);
@@ -28,6 +30,15 @@ export function createInput(touchRead) {
   const onUp = (e) => keys.delete(e.code);
   window.addEventListener('keydown', onDown);
   window.addEventListener('keyup', onUp);
+  // Log a pad's id/mapping on connect — non-standard pads (Switch Pro / Joy-Con over Bluetooth, most pads in
+  // Firefox/Safari) re-index everything; the id lets us map them exactly. Console shows it on a deployed build.
+  const onGpConn = (e) => {
+    try {
+      console.log('[gamepad] connected:', padSummary(e.gamepad));
+      if (e.gamepad && e.gamepad.mapping !== 'standard') console.warn('[gamepad] NON-STANDARD mapping — buttons/axes may be mis-indexed. Menus use the left-stick + d-pad-hat fallback; report the id above to map it exactly.');
+    } catch (_) {}
+  };
+  window.addEventListener('gamepadconnected', onGpConn);
 
   const input = {
     pitch: 0,
@@ -54,11 +65,7 @@ export function createInput(touchRead) {
 
   const axisKey = (neg, pos) => (keys.has(neg) ? -1 : 0) + (keys.has(pos) ? 1 : 0);
 
-  function firstPad() {
-    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-    for (const p of pads) if (p && p.connected !== false) return p;
-    return null;
-  }
+  function firstPad() { return activePad(); } // prefer a standard-mapped pad (see gamepad.js)
 
   function poll() {
     // keyboard — WASD flies (arrows now drive the gun, not flight)
@@ -127,6 +134,7 @@ export function createInput(touchRead) {
   function dispose() {
     window.removeEventListener('keydown', onDown);
     window.removeEventListener('keyup', onUp);
+    window.removeEventListener('gamepadconnected', onGpConn);
   }
 
   return input;

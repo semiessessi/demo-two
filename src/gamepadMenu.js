@@ -5,6 +5,8 @@
 //
 // Standard-mapping button indices: 0=A 1=B 12=Up 13=Down 14=Left 15=Right. Axes: 0=LX 1=LY.
 
+import { activePad, dpad } from './gamepad.js';
+
 const FOCUSABLE = 'button:not([disabled]), input[type=range], input[type=text], input[type=color]';
 
 let styleInjected = false;
@@ -51,12 +53,6 @@ export function createGamepadMenu({ onFirstButton } = {}) {
     setFocus((idx + delta + items.length) % items.length);
   }
 
-  function activePad() {
-    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-    for (const p of pads) if (p && p.connected) return p;
-    return null;
-  }
-
   function poll(dt) {
     const p = activePad();
     if (!p) return;
@@ -76,10 +72,11 @@ export function createGamepadMenu({ onFirstButton } = {}) {
     if (edge(0)) { const it = items[idx]; if (it && it.tagName === 'BUTTON') it.click(); } // A: activate
     if (edge(1) && onBack) onBack();                                                       // B: back
 
-    const up = down(12) || ax[1] < -0.55;
-    const dn = down(13) || ax[1] > 0.55;
-    const lf = down(14) || ax[0] < -0.55;
-    const rt = down(15) || ax[0] > 0.55;
+    const hat = dpad(p); // buttons 12-15 + hat-axis fallback (non-standard pads)
+    const up = hat.up || ax[1] < -0.55;
+    const dn = hat.dn || ax[1] > 0.55;
+    const lf = hat.lf || ax[0] < -0.55;
+    const rt = hat.rt || ax[0] > 0.55;
     repeatT -= dt;
     if (up || dn || lf || rt) {
       if (repeatT <= 0) {

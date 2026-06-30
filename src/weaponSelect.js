@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { activePad, dpad } from './gamepad.js';
 
 // In-flight WEAPON & TARGET selection HUD. A vertical STACK (the WEAPON column) navigable up/down, with a
 // TARGET column to its left and an OPTIONS column to its right. Navigated by the d-pad (12/13/14/15) or the
@@ -355,12 +356,6 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
   }
 
   // --- navigation ---
-  function activePad() {
-    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-    for (const p of pads) if (p && p.connected) return p;
-    return null;
-  }
-
   function moveCol(d) {
     const nc = col + d;
     if (nc < 0 || nc > 2) return;
@@ -393,16 +388,14 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     if (!visible) { for (const it of items) if (it.cd > 0) it.cd = 0; if (audio && audio.lockTone) audio.lockTone(null); return; }
     for (const it of items) if (it.cd > 0) it.cd = Math.max(0, it.cd - dt);
 
-    // nav intents: keyboard (-,=,[,]) OR d-pad (12/13/14/15)
+    // nav intents: keyboard (-,=,[,]) OR d-pad (buttons 12-15, or the hat-axis fallback for non-standard pads)
     const keys = input.keys;
-    const pad = activePad();
-    const pb = pad ? pad.buttons : null;
-    const pd = (i) => !!(pb && pb[i] && pb[i].pressed);
+    const dp = dpad(activePad());
     const cur = {
-      up: keys.has('Equal') || pd(12),
-      dn: keys.has('Minus') || pd(13),
-      lf: keys.has('BracketLeft') || pd(14),
-      rt: keys.has('BracketRight') || pd(15),
+      up: keys.has('Equal') || dp.up,
+      dn: keys.has('Minus') || dp.dn,
+      lf: keys.has('BracketLeft') || dp.lf,
+      rt: keys.has('BracketRight') || dp.rt,
     };
     // column moves: edge only
     if (cur.lf && !prevNav.lf) moveCol(-1);
