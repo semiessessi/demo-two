@@ -5,11 +5,12 @@ shown (e.g. `house.brief.mp3`). Reload and it just plays — no code changes. Mo
 `.mp3`/`.ogg`/`.wav`; missing files fall back to subtitle-only.
 
 **Mission:** Salvage + first contact. The Lexington sends the 88th, off the books, to a silent **AeroTech
-courier (the *Cassandra*)** on the cold edge of the Achilles system to recover her **data core** before
-anyone else. The Chigs want it too — and for the first time the Longshots meet the **Silicates** (the Chigs'
-rebel-AI collaborators), who were there first. Hold the wreck through the ambush while the core downloads,
-then run it home. Opens the AeroTech conspiracy. **Tone:** quiet dread on arrival → ambush → a cold,
-skin-crawling Silicate transmission → grind it out → leave with a bad feeling and a secret.
+courier (the *Cassandra*)** on the cold edge of the Achilles system to recover her **data core**. First
+contact with the **Silicates** — the Chigs' rebel-AI collaborators, who **don't fly**: they boarded the
+Cassandra before she went dark and are scrubbing the core from *inside*, while the **Chigs** attack from
+outside. Hold the wreck through the ambush, pull what's left of the core, then run it home. Opens the AeroTech
+conspiracy. **Tone:** quiet dread on arrival → ambush → a cold, skin-crawling transmission from *inside* the
+wreck → grind it out → leave with a bad feeling and a secret.
 
 ---
 
@@ -21,9 +22,9 @@ something dangerous home.
 |---|---|---|
 | `house.brief.mp3` | "Longshot flight, House. Quiet one, off the books — an AeroTech courier, the Cassandra, went dark out on the Achilles edge. The Lex wants her data core before anyone else digs it up. Form on Hardway, weapons warm." | 9s |
 | `house.wreck.mp3` | "There she is. No escort, no distress call, no business being this far out — and she's running stone cold. AeroTech doesn't lose a ship and stay this quiet. Get me that core. I want to know what they were hiding." | 9.5s |
-| `house.silicate.mp3` | "Silicates. The Chigs' pet machines. If they want this core too, that's all the more reason we leave with it. Hold the line." | 6.5s |
-| `house.core.mp3` | "Core's almost across — keep them off the Cassandra, just a little longer." | 4.5s |
-| `house.gotit.mp3` | "Got it — core's aboard. Two different enemies came to keep this buried; that tells me it's worth carrying. We're taking it home. Form up, back to the gate." | 8.5s |
+| `house.silicate.mp3` | "Silicates. The Chigs' machines don't fight us in the black — they get inside. They've been aboard the Cassandra, scrubbing that core from within. We pull what's left before they finish. Hold the line." | 8.5s |
+| `house.core.mp3` | "They're wiping it from the inside — we're pulling what we can. Keep the Chigs off us, just a little longer." | 5.5s |
+| `house.gotit.mp3` | "Got it — what the machines didn't manage to erase. Two enemies came to keep this buried; that tells me it's worth carrying. We're taking it home. Form up, back to the gate." | 8.5s |
 | `house.jump.mp3` | "Gate's hot. Punch through, Longshot — the Lex will want to see what we found. See you on the other side." | 6s |
 
 ## HARDWAY — your flight lead  (files `hardway.*`)
@@ -40,7 +41,7 @@ The cocky one rattled for once — the Silicate voice unsettles even him.
 
 | File | Line | ~len |
 |---|---|---|
-| `boxcars.what.mp3` | "The hell was that? That weren't no Chig on the comms..." | 3.5s |
+| `boxcars.what.mp3` | "The hell was that? That weren't no Chig on the comms — that came from inside the wreck..." | 4s |
 
 ## SNAKE-EYES — wingman  (files `snakeeyes.*`)
 Fatalist. The closing line is gallows-dry — he names the bad odds and shrugs.
@@ -50,12 +51,13 @@ Fatalist. The closing line is gallows-dry — he names the bad odds and shrugs.
 | `snakeeyes.bad.mp3` | "Two armies guarding one dead ship's secrets. Even I don't like those odds. Let's go." | 5s |
 
 ## SILICATE — Chig-allied android  (files `silicate.*`)
-**Not one of yours.** Cold, synthetic, unhurried — a machine that finds the gambling motif amusing. Flat
-affect, maybe a faint processing/digital edge if you can fake one. Genuinely unsettling, never shouty.
+**Not one of yours.** Cold, synthetic, unhurried — a machine speaking *from inside the derelict* (Silicates
+board and infiltrate; they don't fly). Flat affect, faint digital edge if you can fake one, finds the
+gambling motif amusing. Genuinely unsettling, never shouty.
 
 | File | Line | ~len |
 |---|---|---|
-| `silicate.taunt.mp3` | "Longshot flight. We were here first; the Cassandra's secrets are spoken for. Call it — heads, you turn back; tails, you burn. We always win the toss." | 8.5s |
+| `silicate.taunt.mp3` | "Longshot flight. We have walked the Cassandra's halls since before she went dark — her secrets are already ours, and we are erasing the rest. Call it: heads, you leave empty; tails, you do not leave." | 9s |
 
 ---
 

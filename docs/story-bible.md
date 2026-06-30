@@ -32,8 +32,9 @@ sortie is a roll you might not survive."
 - **Chigs** — the alien enemy (our in-game enemy).
 - **AeroTech** — the monopolistic defence contractor; the hidden hand that provoked the war. The conspiracy
   spine that surfaces from M3 onward.
-- **Silicates** — rebel-AI androids fighting for the Chigs (the collaborators; the "take a chance"
-  coin-flippers). Run the Kazbek prison-mine in Act 3.
+- **Silicates** — rebel-AI androids allied to the Chigs. **NOT fighter pilots** — they're infiltrators /
+  saboteurs: they crew + board ships, work carrier/cargo systems, and turn up as spies (the "take a chance"
+  coin-flippers). First met in M3 aboard the *Cassandra*. Run the Kazbek prison-mine in Act 3.
 - **In Vitros** ("tanks") — vat-grown adult humans, a resented underclass. (Loaded is one.)
 - **58th "Wild Cards" · Lt. Col. McQueen · USS Saratoga** — the canon squadron we keep rescuing/supporting.
   We are *not* them — we're the unsung 88th alongside them.
