@@ -167,19 +167,23 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
   }
 
   // --- firing ---
+  let rearPortIdx = 0; // alternate the two rear ports so each fires at the front gun's rate
+  // Is an enemy overlapping the rear FIRING cone (the scatter cone straight back), within range? The rear
+  // gun never tracks — it always sprays straight back — so this only gates WHEN it auto-fires.
   function rearTarget() {
-    _rear.set(0, 0, 1).applyQuaternion(ship.pivot.quaternion);
+    _rear.set(0, 0, 1).applyQuaternion(ship.pivot.quaternion); // ship-local rear -> world
     const pos = ship.pivot.position;
-    let best = null, bd = Infinity;
+    const coneHalf = THREE.MathUtils.degToRad(REAR_SPREAD) * 0.5; // half-angle of the scatter cone
     for (const e of getEnemies()) {
       if (!e.alive) continue;
       _to.copy(e.pos).sub(pos);
       const d = _to.length() || 1;
       if (d > REAR_RANGE) continue;
-      if (_rear.dot(_to) / d < 0.2) continue; // not behind us
-      if (d < bd) { bd = d; best = e; }
+      const cos = _rear.dot(_to) / d;
+      if (cos <= 0) continue; // in front of us
+      if (Math.acos(Math.min(1, cos)) - (e.radius || 3) / d <= coneHalf) return e; // body overlaps the cone
     }
-    return best;
+    return null;
   }
 
   // perturb `dir` (in place) within a `deg`-degree FULL cone -> deviation is up to deg/2 off the aim
@@ -194,26 +198,24 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     dir.multiplyScalar(Math.cos(ang)).addScaledVector(_t1, Math.cos(az) * s).addScaledVector(_t2, Math.sin(az) * s).normalize();
   }
 
-  // Fire from BOTH rear muzzle ports (REAR_GUN_PORTS, pivot-local), aiming at a rear target if there is one
-  // else straight back, scattering each bolt in a REAR_SPREAD-degree cone.
+  // Rear point-defence: ALWAYS fires straight back (never tracks), scattering each bolt into a
+  // REAR_SPREAD-degree cone. The two ports alternate so each fires at the front gun's rate (combined =
+  // 2x the front gun, visibly L/R/L/R). In auto it only sprays when an enemy overlaps the rear cone.
   function fireRear(ctx, item, auto) {
     if (item.cd > 0 || item.ammo <= 0) return;
-    const tgt = rearTarget();
-    if (auto && !tgt) return; // auto only fires when something's behind us
-    const P = cannon.params; // match the front gun: fire rate + bolt speed/colour/damage/scale (keep the scatter)
+    if (auto && !rearTarget()) return; // only spray when something's actually in the cone
+    const P = cannon.params; // front-gun characteristics: bolt speed / colour / damage / scale
     const q = ship.pivot.quaternion, base = ship.pivot.position;
-    for (const port of REAR_GUN_PORTS) {
-      if (item.ammo <= 0) break;
-      _mpos.set(port.pos[0], port.pos[1], port.pos[2]).applyQuaternion(q).add(base); // pivot-local muzzle -> world
-      if (tgt) { _dir.copy(tgt.pos).sub(_mpos).normalize(); }
-      else { _dir.set(port.dir[0], port.dir[1], port.dir[2]).applyQuaternion(q).normalize(); }
-      scatterDir(_dir, REAR_SPREAD);
-      _vel.copy(_dir).multiplyScalar(P.boltSpeed);
-      if (pvel) _vel.add(pvel);
-      projectiles.spawn({ pos: _mpos, vel: _vel, color: P.color, team: 'player', damage: P.damage, life: 2.0, radius: 0.4, scale: P.boltScale });
-      item.ammo--;
-    }
-    item.cd = 1 / P.fireRate;
+    const port = REAR_GUN_PORTS[rearPortIdx % REAR_GUN_PORTS.length]; // alternate ports each shot
+    rearPortIdx++;
+    _mpos.set(port.pos[0], port.pos[1], port.pos[2]).applyQuaternion(q).add(base); // pivot-local muzzle -> world
+    _dir.set(port.dir[0], port.dir[1], port.dir[2]).applyQuaternion(q).normalize(); // straight back
+    scatterDir(_dir, REAR_SPREAD); // random scatter into the cone
+    _vel.copy(_dir).multiplyScalar(P.boltSpeed);
+    if (pvel) _vel.add(pvel);
+    projectiles.spawn({ pos: _mpos, vel: _vel, color: P.color, team: 'player', damage: P.damage, life: 2.0, radius: 0.4, scale: P.boltScale });
+    item.ammo--;
+    item.cd = 1 / (P.fireRate * REAR_GUN_PORTS.length); // both ports together fire at 2x the front gun's rate
   }
 
   function fireMissile(ctx, item) {

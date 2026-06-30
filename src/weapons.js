@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FRONT_GUN } from './frontGun.js';
 
 // Player front cannon. Fires while input.fire (Space / right trigger) is held: rate-limited white
 // tracers from the gun exit, inheriting ship velocity, with a muzzle flare.
@@ -16,9 +17,9 @@ function flashTexture() {
   cv.width = cv.height = s;
   const ctx = cv.getContext('2d');
   const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-  g.addColorStop(0.0, 'rgba(255,250,210,1)');
-  g.addColorStop(0.4, 'rgba(255,200,90,0.7)');
-  g.addColorStop(1.0, 'rgba(255,140,40,0)');
+  g.addColorStop(0.0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.4, 'rgba(255,255,255,0.7)');
+  g.addColorStop(1.0, 'rgba(255,255,255,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, s, s);
   const t = new THREE.CanvasTexture(cv);
@@ -84,15 +85,16 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
   const aimDir = new THREE.Vector3(0, 0, -1);
 
   const flash = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: flashTexture(), color: 0xffe6a0, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
+    new THREE.SpriteMaterial({ map: flashTexture(), color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
   );
   flash.visible = false;
   flash.frustumCulled = false;
   scene.add(flash);
 
   function muzzle() {
-    muzzleLocal.set(params.muzzle.x, params.muzzle.y, params.muzzle.z);
-    return muzzleWorld.copy(muzzleLocal).applyQuaternion(ship.pivot.quaternion).add(ship.pivot.position);
+    // gun mount (ship-local) -> world, then out along the aimed barrel to the tip (flash + bolts spawn here)
+    muzzleLocal.set(FRONT_GUN.mount[0], FRONT_GUN.mount[1], FRONT_GUN.mount[2]);
+    return muzzleWorld.copy(muzzleLocal).applyQuaternion(ship.pivot.quaternion).add(ship.pivot.position).addScaledVector(aimDir, FRONT_GUN.barrel);
   }
 
   const selInv = new THREE.Quaternion();
@@ -273,6 +275,8 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
     setTarget,     // (e) pin a specific target
     get ammo() { return rounds; },
     reload() { rounds = params.ammo; }, // refill to full (new launch)
+    get gimbalYaw() { return gimbalYaw; }, //   the gun mesh (frontGun) pivots by these to match aimDir
+    get gimbalPitch() { return gimbalPitch; },
     get aimDir() {
       return aimDir;
     },
