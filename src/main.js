@@ -706,7 +706,7 @@ async function init() {
   });
   if (ATTRACT) {
     // attract mode: build the cinematic AI-vs-AI dogfight instead of the player combat stack.
-    attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting, rcs });
+    attract = createAttract(scene, camera, { ship, thrusters, chigKit, enemyMgr, projectiles, vfx, debris, lighting, rcs, rcsLights: IS_MOBILE ? 0 : 1 });
     combat.setFriendlies(attract.friendlies); // enemy bolts route to whichever ally ship they hit
   } else {
   damage = createDamageModel(ship);
