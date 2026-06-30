@@ -70,7 +70,7 @@ float vnoise(vec3 x) {
              mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
                  mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
 }
-float fbm5(vec3 p) { float v=0.0,a=0.5; for(int i=0;i<6;i++){ if(i>=uOctaves) break; v+=a*vnoise(p); p*=2.02; a*=0.5; } return v; } // octave count tier-scaled via uOctaves
+float fbm5(vec3 p) { float v=0.0,a=0.5; for(int i=0;i<7;i++){ if(i>=uOctaves) break; v+=a*vnoise(p); p*=2.02; a*=0.5; } return v; } // octave count tier-scaled via uOctaves (cap 7 -> extra fine detail on capable GPUs)
 float fbm3(vec3 p) { float v=0.0,a=0.5; for(int i=0;i<3;i++){ v+=a*vnoise(p); p*=2.02; a*=0.5; } return v; }
 
 const int MAX_STEPS = 80;
@@ -159,9 +159,11 @@ void main() {
       }
       vec3 smoke = uColSmoke * (uAmbient + uLightColor * lit);
       smoke *= 1.0 - 0.55 * exp(-d * 3.0); // Beer-Powder: darker thin edges
-      if (uCoreDark > 0.001) { // sooty dark cores: dense regions go near-black, broken into wispy filaments (occluding black)
-        float soot = clamp(d * uCoreDark, 0.0, 1.0) * (0.35 + 0.65 * vnoise((p / uRadius) * uCoreNoise + vec3(uSeed * 1.7)));
-        smoke *= 1.0 - 0.8 * soot;
+      if (uCoreDark > 0.001) { // sooty BLACK filaments + larger patches breaking up the flat grey (occluding black)
+        float fil = 0.62 * vnoise((p / uRadius) * uCoreNoise + vec3(uSeed * 1.7))
+                  + 0.38 * vnoise((p / uRadius) * (uCoreNoise * 0.34) + vec3(uSeed * 2.3)); // fine filaments mixed with bigger blobs
+        float soot = clamp(d * uCoreDark, 0.0, 1.0) * (0.15 + 0.85 * fil);
+        smoke *= 1.0 - 0.92 * soot; // drive sooty regions toward near-black
       }
 
       // --- fire: temperature field -> blackbody emission (only when uEmissive > 0) ---
@@ -320,9 +322,9 @@ export function createVolumetrics(scene, camera, opts = {}) {
     const u = s.mat.uniforms;
     u.uCenter.value.copy(cpos);
     u.uSeed.value = s.seed;
-    u.uNoiseScale.value = 3.0; // higher frequency -> finer detail
-    u.uCoreDark.value = 0.6;   // sooty dark cores in the smoke (fire emission glows on top while hot)
-    u.uCoreNoise.value = 6.0;
+    u.uNoiseScale.value = 3.6; // higher frequency -> finer detail
+    u.uCoreDark.value = 1.0;   // sooty BLACK cores in the smoke (fire emission glows on top while hot)
+    u.uCoreNoise.value = 7.5;
     u.uDrift.value = 0.5;
     u.uColSmoke.value.copy(COL.explSmoke);
     u.uBlobCount.value = 0;
@@ -332,6 +334,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
   }
 
   function explosion(pos, scale = 1) {
+    scale *= 0.7; // explosions dialled to 70% so the surrounding detail (debris, smoke filaments) reads through
     configExpl(pick(explPool), pos, scale); // primary fireball
     if (quality !== 'low') {
       // satellite lobes -> a richer, lumpier blast
@@ -361,9 +364,9 @@ export function createVolumetrics(scene, camera, opts = {}) {
     const u = s.mat.uniforms;
     u.uCenter.value.copy(pos);
     u.uSeed.value = s.seed;
-    u.uNoiseScale.value = 3.4; // higher frequency -> finer smoke detail
-    u.uCoreDark.value = 1.0;   // strong sooty dark cores -> rich, occluding smoke
-    u.uCoreNoise.value = 7.5;
+    u.uNoiseScale.value = 4.2; // higher frequency -> finer smoke detail
+    u.uCoreDark.value = 1.4;   // strong sooty BLACK cores -> rich, occluding, non-flat smoke
+    u.uCoreNoise.value = 9.5;
     u.uDrift.value = 0.35;
     u.uColSmoke.value.copy(COL.trailSmoke);
     const nb = opts.blobs ?? 3;
@@ -382,14 +385,16 @@ export function createVolumetrics(scene, camera, opts = {}) {
     s.age += dt;
     if (s.age >= s.maxLife) { retire(s); return; }
     const age = s.age;
-    const grow = 0.25 + 0.75 * (1 - Math.exp(-age * 6));
+    const k = age / s.maxLife;
+    const grow = 0.25 + 0.68 * (1 - Math.exp(-age * 6)) + 0.3 * k; // fast bloom, then keep billowing outward as it dissipates
     const cur = s.baseScale * grow;
     s.mesh.scale.setScalar(cur);
     s.mesh.position.addScaledVector(s.drift, dt);
     const u = s.mat.uniforms;
     u.uCenter.value.copy(s.mesh.position);
     u.uRadius.value = cur * 0.78;
-    u.uDensity.value = 1.7 * Math.exp(-age * 1.2) * tunable.densityMul;
+    const fadeOut = 1 - THREE.MathUtils.smoothstep(k, 0.6, 1.0); // thin to nothing by end-of-life so it doesn't pop out
+    u.uDensity.value = 1.7 * Math.exp(-age * 1.2) * fadeOut * tunable.densityMul;
     u.uEmissive.value = Math.max(0, 1.25 - age / 0.5); // white-hot core flash, then cools to thick smoke
     u.uSigma.value = tunable.fireSigma;
     u.uTime.value = elapsed;
@@ -410,7 +415,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
     s.age += dt;
     if (s.age >= s.maxLife) { retire(s); return; }
     const k = s.age / s.maxLife;
-    const grow = 0.6 + 0.7 * (1 - Math.exp(-s.age * 1.6));
+    const grow = 0.55 + 0.8 * (1 - Math.exp(-s.age * 1.5)) + 0.6 * k; // keep billowing outward through life -> expands as it fades (no pop-out)
     const cur = s.baseScale * grow;
     s.mesh.scale.setScalar(cur);
     s.mesh.position.addScaledVector(s.drift, dt);
@@ -418,7 +423,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
     u.uCenter.value.copy(s.mesh.position);
     u.uRadius.value = cur * 0.78;
     const fadeIn = THREE.MathUtils.smoothstep(k, 0, 0.1);
-    const fadeOut = 1 - THREE.MathUtils.smoothstep(k, 0.7, 1.0);
+    const fadeOut = 1 - THREE.MathUtils.smoothstep(k, 0.5, 1.0); // gentle, early thin-out so it dissipates as it grows
     u.uDensity.value = 1.15 * s.densMul * fadeIn * fadeOut * tunable.densityMul;
     u.uEmissive.value = 0; // pure smoke
     u.uSigma.value = tunable.smokeSigma;
