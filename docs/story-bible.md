@@ -49,7 +49,8 @@ sortie is a roll you might not survive."
 - **M1 "Shakedown"** — Groombridge 34 recon sweep; the system is empty; flash traffic: the 58th has been
   bounced hard at the Belt and is going under; scrub the recon, jump to help. *(Built, on master.)*
 - **M2 "Battle of the Belt"** — arrive as the **rescuers**: clear the Chig swarm off the Wild Cards before
-  they're wiped out. The pilot's climactic battle, from our side. *(Built; reframed as the rescue.)*
+  they're wiped out, while behind the furball FOUR human carriers missile TWO Chig battleships to death.
+  The pilot's climactic battle, from our side. *(Built; reframed as the rescue. Capital-ship set-piece TBD.)*
 - **M3 "Dead Man's Hand"** — salvage on the Achilles outer edge: recover the data core from a silent
   **AeroTech** courier (the *Cassandra*) under a Chig ambush, and meet the **Silicates** for the first time
   (they were there first). Opens the AeroTech conspiracy thread; introduces the `silicate` speaker. *(Built,
@@ -68,13 +69,19 @@ sortie is a roll you might not survive."
 
 ## Production notes
 
-- **Capital ships** — built from a CC BY-NC-SA Saratoga STL (alpokemon / orig. Katase, Thingiverse
-  [#1889381](https://www.thingiverse.com/thing:1889381); **attribution required, non-commercial only**).
-  One mesh serves every carrier. Three roles for the same asset:
-  - *Set-dressing* — a carrier looming in the attract/skirmish backdrop.
-  - *Story combatant* — the **Lexington** fights alongside us in the campaign.
-  - *Skirmish refuel/reload point* — its carrier name is randomised from a pool of historic US carriers
-    (Saratoga, Lexington, Ranger, Yorktown, Hornet, Belleau Wood, …).
+- **Capital ships** — two assets, both shaded procedurally in-engine (no textures); the look is dialled in
+  the **ship-preview** dev tool (`/ship-preview`):
+  - *Human carriers* — a CC BY-NC-SA Saratoga STL (alpokemon / orig. Katase, Thingiverse
+    [#1889381](https://www.thingiverse.com/thing:1889381); **attribution required, non-commercial only**).
+    One mesh serves every carrier. Roles: set-dressing; story combatant (the **Lexington**); and a skirmish
+    refuel/reload point whose name is randomised from historic US carriers (Saratoga, Lexington, Ranger,
+    Yorktown, Hornet, Belleau Wood, …).
+  - *Chig battleship* — `assets-src/source/chig-battleship.fbx`; dark-green hull + a glowing hex/triangle
+    grid (hexagons split into six triangles) with recessed seams + a cyan noise core band that tilts up at
+    the angled front. **In-game scale: ~30× the Chig fighter's height** (capital-ship presence — apply when
+    integrating). Roles: the **Battle of the Belt** set-piece (TWO of them, missiled to death by FOUR
+    human carriers while the 88th saves the 58th); a **fighter source** in later missions; and in
+    **skirmish**, warps in after wave 3 to spawn fighters.
 - Campaign is gated behind **`?singleplayer`**.
 - Per-mission **VO scripts** live in `public/vo/<missionId>/README.md`; the user records the lines, drops
   them in, and they play (subtitle-only until then).
