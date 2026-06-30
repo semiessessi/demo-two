@@ -49,9 +49,12 @@ sortie is a roll you might not survive."
   bounced hard at the Belt and is going under; scrub the recon, jump to help. *(Built, on master.)*
 - **M2 "Battle of the Belt"** — arrive as the **rescuers**: clear the Chig swarm off the Wild Cards before
   they're wiped out. The pilot's climactic battle, from our side. *(Built; reframed as the rescue.)*
-- **M3+** — TBD (decide after testing M2). The bible's later beats to draw on: Salvage, Escort (first
-  Silicate contact), the costly Proxima set-piece, a Silicate-run prison-mine rescue (Kazbek), a named
-  enemy ace, the AeroTech cover-up reveal.
+- **M3 "Dead Man's Hand"** — salvage on the Achilles outer edge: recover the data core from a silent
+  **AeroTech** courier (the *Cassandra*) under a Chig ambush, and meet the **Silicates** for the first time
+  (they were there first). Opens the AeroTech conspiracy thread; introduces the `silicate` speaker. *(Built,
+  gated `?singleplayer`.)*
+- **M4+** — TBD. Beats to draw on: Escort (protect a hauler), the costly Proxima set-piece, a Silicate-run
+  prison-mine rescue (Kazbek), a named enemy ace, the AeroTech cover-up reveal.
 
 ## Production notes
 
@@ -70,7 +73,7 @@ sortie is a roll you might not survive."
 
 ## Open decisions / TODO
 
-- **M3 direction** — after the user tests M2.
-- **Missile firing** as a real weapon (cosmetic today) — needed for later combat + a named-ace duel.
+- **M4 direction** — after M3 lands (Escort / Proxima / Kazbek candidates above).
+- **Missiles are real now** (3s lock + homing, top-down weapon HUD) — the named-ace duel can use them.
 - Develop the reserve cast (Push / Loaded / Natural) + the In Vitro / AeroTech threads.
 - Optional M2 polish: actual battered 58th ships to escort/protect during the rescue.

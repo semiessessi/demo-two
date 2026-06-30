@@ -3,8 +3,9 @@
 
 import { m1 } from './m1-shakedown.js';
 import { m2 } from './m2-belt.js';
+import { m3 } from './m3-deadmanshand.js';
 
-export const MISSIONS = [m1, m2];
+export const MISSIONS = [m1, m2, m3];
 
 export const byId = (id) => MISSIONS.find((m) => m.id === id) || null;
 
