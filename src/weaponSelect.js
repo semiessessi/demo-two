@@ -122,7 +122,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
       key: 'rear', label: 'REAR CANNON', type: 'rear', modeIdx: 0, cd: 0, ammo: REAR_AMMO, // default Auto (rear point-defence)
       options: [{ label: 'Auto-fire', kind: 'mode' }, { label: 'Manual-fire', kind: 'mode' }],
       autoTick(ctx) { if (this.modeIdx === 0) fireRear(ctx, this, true); },
-      activate(ctx, ev) { if (ev.held) fireRear(ctx, this, false); },
+      activate(ctx, ev) { if (ev.held && this.modeIdx !== 0) fireRear(ctx, this, false); }, // manual mode only (auto handled by autoTick) -> fireRear called once/frame
     });
     // 3) Missiles, grouped by type (pairs hold 2 each; LR holds 1).
     const mp = countMounts('missile-pair'), lr = countMounts('lr-missile');
@@ -201,21 +201,30 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
   // Rear point-defence: ALWAYS fires straight back (never tracks), scattering each bolt into a
   // REAR_SPREAD-degree cone. The two ports alternate so each fires at the front gun's rate (combined =
   // 2x the front gun, visibly L/R/L/R). In auto it only sprays when an enemy overlaps the rear cone.
+  // Own subframe cooldown (item.rcd) — the combined rate (> frame rate at the 3x gun rate) would cap at
+  // one bolt/frame on the clamped shared item.cd. fireRear is called once/frame (auto XOR manual mode).
   function fireRear(ctx, item, auto) {
-    if (item.cd > 0 || item.ammo <= 0) return;
-    if (auto && !rearTarget()) return; // only spray when something's actually in the cone
+    if (item.ammo <= 0) return;
+    item.rcd = (item.rcd || 0) - (ctx.dt || 0);
+    if (auto && !rearTarget()) { if (item.rcd < 0) item.rcd = 0; return; } // nothing in the cone -> don't bank shots
     const P = cannon.params; // front-gun characteristics: bolt speed / colour / damage / scale
+    const interval = 1 / (P.fireRate * REAR_GUN_PORTS.length); // combined = ports x the front gun's rate
     const q = ship.pivot.quaternion, base = ship.pivot.position;
-    const port = REAR_GUN_PORTS[rearPortIdx % REAR_GUN_PORTS.length]; // alternate ports each shot
-    rearPortIdx++;
-    _mpos.set(port.pos[0], port.pos[1], port.pos[2]).applyQuaternion(q).add(base); // pivot-local muzzle -> world
-    _dir.set(port.dir[0], port.dir[1], port.dir[2]).applyQuaternion(q).normalize(); // straight back
-    scatterDir(_dir, REAR_SPREAD); // random scatter into the cone
-    _vel.copy(_dir).multiplyScalar(P.boltSpeed);
-    if (pvel) _vel.add(pvel);
-    projectiles.spawn({ pos: _mpos, vel: _vel, color: P.color, team: 'player', damage: P.damage, life: 2.0, radius: 0.4, scale: P.boltScale });
-    item.ammo--;
-    item.cd = 1 / (P.fireRate * REAR_GUN_PORTS.length); // both ports together fire at 2x the front gun's rate
+    while (item.rcd <= 0 && item.ammo > 0) {
+      const age = -item.rcd; // sub-frame age -> spaces same-frame bolts into a stream
+      item.rcd += interval;
+      const port = REAR_GUN_PORTS[rearPortIdx % REAR_GUN_PORTS.length]; // alternate ports each shot
+      rearPortIdx++;
+      _mpos.set(port.pos[0], port.pos[1], port.pos[2]).applyQuaternion(q).add(base); // pivot-local muzzle -> world
+      _dir.set(port.dir[0], port.dir[1], port.dir[2]).applyQuaternion(q).normalize(); // straight back
+      scatterDir(_dir, REAR_SPREAD); // random scatter into the cone
+      _vel.copy(_dir).multiplyScalar(P.boltSpeed);
+      if (pvel) _vel.add(pvel);
+      _mpos.addScaledVector(_vel, age); // advance by the sub-frame age
+      projectiles.spawn({ pos: _mpos, vel: _vel, color: P.color, team: 'player', damage: P.damage, life: 2.0, radius: 0.4, scale: P.boltScale });
+      item.ammo--;
+    }
+    if (item.rcd < 0) item.rcd = 0;
   }
 
   function fireMissile(ctx, item) {
