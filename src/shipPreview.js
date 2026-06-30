@@ -58,16 +58,20 @@ const chigUniforms = {
   uLine: { value: new THREE.Color(0x35e0ff) },      // glowing triangle-edge lines (cyan)
   uBandColor: { value: new THREE.Color(0x40e8ff) }, // cyan core band
   uLightDir: { value: new THREE.Vector3(6, 8, 4).normalize() },
-  uCell: { value: 14.0 },        // grid frequency (cells across the model)
-  uVStretch: { value: 0.5 },     // <1 = triangles stretched TALL
-  uLineW: { value: 0.06 },       // glowing line thickness
-  uGlow: { value: 1.6 },         // emissive strength of the lines
-  uNoiseScale: { value: 5.0 },   // band noise frequency
+  uCell: { value: 4.0 },         // grid frequency (cells across the model)
+  uVStretch: { value: 0.35 },    // <1 = triangles stretched TALL
+  uLineW: { value: 0.14 },       // glowing line thickness
+  uGlow: { value: 1.1 },         // emissive strength of the lines
+  uNoiseScale: { value: 18.0 },  // band noise frequency
   uBandCenter: { value: 0.0 },   // band position along uBandAxis (normalised object coords)
-  uBandW: { value: 0.3 },        // band half-extent (narrow slice across the middle)
-  uBandSoft: { value: 0.12 },    // band edge softness
+  uBandW: { value: 0.0 },        // band half-extent (0 = pure soft falloff)
+  uBandSoft: { value: 0.66 },    // band edge softness
   uProjAxis: { value: 0 },       // 0=X (left/right), 1=Y, 2=Z
   uBandAxis: { value: 1 },       // axis the central band runs across
+  uBandTilt: { value: 0.0 },     // raise the band toward the front (where the hull angles up)
+  uTiltAxis: { value: 2 },       // front/length axis (0=X, 1=Y, 2=Z)
+  uTiltStart: { value: 1.0 },    // along uTiltAxis: where the rise begins
+  uTiltSpan: { value: 2.0 },     // range over which it rises (negative -> rise toward the other end)
 };
 
 const CHIG_VERT = /* glsl */`
@@ -81,20 +85,31 @@ const CHIG_VERT = /* glsl */`
 const CHIG_FRAG = /* glsl */`
   precision highp float;
   varying vec3 vObj; varying vec3 vN;
-  uniform float uTime, uCell, uVStretch, uLineW, uGlow, uNoiseScale, uBandCenter, uBandW, uBandSoft;
+  uniform float uTime, uCell, uVStretch, uLineW, uGlow, uNoiseScale, uBandCenter, uBandW, uBandSoft, uBandTilt, uTiltStart, uTiltSpan;
   uniform vec3 uBase, uLine, uBandColor, uLightDir;
-  uniform int uProjAxis, uBandAxis;
+  uniform int uProjAxis, uBandAxis, uTiltAxis;
   float hash(vec3 p){ p=fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
   float vnoise(vec3 x){ vec3 i=floor(x),f=fract(x); f=f*f*(3.0-2.0*f);
     return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
                mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z); }
   float fbm(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<4;i++){ v+=a*vnoise(p); p*=2.03; a*=0.5; } return v; }
-  // equilateral triangular grid: three line families 60deg apart -> distance to nearest line (0 on a line)
+  // HEXAGONAL tiling, each hex split into SIX triangles by spokes from its corners to its centre.
+  // Returns the distance to the nearest line — hex border OR centre spoke — so the glow draws both.
+  float hexD(vec2 p){ p = abs(p); return max(dot(p, vec2(0.5, 0.8660254)), p.x); } // 0 at centre, 0.5 at edge
+  vec2 hexLocal(vec2 uv){
+    vec2 r = vec2(1.0, 1.7320508);
+    vec2 a = mod(uv, r) - r * 0.5;
+    vec2 b = mod(uv - r * 0.5, r) - r * 0.5;
+    return dot(a, a) < dot(b, b) ? a : b; // local coords, hex centre at origin
+  }
   float gridEdge(vec2 p){
-    float a = abs(fract(p.x) - 0.5);
-    float b = abs(fract(dot(p, vec2(0.5, 0.8660254))) - 0.5);
-    float c = abs(fract(dot(p, vec2(-0.5, 0.8660254))) - 0.5);
-    return min(min(a,b),c);
+    vec2 gv = hexLocal(p);
+    float edge = 0.5 - hexD(gv);                                   // 0 on the hexagon border
+    float ang = atan(gv.y, gv.x);                                  // 6 spokes hit the corners (30deg + k*60deg)
+    float k = floor((ang - 0.5235988) / 1.0471976 + 0.5);
+    float aDiff = ang - (0.5235988 + k * 1.0471976);
+    float spoke = length(gv) * abs(sin(aDiff));                    // perp distance to the nearest centre->corner spoke
+    return min(edge, spoke);
   }
   void main(){
     // side projection: the grid is painted from one axis (default X = left/right)
@@ -108,9 +123,13 @@ const CHIG_FRAG = /* glsl */`
     col *= 0.22 + 0.95 * ndl;                            // hull shading
     col += uLine * line * uGlow;                         // emissive triangle grid
 
-    // bright cyan, noise-modulated band across the central ("cuboid") section
+    // bright cyan, noise-modulated band across the central ("cuboid") section. The centreline can TILT up
+    // toward the front (along uTiltAxis) so it follows where the hull changes angle.
     float bc = uBandAxis == 0 ? vObj.x : (uBandAxis == 1 ? vObj.y : vObj.z);
-    float band = 1.0 - smoothstep(uBandW, uBandW + uBandSoft, abs(bc - uBandCenter));
+    float fa = uTiltAxis == 0 ? vObj.x : (uTiltAxis == 1 ? vObj.y : vObj.z);
+    float tt = clamp((fa - uTiltStart) / uTiltSpan, 0.0, 1.0);
+    float center = uBandCenter + uBandTilt * (tt * tt * (3.0 - 2.0 * tt)); // smooth rise toward the front
+    float band = 1.0 - smoothstep(uBandW, uBandW + uBandSoft, abs(bc - center));
     if (band > 0.001) {
       float nz = fbm(vObj * uNoiseScale + vec3(0.0, uTime * 0.35, 0.0));
       vec3 bandCol = uBandColor * (0.45 + 1.5 * nz);
@@ -213,7 +232,11 @@ bf.add(chigUniforms.uBandAxis, 'value', { 'X': 0, 'Y': 1, 'Z': 2 }).name('Band a
 bf.add(chigUniforms.uBandCenter, 'value', -6, 6, 0.05).name('Band center');
 bf.add(chigUniforms.uBandW, 'value', 0, 5, 0.05).name('Band width');
 bf.add(chigUniforms.uBandSoft, 'value', 0.01, 3, 0.05).name('Band softness');
-bf.add(chigUniforms.uNoiseScale, 'value', 0.5, 20, 0.5).name('Noise scale');
+bf.add(chigUniforms.uNoiseScale, 'value', 0.5, 40, 0.5).name('Noise scale');
+bf.add(chigUniforms.uBandTilt, 'value', -4, 4, 0.05).name('Front tilt');
+bf.add(chigUniforms.uTiltAxis, 'value', { 'X': 0, 'Y': 1, 'Z': 2 }).name('Tilt/front axis');
+bf.add(chigUniforms.uTiltStart, 'value', -6, 6, 0.05).name('Tilt start');
+bf.add(chigUniforms.uTiltSpan, 'value', -6, 6, 0.05).name('Tilt span');
 
 // ---------------------------------------------------------------------------
 window.addEventListener('resize', () => {
