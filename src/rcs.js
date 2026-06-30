@@ -66,7 +66,7 @@ export function createRcs(scene, ship, ports = RCS_PORTS, opts = {}) {
   // Optional REAL local point lights (opts.lights = pool size). A small pool that hops to the strongest-
   // firing jets each frame so the hull genuinely lights up — without one-light-per-jet cost. Parented to
   // the ship-local group so they move with it (no per-frame world transform); parked at intensity 0 idle.
-  const RCS_LIGHT_PEAK = 22;
+  const RCS_LIGHT_PEAK = 11; // halved (was 22)
   const rcsLights = [];
   for (let i = 0; i < (opts.lights || 0); i++) {
     const pl = new THREE.PointLight(0xbfe0ff, 0, ship.radius * 1.6, 2); // cool-white, short range, no shadow

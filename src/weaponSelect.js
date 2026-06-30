@@ -62,7 +62,21 @@ export const REAR_GUN_PORTS = [
   { name: 'Rear Gun R', pos: [-0.15, 0.5, 1.85], dir: [0, 0, 1] },
 ];
 
-export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemies, settings, applyLoadout, vfx, audio } = {}) {
+let _flashTex = null;
+function flashTex() {
+  if (_flashTex) return _flashTex;
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.4, 'rgba(255,255,255,0.6)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  _flashTex = new THREE.CanvasTexture(c); _flashTex.colorSpace = THREE.SRGBColorSpace;
+  return _flashTex;
+}
+
+export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemies, settings, applyLoadout, vfx, audio, lighting } = {}) {
   injectStyle();
 
   // --- state ---
@@ -102,6 +116,33 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     return m;
   }
   function releaseMissileBody(m) { if (!m) return; m.visible = false; missilePool.push(m); }
+  const _flashPos = new THREE.Vector3();
+
+  // rear muzzle flash: a small additive sprite pool at the rear ports, plus a real light via lighting.muzzleFlashRear
+  const REAR_FLASH_TIME = 0.06;
+  const rearFlashes = [];
+  for (let i = 0; i < 3; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTex(), color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 }));
+    s.frustumCulled = false; s.visible = false;
+    if (scene) scene.add(s);
+    rearFlashes.push({ s, life: 0 });
+  }
+  let rearFlashRR = 0;
+  function rearMuzzleFlash(pos) {
+    const fl = rearFlashes[(rearFlashRR = (rearFlashRR + 1) % rearFlashes.length)];
+    fl.s.position.copy(pos); fl.life = REAR_FLASH_TIME; fl.s.visible = true;
+    if (lighting && lighting.muzzleFlashRear) lighting.muzzleFlashRear(pos); // real point-light pulse at the tail
+  }
+  function decayRearFlashes(dt) {
+    for (const fl of rearFlashes) {
+      if (fl.life <= 0) continue;
+      fl.life -= dt;
+      const f = Math.max(0, fl.life / REAR_FLASH_TIME);
+      fl.s.scale.setScalar(0.4 + 0.6 * f); // match the front gun's (shrunk) flash size
+      fl.s.material.opacity = f;
+      if (fl.life <= 0) fl.s.visible = false;
+    }
+  }
 
   // --- DOM ---
   const root = el('div', '', document.body);
@@ -231,6 +272,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     const P = cannon.params; // front-gun characteristics: bolt speed / colour / damage / scale
     const interval = 1 / (P.fireRate * REAR_GUN_PORTS.length); // combined = ports x the front gun's rate
     const q = ship.pivot.quaternion, base = ship.pivot.position;
+    let fired = false;
     while (item.rcd <= 0 && item.ammo > 0) {
       const age = -item.rcd; // sub-frame age -> spaces same-frame bolts into a stream
       item.rcd += interval;
@@ -241,11 +283,14 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
       scatterDir(_dir, REAR_SPREAD); // random scatter into the cone
       _vel.copy(_dir).multiplyScalar(P.boltSpeed);
       if (pvel) _vel.add(pvel);
+      _flashPos.copy(_mpos); // muzzle (un-aged) -> flash + light
       _mpos.addScaledVector(_vel, age); // advance by the sub-frame age
       projectiles.spawn({ pos: _mpos, vel: _vel, color: P.color, team: 'player', damage: P.damage, life: 2.0, radius: 0.4, scale: P.boltScale });
       item.ammo--;
+      fired = true;
     }
     if (item.rcd < 0) item.rcd = 0;
+    if (fired) rearMuzzleFlash(_flashPos); // one flash + light per frame, at the last port fired
   }
 
   function fireMissile(ctx, item) {
@@ -402,6 +447,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     if (fuel > 0) fuel = Math.max(0, fuel - CRUISE_BURN * dt); // cruise consumption (boost adds BOOST_BURN on top)
 
     updateMissiles(dt);
+    decayRearFlashes(dt);
     render();
   }
 

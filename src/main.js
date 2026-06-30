@@ -721,7 +721,7 @@ async function init() {
   weaponSelect = createWeaponSelect({
     scene, ship, projectiles, cannon,
     getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
-    settings, applyLoadout, vfx, audio,
+    settings, applyLoadout, vfx, audio, lighting,
   });
   weaponHud = createWeaponHud(); // top-down craft readout driven by weaponSelect.getHudState()
   // ?skirmish -> return to the menu after a mission; default -> drop straight back into flight.

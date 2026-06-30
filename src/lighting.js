@@ -184,23 +184,33 @@ export function createLighting(scene, camera, renderer, opts = {}) {
   // 27 rounds/s with a ~60ms decay the two lights cross-fade into a steady muzzle glow that lights the
   // nose + any enemy in front. Pooled + parked at intensity 0 when idle (no shader recompiles).
   const MUZZLE_LIFE = 0.06;
-  const muzzleParams = { color: 0xffffff, peak: 90, distance: 55 }; // pure-white muzzle flash (sprite + light)
-  const muzzlePool = [];
-  for (let i = 0; i < 2; i++) {
-    const pl = new THREE.PointLight(muzzleParams.color, 0, muzzleParams.distance, 2);
-    pl.castShadow = false;
-    scene.add(pl);
-    muzzlePool.push({ light: pl, life: 0 });
+  const muzzleParams = { color: 0xffffff, peak: 360, distance: 55 }; // pure-white muzzle flash; light 4x (was 90), sprite shrunk to match
+  // Two pools — one at the chin (front gun), one at the tail (rear gun) — so the rear's high rate doesn't
+  // steal the front gun's lights. Each round-robins its own lights on every shot.
+  function makeMuzzlePool() {
+    const pool = [];
+    for (let i = 0; i < 2; i++) {
+      const pl = new THREE.PointLight(muzzleParams.color, 0, muzzleParams.distance, 2);
+      pl.castShadow = false;
+      scene.add(pl);
+      pool.push({ light: pl, life: 0 });
+    }
+    let rr = 0;
+    function flash(pos) {
+      rr = (rr + 1) % pool.length;
+      const m = pool[rr];
+      m.light.position.copy(pos);
+      m.light.color.set(muzzleParams.color);
+      m.light.distance = muzzleParams.distance;
+      m.life = MUZZLE_LIFE;
+    }
+    return { pool, flash };
   }
-  let muzzleRR = 0;
-  function muzzleFlash(pos) {
-    muzzleRR = (muzzleRR + 1) % muzzlePool.length;
-    const m = muzzlePool[muzzleRR];
-    m.light.position.copy(pos);
-    m.light.color.set(muzzleParams.color);
-    m.light.distance = muzzleParams.distance;
-    m.life = MUZZLE_LIFE;
-  }
+  const muzzleFront = makeMuzzlePool();
+  const muzzleRear = makeMuzzlePool();
+  const muzzleFlash = muzzleFront.flash;
+  const muzzleFlashRear = muzzleRear.flash;
+  const allMuzzle = muzzleFront.pool.concat(muzzleRear.pool);
 
   // --- transient shadow spotlights (proximity: shots / engines that get close to a ship) -----------
   // A small pool of shadow-capable SpotLights re-aimed each frame at the highest-priority emitter->ship
@@ -322,8 +332,8 @@ export function createLighting(scene, camera, renderer, opts = {}) {
     const ti = thrusterParams.idle + (thrusterParams.peak - thrusterParams.idle) * thrust01;
     for (const pl of thrusterLights) pl.intensity = ti;
 
-    // muzzle flashes decay to nothing
-    for (const m of muzzlePool) {
+    // muzzle flashes decay to nothing (front + rear pools)
+    for (const m of allMuzzle) {
       if (m.life > 0) {
         m.life -= dt;
         m.light.intensity = muzzleParams.peak * Math.max(0, m.life / MUZZLE_LIFE);
@@ -409,6 +419,7 @@ export function createLighting(scene, camera, renderer, opts = {}) {
     setThrusterParams,
     thrusterParams,
     muzzleFlash,
+    muzzleFlashRear,
     muzzleParams,
     setTransientBudget,
     transientParams,
