@@ -106,6 +106,39 @@ export async function loadShip() {
     if (c.isMesh) c.visible = false;
   }));
 
+  // --- carve the baked-in chin gun out of the hull -------------------------------------------------
+  // The new pivoting gun (front-gun.glb) was modelled in place, so ITS bounding box marks exactly the
+  // hull region the old gun occupies. Delete every triangle whose centroid lies inside it. Done now,
+  // in the raw model/scene frame (before the recenter below) — the same frame the gun GLB lives in.
+  {
+    // The cuboid the user placed in Blender to bound the gun (Blender Z-up: a unit cube * scale at pos).
+    // Convert to the GLB's Y-up model frame: (bx, by, bz) -> (bx, bz, -by). This is the exact region the
+    // old gun occupies on the fuselage, so delete every hull triangle whose centroid lies inside it.
+    const B = { x: 0.015887, y: 5.83745, z: -1.16687, sx: 0.22, sy: 1, sz: 0.2 };
+    const cut = new THREE.Box3(
+      new THREE.Vector3(B.x - B.sx, B.z - B.sz, -(B.y + B.sy)),
+      new THREE.Vector3(B.x + B.sx, B.z + B.sz, -(B.y - B.sy)),
+    );
+    model.updateMatrixWorld(true);
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    let removed = 0;
+    model.traverse((o) => {
+      if (!o.isMesh || !o.geometry || !o.geometry.index) return;
+      const geo = o.geometry, p = geo.attributes.position, ix = geo.index.array, M = o.matrixWorld, keep = [];
+      for (let t = 0; t < ix.length; t += 3) {
+        const i0 = ix[t], i1 = ix[t + 1], i2 = ix[t + 2];
+        a.fromBufferAttribute(p, i0).applyMatrix4(M);
+        b.fromBufferAttribute(p, i1).applyMatrix4(M);
+        c.fromBufferAttribute(p, i2).applyMatrix4(M);
+        const X = (a.x + b.x + c.x) / 3, Y = (a.y + b.y + c.y) / 3, Z = (a.z + b.z + c.z) / 3;
+        if (X >= cut.min.x && X <= cut.max.x && Y >= cut.min.y && Y <= cut.max.y && Z >= cut.min.z && Z <= cut.max.z) { removed++; continue; }
+        keep.push(i0, i1, i2);
+      }
+      if (keep.length !== ix.length) { geo.setIndex(keep); geo.computeBoundingSphere(); }
+    });
+    console.log('[ship] carved baked-in gun:', removed, 'tris in', cut.min.toArray().map((v) => +v.toFixed(2)), '..', cut.max.toArray().map((v) => +v.toFixed(2)));
+  }
+
   // --- recenter + scale (from the VISIBLE ship only) ---
   const box = new THREE.Box3();
   model.traverse((o) => {
@@ -155,5 +188,5 @@ export async function loadShip() {
     rearDir.toArray().map((v) => +v.toFixed(2)),
   );
 
-  return { pivot, align, model, engineMaterials, nozzles, ordnance, rearDir, radius: TARGET_RADIUS };
+  return { pivot, align, model, engineMaterials, nozzles, ordnance, rearDir, radius: TARGET_RADIUS, center };
 }

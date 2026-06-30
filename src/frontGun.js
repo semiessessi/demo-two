@@ -22,6 +22,7 @@ const _X = new THREE.Vector3(1, 0, 0);
 
 export async function createFrontGun(ship) {
   const alignScale = (ship.align && ship.align.scale && ship.align.scale.x) || 1;
+  const center = ship.center || new THREE.Vector3(); // the ship's recenter (model is drawn at scale*(V - center))
 
   const gunMount = new THREE.Group(); // at FRONT_GUN.mount (ship-local) — the pivot point
   const gunAim = new THREE.Group(); //  rotated each frame to the cannon's aim
@@ -37,7 +38,14 @@ export async function createFrontGun(ship) {
   // push FRONT_GUN onto the live objects (on load and after any calibration edit)
   function applyConfig() {
     gunMount.position.set(FRONT_GUN.mount[0], FRONT_GUN.mount[1], FRONT_GUN.mount[2]);
-    gunHolder.position.set(FRONT_GUN.offset[0], FRONT_GUN.offset[1], FRONT_GUN.offset[2]);
+    // The mesh keeps its NATIVE model coords (cut from the hull in place). The hull is drawn at
+    // scale*(V - center), so cancel BOTH the pivot (-mount) and the ship's recenter (-scale*center)
+    // here; the gun then sits exactly where it was modelled and pivots about the mount. offset nudges.
+    gunHolder.position.set(
+      FRONT_GUN.offset[0] - FRONT_GUN.mount[0] - alignScale * center.x,
+      FRONT_GUN.offset[1] - FRONT_GUN.mount[1] - alignScale * center.y,
+      FRONT_GUN.offset[2] - FRONT_GUN.mount[2] - alignScale * center.z,
+    );
     gunHolder.rotation.set(FRONT_GUN.rest[0], FRONT_GUN.rest[1], FRONT_GUN.rest[2]);
     gunHolder.scale.setScalar(FRONT_GUN.scale * alignScale); // scale = 1 -> matches the hull's render scale
   }
@@ -56,12 +64,7 @@ export async function createFrontGun(ship) {
       o.castShadow = o.receiveShadow = false;
       o.frustumCulled = false; // tiny + always near the camera
     });
-    // re-centre the (substandard) mesh so its bounding-box centre is the local origin — the gun then
-    // shows up AT the mount on first load no matter where the FBX put its origin; offset nudges from there.
-    gunModel.updateMatrixWorld(true);
-    const ctr = new THREE.Box3().setFromObject(gunModel).getCenter(new THREE.Vector3());
-    gunModel.position.sub(ctr);
-    gunHolder.add(gunModel);
+    gunHolder.add(gunModel); // keep native model coords — placed in world by applyConfig()
     applyConfig();
   } catch (e) {
     console.warn('[frontGun] /front-gun.glb not loaded — gun not drawn (run scripts/convert-front-gun.sh)', e);
