@@ -35,7 +35,7 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
   const canFire = opts.canFire || (() => true); // false once the Gun subsystem is destroyed
   const onFire = opts.onFire || null; // (muzzleWorld) -> pulse a real muzzle-flash light
   const params = {
-    fireRate: 27,
+    fireRate: 81, // 3x (was 27); rear gun reads this too. Above the frame rate -> subframe firing below
     boltSpeed: 380,
     damage: 9,
     gimbalMax: 0.85, // yaw range (rad, ±)
@@ -243,17 +243,24 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
     aimDir.applyQuaternion(qPitch).normalize();
 
     cooldown -= dt;
-    if ((input?.fire || 0) > 0.5 && cooldown <= 0 && canFire() && rounds > 0) {
-      cooldown = 1 / params.fireRate;
+    const firing = (input?.fire || 0) > 0.5 && canFire();
+    const interval = 1 / params.fireRate;
+    let fired = false;
+    // Subframe firing: a rate above the frame rate would otherwise cap at one bolt per frame. Fire as many
+    // as the elapsed time allows, advancing each by its sub-frame age so they space into an even stream.
+    while (firing && cooldown <= 0 && rounds > 0) {
+      const age = -cooldown; // seconds ago (within this frame) this shot should have left the barrel
+      cooldown += interval;
       rounds--;
       muzzle();
       vel.copy(aimDir).multiplyScalar(params.boltSpeed);
       if (player?.vel) vel.add(player.vel);
+      muzzleWorld.addScaledVector(vel, age); // advance by the sub-frame age -> spaces same-frame shots
       projectiles.spawn({ pos: muzzleWorld, vel, color: params.color, team: 'player', damage: params.damage, life: 2.0, radius: 0.4, scale: params.boltScale });
-      flash.visible = true;
-      flashLife = FLASH_TIME;
-      if (onFire) onFire(muzzleWorld); // real muzzle-flash light pulse
+      fired = true;
     }
+    if (cooldown < 0) cooldown = 0; // idle / out of ammo -> don't bank up a burst
+    if (fired) { flash.visible = true; flashLife = FLASH_TIME; if (onFire) onFire(muzzle()); } // one flash + light per frame
 
     if (flashLife > 0) {
       flashLife -= dt;

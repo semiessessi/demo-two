@@ -22,7 +22,7 @@ const DEFAULT_TUNE = {
   turnRate: 0.85, // lazy, heavy arcs (< Chig 1.4)
   aimTurnRate: 1.6, // sharper when lined up, but still can't pivot on a dime (< Chig 2.8)
   fireRange: 220,
-  fireRate: 7, // cinematic bursts (player cannon is ~27)
+  fireRate: 21, // cinematic bursts, 3x (was 7)
   aimCone: Math.cos(0.6), // steer harder when the target is within ~34deg of the nose
   gimbalCone: Math.cos(0.42), // gun gimbal: fire when the intercept LEAD is within ~24deg (auto-track)
   boltSpeed: 380, // == weapons boltSpeed
