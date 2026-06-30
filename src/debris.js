@@ -63,7 +63,7 @@ export function collectWingHullPoints(shipRoot, zone) {
   _dInv.copy(shipRoot.matrixWorld).invert(); // mesh world -> pivot-local (pose-independent)
   const cx = zone.center[0], cy = zone.center[1], cz = zone.center[2];
   const rx = zone.radii[0], ry = zone.radii[1], rz = zone.radii[2];
-  const aileronRe = cx < 0 ? /^L_Aileron$/i : /^R_Aileron$/i;
+  const aileronRe = cx < 0 ? /^L Aileron$/i : /^R Aileron$/i;
   let aileronRoot = null;
   shipRoot.traverse((o) => { if (!aileronRoot && aileronRe.test(o.name)) aileronRoot = o; });
   const aileronMeshes = new Set();

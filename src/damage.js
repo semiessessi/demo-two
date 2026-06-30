@@ -44,14 +44,14 @@ export function createDamageModel(ship, opts = {}) {
     z.node = findNode(re); // the L_Canard / R_Canard group — hidden + cloned to debris when destroyed
     z.sparkPoint = new THREE.Vector3(sx * 0.4, -0.1, -2.7); // inboard root near the cockpit (stub sparks)
   }
-  addCanard('L Canard', /^L_Canard$/i, -1, new THREE.Vector3(-0.86, -0.12, -2.90), new THREE.Vector3(0.30, 0.15, 0.30));
-  addCanard('R Canard', /^R_Canard$/i, 1, new THREE.Vector3(0.86, -0.12, -2.90), new THREE.Vector3(0.30, 0.15, 0.30));
+  addCanard('L Canard', /^L Canard$/i, -1, new THREE.Vector3(-0.86, -0.12, -2.90), new THREE.Vector3(0.30, 0.15, 0.30));
+  addCanard('R Canard', /^R Canard$/i, 1, new THREE.Vector3(0.86, -0.12, -2.90), new THREE.Vector3(0.30, 0.15, 0.30));
 
   // Wings (the aileron surfaces): lose EITHER one and the ship tumbles out of control — the only out is
   // to eject. The node is the L_Aileron / R_Aileron group, blown off + cloned to debris on loss.
   for (const z of zones) {
-    if (z.name === 'L Wing') z.node = findNode(/^L_Aileron$/i);
-    else if (z.name === 'R Wing') z.node = findNode(/^R_Aileron$/i);
+    if (z.name === 'L Wing') z.node = findNode(/^L Aileron$/i);
+    else if (z.name === 'R Wing') z.node = findNode(/^R Aileron$/i);
   }
 
   let onEject = opts.onEject || null;
