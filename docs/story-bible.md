@@ -54,8 +54,12 @@ sortie is a roll you might not survive."
   **AeroTech** courier (the *Cassandra*) under a Chig ambush, and meet the **Silicates** for the first time
   (they were there first). Opens the AeroTech conspiracy thread; introduces the `silicate` speaker. *(Built,
   gated `?singleplayer`.)*
-- **M4+** — TBD. Beats to draw on: Escort (protect a hauler), the costly Proxima set-piece, a Silicate-run
-  prison-mine rescue (Kazbek), a named enemy ace, the AeroTech cover-up reveal.
+- **M4 "Cold Deck"** — the betrayal. The Cassandra's core decrypts to an AeroTech relay past the line
+  (Tartarus); the off-the-books strike is a **trap** — AeroTech flagged the 88th to a waiting Chig ambush to
+  bury what they know. Confirms the contractor is dealing with the enemy; the war grows a second front, at
+  our backs. *(Built, gated `?singleplayer`.)*
+- **M5+** — TBD. Beats to draw on: Escort (protect a hauler), the costly Proxima set-piece, a Silicate-run
+  prison-mine rescue (Kazbek), a named enemy ace, the AeroTech cover-up going public.
 
 ## Production notes
 
