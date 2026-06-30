@@ -58,9 +58,9 @@ const chigUniforms = {
   uLine: { value: new THREE.Color(0x35e0ff) },      // glowing triangle-edge lines (cyan)
   uBandColor: { value: new THREE.Color(0x40e8ff) }, // cyan core band
   uLightDir: { value: new THREE.Vector3(6, 8, 4).normalize() },
-  uCell: { value: 4.0 },         // grid frequency (cells across the model)
+  uCell: { value: 3.0 },         // grid frequency (cells across the model)
   uVStretch: { value: 0.35 },    // <1 = triangles stretched TALL
-  uLineW: { value: 0.03 },       // glowing line thickness
+  uLineW: { value: 0.05 },       // glowing line thickness
   uGlow: { value: 1.1 },         // emissive strength of the lines
   uNoiseScale: { value: 18.0 },  // band noise frequency
   uBandCenter: { value: 0.0 },   // band position along uBandAxis (normalised object coords)
@@ -121,6 +121,7 @@ const CHIG_FRAG = /* glsl */`
     // side projection: the grid is painted from one axis (default X = left/right)
     vec2 p = uProjAxis == 0 ? vObj.zy : (uProjAxis == 1 ? vObj.xz : vObj.xy);
     p *= uCell; p.y *= uVStretch;
+    p = vec2(p.y, -p.x);                                 // rotate 90deg before the hex skew -> the vertical lines run horizontal
     float edge = gridEdge(p);
     float line = 1.0 - smoothstep(0.0, uLineW, edge);   // glowing grid lines
 
@@ -128,7 +129,8 @@ const CHIG_FRAG = /* glsl */`
     // the grooves so the grid edges read as recesses (a live preview before they're modelled into the mesh).
     float hh = 0.05;
     vec2 grad = vec2(gridEdge(p + vec2(hh, 0.0)) - edge, gridEdge(p + vec2(0.0, hh)) - edge) / hh;
-    vec3 inPlane = uProjAxis == 0 ? vec3(0.0, grad.y, grad.x) : (uProjAxis == 1 ? vec3(grad.x, 0.0, grad.y) : vec3(grad.x, grad.y, 0.0));
+    vec2 gradP = vec2(-grad.y, grad.x);                  // un-rotate the gradient back to the projection plane
+    vec3 inPlane = uProjAxis == 0 ? vec3(0.0, gradP.y, gradP.x) : (uProjAxis == 1 ? vec3(gradP.x, 0.0, gradP.y) : vec3(gradP.x, gradP.y, 0.0));
     float wall = 1.0 - smoothstep(0.0, uLineW * 2.0, edge); // only perturb near the grooves
     vec3 N = normalize(vN - inPlane * uRecess * wall);
 
