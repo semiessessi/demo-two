@@ -188,7 +188,7 @@ export function createBlackHole(bhDir) {
       float fbm(vec2 p){ float v=0.0, a=0.5; for(int i=0;i<5;i++){ v+=a*vnoise(p); p*=2.03; a*=0.5; } return v; }
 
       // flow-map animated cube sample: the flow field perturbs the sample direction over time (two cross-faded
-      // phases), and `suck` drags it toward the hole (holeLocal) -> the nebula drifts AND gets pulled inward.
+      // phases), and the suck term drags it toward the hole (holeLocal) -> the nebula drifts AND is pulled inward.
       vec3 flowCube(vec3 dir, float amt, vec3 holeLocal, float suck){
         vec2 fl = (textureCube(uSkyFlow, dir).rg * 2.0 - 1.0) * amt;
         vec3 up = abs(dir.y) < 0.95 ? vec3(0.0,1.0,0.0) : vec3(1.0,0.0,0.0);
