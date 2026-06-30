@@ -11,5 +11,6 @@ export const CHARACTERS = {
   loaded:    { name: 'LOADED',     color: '#e08aa8' }, // a "Chip" (engineered underclass)
   natural:   { name: 'NATURAL',    color: '#8ad0c8' }, // effortless prodigy
   silicate:  { name: 'SILICATE',   color: '#9fe8e0' }, // Chig-allied rebel-AI android — cold, synthetic
+  wildcards: { name: '58TH',       color: '#a0b8d8' }, // the canon 58th "Wild Cards" (overheard radio, episode samples)
   player:    { name: 'COMEOUT',    color: '#cdd6ea' }, // the player — the new arrival
 };

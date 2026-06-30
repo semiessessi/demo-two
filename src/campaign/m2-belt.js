@@ -21,7 +21,7 @@ export const m2 = {
     location: 'JUPITER TROJANS · THE BELT',
     body: [
       "You came out of the gate into someone else's disaster. The 58th — the Wild Cards, off the Saratoga — got bounced in the Belt and they're being torn apart. The 88th is the only flight close enough to reach them.",
-      "Form up, then break and pull the Chigs off them. Their fighters are faster and climb harder, but you turn tighter and hit heavier — out-fly them, don't chase. Get the Wild Cards out alive.",
+      "We go in on radio silence — no chatter on the run-in, just the 58th's traffic over the net as we close. Form up, then break and pull the Chigs off them. Their fighters are faster and climb harder, but you turn tighter and hit heavier — out-fly them, don't chase. Get the Wild Cards out alive.",
     ],
     objectives: ['Reach the Wild Cards', 'Clear the Chigs off the 58th'],
   },
@@ -35,9 +35,12 @@ export const m2 = {
   ],
 
   script: [
+    // Radio silence on the run-in: no 88th chatter — we drop into the battle hearing only the 58th's traffic
+    // over the net (episode samples ep.* -> public/vo/m2-belt/, user-supplied). Silence breaks at contact.
     { id: 'b_open', when: { t: 1.0 },
-      do: [ { comms: 'house.arrive' }, { objective: { id: 'hold', state: 'active', label: 'Reach the Wild Cards' } }, { formation: { move: true } } ] },
-    { id: 'b_engage', when: { commsDone: 'house.arrive' },
+      do: [ { comms: 'ep.belt1' }, { objective: { id: 'hold', state: 'active', label: 'Close on the Wild Cards — radio silence' } }, { formation: { move: true } } ] },
+    { id: 'b_overheard', when: { after: 'b_open', delay: 9 }, do: [ { comms: 'ep.belt2' } ] },
+    { id: 'b_engage', when: { after: 'b_open', delay: 17 },
       do: [ { comms: 'hardway.break' }, { objective: { id: 'kill', state: 'active', label: 'Clear the Chigs off the 58th' } }, { formation: { engage: true } },
             { spawn: { count: 4, at: [180, 20, -520], heading: [0, 0, 1], difficulty: 0.3 } },
             { spawn: { count: 3, at: [-220, -10, -560], heading: [0, 0, 1], difficulty: 0.3 } } ] },
@@ -56,8 +59,11 @@ export const m2 = {
   ],
 
   lines: {
-    'house.arrive':  { speaker: 'house',     text: "Longshot flight, House. The Wild Cards are down in the rocks, swarmed — Saratoga's lost contact. We are the rescue. Form on Hardway, then we go in.", dur: 7.5 },
-    'hardway.break': { speaker: 'hardway',   text: "There they are — 58th, taking a beating. Break and engage, weapons free! Pull the Chigs off them; don't chase the runners.", dur: 6.0 },
+    // Episode samples (user-supplied audio -> public/vo/m2-belt/ep.belt1.<mp3|ogg|wav>). The `text` is a
+    // neutral on-screen description only — NOT a transcript of the show. Absent audio -> just the caption.
+    'ep.belt1':      { speaker: 'wildcards', text: "[ Saratoga's 58th — the Wild Cards, under fire in the Belt ]", dur: 7.0 },
+    'ep.belt2':      { speaker: 'wildcards', text: "[ 58th over the net — the fight turning against them ]", dur: 6.0 },
+    'hardway.break': { speaker: 'hardway',   text: "Radio silence is blown — they've made us. Break and engage, weapons free! Pull the Chigs off the Wild Cards.", dur: 6.0 },
     'boxcars.splash':{ speaker: 'boxcars',   text: "Splash one! Hold on, Wild Cards — the Longshots are buying you out.", dur: 4.5 },
     'house.push':    { speaker: 'house',     text: "More inbound — they want the 58th dead. Keep your spacing, stay between them and the Wild Cards.", dur: 5.5 },
     'snakeeyes.odds':{ speaker: 'snakeeyes', text: "Whole sky full of teeth. Just the odds I like — terrible.", dur: 4.0 },
