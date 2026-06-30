@@ -54,12 +54,13 @@ export const ENVIRONMENT = {
     label: 'Cerberus', body: 'blackhole', body2: 'saturn', sunMult: 2, // grey ringed planet on the far side, away from the blue patch
     // richer nebulosity around the hole; blue (uColorB) + red (uColorC) brightness +30%
     nebula: { uColorA: 0x07040f, uColorB: 0x37226e, uColorC: 0x9f3753, uBrightness: 0.12, uSaturation: 0.5, uMilkyWay: 0.12 },
-    patch: { bright: 0.6, color: 0x4d2d8c }, // big blue/purple nebula cloud filling ~2/3 of the sky around the hole
+    patch: { bright: 0.6, color: 0x4d2d8c, color2: 0x9f3753, warp: 0.5, dir: [0.40, 0.18, -0.90] }, // big blue/purple nebula (red cores) filling ~2/3 of the sky around the hole
     sun: { disc: 220, glow: 520, halo: 0, color: 0xeef0ff, glowAlpha: 0.4, haloAlpha: 0.0, white: true, light: 0x9fc0ff },
   },
   tartarus: {
     label: 'Tartarus', body: 'cloudplanet', sunMult: 0.7, // just the one big cyan cloud planet; distant white dwarf -> dim
     nebula: { uColorA: 0x05060f, uColorB: 0x182840, uColorC: 0x40342a, uBrightness: 0.05, uSaturation: 0.35, uMilkyWay: 0.10 },
+    patch: { bright: 0.5, color: 0x123f57, color2: 0x3fa0a8, warp: 0.7, dir: [-0.35, 0.12, 0.93] }, // big teal/cyan procgen nebula (matches the cyan cloud planet)
     sun: { disc: 130, glow: 260, halo: 0, color: 0xffffff, glowAlpha: 0.5, haloAlpha: 0.0, white: true, light: 0xffffff }, // pure white sun (the blue cast is the environment, not the star)
     companion: { color: 0xffffff, mult: 0.6, disc: 120, glow: 600 }, // plain white fill from the opposite side to counter the blue (tweak as we go)
   },
@@ -72,6 +73,7 @@ export const ENVIRONMENT = {
   ixion: {
     label: 'Ixion', body: 'habitable', sunMult: 5, // inhabited world -> a sun-like star, decent daylight
     nebula: { uColorA: 0x04050f, uColorB: 0x1e2c66, uColorC: 0x8a4a2a, uBrightness: 0.08, uSaturation: 0.34, uMilkyWay: 0.10 },
+    patch: { bright: 0.5, color: 0x352866, color2: 0x9a4f72, warp: 0.6, dir: [0.62, 0.18, 0.76] }, // big violet/rose procgen nebula across the sky
     sun: { disc: 480, glow: 2200, halo: 5200, color: 0xfff6e8, glowAlpha: 0.85, haloAlpha: 0.7, light: 0xfff0d8 }, // warm-white G-type
   },
 };

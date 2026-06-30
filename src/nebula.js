@@ -24,6 +24,8 @@ uniform vec3 uMwPole;    // unit galactic NORTH pole (scene coords) — the Milk
 uniform vec3 uPatchDir;    // centre of a big localized nebula patch (e.g. around the Cerberus black hole)
 uniform float uPatchBright; // 0 = off; >0 fills a broad swathe of sky around uPatchDir
 uniform vec3 uPatchColor;  // patch tint (blue/purple)
+uniform vec3 uPatchColor2; // hotter/contrasting tint in the densest cores
+uniform float uPatchWarp;  // domain-warp strength -> swirly, organic nebulosity
 uniform vec3 uColorA; // deep base
 uniform vec3 uColorB; // mid clouds
 uniform vec3 uColorC; // hot cores
@@ -107,10 +109,16 @@ void main() {
   // Added after the global dimming so it sits above the ~10% backdrop.
   if (uPatchBright > 0.001) {
     float pd = dot(dir, uPatchDir);
-    float cov = smoothstep(-0.4, 0.3, pd);                       // broad cone -> ~2/3 of the sky
-    float nb = fbm(dir * 1.7 + vec3(0.0, 0.0, uTime * 0.008) + 12.0) * 0.65 + fbmDetail(dir * 4.2 + 5.0) * 0.45;
-    float dens = cov * smoothstep(0.28, 0.95, nb);
-    col += uPatchColor * dens * uPatchBright;
+    float cov = smoothstep(-0.4, 0.35, pd);                      // broad cone -> ~2/3 of the sky
+    // DOMAIN WARP: offset the cloud lookup by a low-freq noise field -> flowing, swirly nebulosity (not blobs)
+    vec3 wb = dir * 1.3 + 9.0;
+    vec3 warp = vec3(fbmDetail(wb) - 0.5, fbmDetail(wb + 17.0) - 0.5, fbmDetail(wb + 31.0) - 0.5) * uPatchWarp;
+    vec3 pp = dir * 1.9 + warp + vec3(0.0, 0.0, uTime * 0.006);
+    float nb = fbm(pp) * 0.7 + fbmDetail(pp * 3.0 + 5.0) * 0.4; // big cloud + finer wisps, both warped
+    float dens = cov * smoothstep(0.30, 0.92, nb);
+    vec3 pc = mix(uPatchColor, uPatchColor2, smoothstep(0.55, 0.95, nb)); // two-tone: hotter cores in the densest parts
+    col += pc * dens * uPatchBright;
+    col += uPatchColor2 * smoothstep(0.85, 0.96, nb) * cov * uPatchBright * 0.7; // a few brighter knots
   }
 
   gl_FragColor = vec4(col, 1.0);
@@ -127,6 +135,8 @@ export function createNebula() {
     uPatchDir: { value: new THREE.Vector3(0.40, 0.18, -0.90).normalize() }, // toward the Cerberus black hole
     uPatchBright: { value: 0 }, // per-environment (Cerberus turns it on)
     uPatchColor: { value: new THREE.Color(0x4d2d8c) }, // blue/purple
+    uPatchColor2: { value: new THREE.Color(0x9f3753) }, // hotter cores in the densest nebulosity
+    uPatchWarp: { value: 0.6 }, // domain-warp strength -> swirly, organic clouds
     uColorA: { value: new THREE.Color(0x04050f) }, // deep blue-black base
     uColorB: { value: new THREE.Color(0x223080) }, // blue clouds (dominant)
     uColorC: { value: new THREE.Color(0xd8401f) }, // red hot cores (accent touches)

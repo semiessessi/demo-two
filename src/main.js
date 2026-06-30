@@ -444,7 +444,9 @@ function applyEnvironment(s) {
   if (u.uPatchBright) u.uPatchBright.value = e.patch ? e.patch.bright : 0;
   if (e.patch) {
     if (u.uPatchColor) u.uPatchColor.value.setHex(e.patch.color);
-    if (u.uPatchDir) u.uPatchDir.value.copy(BH_DIR);
+    if (u.uPatchColor2) u.uPatchColor2.value.setHex(e.patch.color2 != null ? e.patch.color2 : e.patch.color);
+    if (u.uPatchWarp) u.uPatchWarp.value = e.patch.warp != null ? e.patch.warp : 0.6;
+    if (u.uPatchDir) u.uPatchDir.value.copy(e.patch.dir ? new THREE.Vector3(e.patch.dir[0], e.patch.dir[1], e.patch.dir[2]).normalize() : BH_DIR);
   }
   lighting.setSunIntensity(e.sunMult != null ? e.sunMult : 7); // intensity matches the star (Sol@5AU dim, etc.)
   lighting.setSunColor(e.sun.light != null ? e.sun.light : 0xffffff); // cast light colour matches the star type
