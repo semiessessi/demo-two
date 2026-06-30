@@ -452,7 +452,14 @@ export function createRingedPlanet(renderer, sunDir) {
   });
   const atmo = new THREE.Mesh(new THREE.SphereGeometry(R * 1.03, 96, 64), atmoMat);
   atmo.renderOrder = -2;
-  group.add(planet, atmo);
+  // Axial-tilt frame: the planet BODY now shares the rings' tilt (was: rings tilted, body upright -> the
+  // zonal bands didn't line up with the rings). Tilting the whole system also rakes the planet's shadow
+  // across the ring face more pleasingly. group only carries the camera-follow position; tilt is internal.
+  const tilt = new THREE.Group();
+  tilt.rotation.x = 0.42; // axial tilt (matches the old ring angle, now applied to body + rings together)
+  tilt.rotation.z = 0.16;
+  group.add(tilt);
+  tilt.add(planet, atmo);
 
   // --- ring (RingGeometry + radial UV strip + lit/shadowed shader) ---
   const RING_IN = R * 1.18, RING_OUT = R * 2.30;
@@ -491,10 +498,9 @@ export function createRingedPlanet(renderer, sunDir) {
       }`,
   });
   const ring = new THREE.Mesh(ringGeo, ringMat);
-  ring.rotation.x = -Math.PI / 2 + 0.42; // lay the disc flat, then tilt for a nice ring angle
-  ring.rotation.z = 0.16;
+  ring.rotation.x = -Math.PI / 2; // lay the disc flat in the tilted frame (tilt group provides the axial angle)
   ring.renderOrder = -2;
-  group.add(ring);
+  tilt.add(ring);
 
   // 1D ring-density strip from stars-clone (copied to public/); missing -> solid grey ring (uColor)
   new THREE.TextureLoader().load('/saturn-rings.png', (t) => {
