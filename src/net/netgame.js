@@ -172,7 +172,7 @@ export function createNetGame(scene, opts) {
   // --- enemy bolt replication (host -> joiners) ------------------------------------------------------
   function spawnEnemyBolt(f) {
     projectiles.spawn({ pos: arrV(f.p), vel: arrV(f.v), color: 0xffffff, team: 'enemy',
-      damage: enemyMgr.params.pulseDamage, life: 2.6, radius: 0.7, scale: 1.35, width: 2, glow: 2.8, noise: 0.6 });
+      damage: enemyMgr.params.pulseDamage, life: 2.6, radius: 0.7, scale: 1.35, width: 2, glow: 2.8, noise: 0.6, round: 1 });
   }
   // HOST: each tick, find newly-spawned enemy bolts and batch them into an efire event.
   function collectEnemyFires() {
