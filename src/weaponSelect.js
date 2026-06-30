@@ -32,8 +32,8 @@ function injectStyle() {
     `#weapon-select .ws-col.on { opacity:1; border-color:rgba(150,180,255,0.45); }` +
     `#weapon-select .ws-head { font-size:9px; letter-spacing:0.16em; color:#9fb0d0; margin:0 0 6px 2px; }` +
     `#weapon-select .ws-row { font-size:12px; line-height:1.45; padding:3px 7px; margin:1px 0; border-radius:6px; white-space:nowrap; color:#cdd6ea; }` +
-    `#weapon-select .ws-row.sel { background:rgba(120,170,255,0.16); }` +
-    `#weapon-select .ws-row.cur { outline:2px solid #9ec7ff; outline-offset:-1px; }` +
+    `#weapon-select .ws-row.sel { background:rgba(127,208,138,0.18); }` +
+    `#weapon-select .ws-row.cur { outline:2px solid #7fd08a; outline-offset:-1px; }` +
     `#weapon-select .ws-row.dim { color:#7a86a0; }` +
     `#weapon-select .ws-dot { color:#7fd08a; }` +
     `#weapon-select .ws-row.low { color:#ff6a5a; font-weight:600; animation: ws-low 0.85s ease-in-out infinite; }` +
@@ -62,7 +62,7 @@ export const REAR_GUN_PORTS = [
   { name: 'Rear Gun R', pos: [-0.15, 0.5, 1.85], dir: [0, 0, 1] },
 ];
 
-export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemies, settings, applyLoadout, vfx } = {}) {
+export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemies, settings, applyLoadout, vfx, audio } = {}) {
   injectStyle();
 
   // --- state ---
@@ -82,6 +82,26 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
   const _fwd = new THREE.Vector3(), _rear = new THREE.Vector3(), _mpos = new THREE.Vector3();
   const _dir = new THREE.Vector3(), _vel = new THREE.Vector3(), _to = new THREE.Vector3();
   const _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3();
+  const _yax = new THREE.Vector3(0, 1, 0), _vd = new THREE.Vector3();
+
+  // Placeholder missile bodies (pooled grey darts — swap a real GLB later). The projectile bolt is dimmed
+  // to a short warm exhaust flare; this mesh is the visible body, oriented along the missile's velocity.
+  const missilePool = [];
+  let mslMat = null;
+  function grabMissileBody() {
+    let m = missilePool.pop();
+    if (!m) {
+      if (!mslMat) mslMat = new THREE.MeshStandardMaterial({ color: 0x8b9099, roughness: 0.5, metalness: 0.4 });
+      m = new THREE.Group();
+      m.add(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.5, 9), mslMat));
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.55, 9), mslMat); nose.position.y = 1.02;
+      m.add(nose);
+      if (scene) scene.add(m);
+    }
+    m.visible = true;
+    return m;
+  }
+  function releaseMissileBody(m) { if (!m) return; m.visible = false; missilePool.push(m); }
 
   // --- DOM ---
   const root = el('div', '', document.body);
@@ -150,6 +170,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     weaponIdx = items.findIndex((it) => it.type === 'afterburner');
     if (weaponIdx < 0) weaponIdx = items.length - 1;
     optionIdx = 0;
+    for (const r of missilesLive) { if (r.trail) r.trail.stop(); releaseMissileBody(r.mesh); }
     missilesLive.length = 0;
     fuelMax = BASE_FUEL + nTanks * TANK_FUEL;
     fuel = keepFuel ? Math.min(fuel, fuelMax) : fuelMax; // (re)launch refills; jettison keeps the reduced fuel
@@ -223,19 +244,21 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     _fwd.set(0, 0, -1).applyQuaternion(ship.pivot.quaternion);
     _mpos.copy(ship.pivot.position).addScaledVector(_fwd, ship.radius);
     const tgt = cannon.target && cannon.target.alive ? cannon.target : null;
-    // Track mode + a target -> homing. SHORT-RANGE needs a 3s MISSILE LOCK (target held continuously);
-    // LONG-RANGE locks instantly. The missile pins the target it locked at launch.
+    // Track mode + a target -> homing. BOTH types need a 3s MISSILE LOCK (target held continuously) before
+    // they'll track; the missile pins the target it locked at launch. (Deferred: the LR additionally needs
+    // the laser line-of-sight maintained mid-flight to keep guiding — `shortRange` is kept for that split.)
     let homing = false;
-    if (item.modeIdx === 0 && tgt) homing = item.shortRange ? (lockTarget === tgt && lockTime >= LOCK_TIME) : true;
+    if (item.modeIdx === 0 && tgt) homing = (lockTarget === tgt && lockTime >= LOCK_TIME);
     if (homing) { _dir.copy(tgt.pos).sub(_mpos).normalize(); } else { _dir.copy(_fwd); }
     _vel.copy(_dir).multiplyScalar(MISSILE_SPEED);
     if (pvel) _vel.add(pvel);
-    const b = projectiles.spawn({ pos: _mpos, vel: _vel, color: 0xffcaa0, team: 'player', damage: MISSILE_DAMAGE, life: 4.0, radius: 0.7, scale: 2.0, width: 0.5, glow: 2.4, noise: 0.15 });
+    // The bolt is dimmed to a short warm EXHAUST flare; the grey body mesh (grabMissileBody) is the missile.
+    const b = projectiles.spawn({ pos: _mpos, vel: _vel, color: 0xffb060, team: 'player', damage: MISSILE_DAMAGE, life: 4.0, radius: 0.7, scale: 0.6, width: 0.6, glow: 1.5, noise: 0.1 });
     item.ammo--;
     item.cd = 0.5;
     if (b) {
-      const trail = (vfx && vfx.createTrail) ? vfx.createTrail({ getPos: () => b.pos, getVel: () => b.vel, spawnDist: 3.5, spawnInterval: 0.09, life: 1.0, radius: 1.1, blobs: 1, density: 0.6 }) : null;
-      missilesLive.push({ b, item, target: homing ? tgt : null, homing, trail });
+      const trail = (vfx && vfx.createTrail) ? vfx.createTrail({ getPos: () => b.pos, getVel: () => b.vel, spawnDist: 2.0, spawnInterval: 0.045, life: 1.5, radius: 1.0, blobs: 2, density: 1.0 }) : null;
+      missilesLive.push({ b, item, target: homing ? tgt : null, homing, trail, mesh: grabMissileBody() });
     }
   }
 
@@ -244,9 +267,14 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
       const r = missilesLive[i];
       if (!r.b.alive) { // hit something or expired -> detonate
         if (r.trail) r.trail.stop();
+        releaseMissileBody(r.mesh);
         if (vfx && vfx.explosion) vfx.explosion(r.b.pos, 0.7);
         missilesLive.splice(i, 1);
         continue;
+      }
+      if (r.mesh) { // ride the projectile: position + orient the body along travel
+        r.mesh.position.copy(r.b.pos);
+        _vd.copy(r.b.vel); if (_vd.lengthSq() > 1e-6) r.mesh.quaternion.setFromUnitVectors(_yax, _vd.normalize());
       }
       if (r.trail) r.trail.update(dt);
       if (r.homing) {
@@ -306,7 +334,7 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
   // --- per-frame ---
   function update(dt, input, vel) {
     if (vel) pvel = vel;
-    if (!visible) { for (const it of items) if (it.cd > 0) it.cd = 0; return; }
+    if (!visible) { for (const it of items) if (it.cd > 0) it.cd = 0; if (audio && audio.lockTone) audio.lockTone(null); return; }
     for (const it of items) if (it.cd > 0) it.cd = Math.max(0, it.cd - dt);
 
     // nav intents: keyboard (-,=,[,]) OR d-pad (12/13/14/15)
@@ -348,9 +376,19 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
     // auto-fire weapons run regardless of which item is selected
     for (const it of items) if (it.autoTick) it.autoTick(ctx);
 
-    // missile lock: accumulate while the current target is held continuously (drives short-range tracking)
+    // missile lock: accumulate while the current target is held continuously (gates missile tracking)
     const ltg = cannon.target && cannon.target.alive ? cannon.target : null;
     if (ltg && ltg === lockTarget) lockTime += dt; else { lockTarget = ltg; lockTime = 0; }
+
+    // seeker lock tone: rising blips -> solid when a missile is the current weapon (Track mode) + a target held
+    if (audio && audio.lockTone) {
+      const sel = items[weaponIdx];
+      if (sel && sel.type === 'missile' && sel.modeIdx === 0 && ltg) {
+        const vv = settings.volume || {};
+        const lvol = 0.25 * (vv.master != null ? vv.master : 1) * (vv.effects != null ? vv.effects : 1);
+        audio.lockTone(lockTime / LOCK_TIME, lvol);
+      } else audio.lockTone(null);
+    }
 
     if (fuel > 0) fuel = Math.max(0, fuel - CRUISE_BURN * dt); // cruise consumption (boost adds BOOST_BURN on top)
 
@@ -453,5 +491,25 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
 
   function dispose() { root.remove(); ejectPrompt.remove(); }
 
-  return { update, rebuild, setVisible, dispose };
+  // Snapshot for the top-down weapon HUD (weaponHud.js): per-weapon ammo + which is selected + lock state.
+  function getHudState() {
+    const sel = items[weaponIdx] || null;
+    const by = {};
+    for (const it of items) by[it.key] = it;
+    return {
+      visible,
+      loadout: settings.loadout || {},
+      selectedKey: sel ? sel.key : null,
+      gunAmmo: cannon.ammo != null ? cannon.ammo : null,
+      gunMode: by.gun ? by.gun.modeIdx : 0,
+      rearAmmo: by.rear ? by.rear.ammo : null,
+      rearMode: by.rear ? by.rear.modeIdx : 0,
+      fuel, fuelMax,
+      missilePair: by.missilePair ? by.missilePair.ammo : null,
+      lrMissile: by.lrMissile ? by.lrMissile.ammo : null,
+      lock: { progress: Math.min(1, lockTime / LOCK_TIME), locked: !!lockTarget && lockTime >= LOCK_TIME, target: !!lockTarget },
+    };
+  }
+
+  return { update, rebuild, setVisible, dispose, getHudState };
 }

@@ -39,6 +39,9 @@ uniform float uNoiseScale;
 uniform float uDrift;
 uniform float uSteps;
 uniform float uSelfShadow; // 1 = run the per-step self-shadow march; 0 = read fully lit (distant/low tier)
+uniform int uOctaves;      // FBM octave count (tier-scaled: 6 high / 5 med / 4 low) -> fine detail
+uniform float uCoreDark;   // 0 = off; >0 = sooty dark cores (dense regions darken toward black -> occlusion)
+uniform float uCoreNoise;  // frequency of the hi-freq noise that breaks the soot into wispy filaments
 uniform vec3 uColSmoke;   // smoke albedo (gets lit)
 uniform vec3 uLightDir;   // toward the key light (normalized)
 uniform vec3 uLightColor;
@@ -67,7 +70,7 @@ float vnoise(vec3 x) {
              mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
                  mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
 }
-float fbm5(vec3 p) { float v=0.0,a=0.5; for(int i=0;i<5;i++){ v+=a*vnoise(p); p*=2.02; a*=0.5; } return v; }
+float fbm5(vec3 p) { float v=0.0,a=0.5; for(int i=0;i<6;i++){ if(i>=uOctaves) break; v+=a*vnoise(p); p*=2.02; a*=0.5; } return v; } // octave count tier-scaled via uOctaves
 float fbm3(vec3 p) { float v=0.0,a=0.5; for(int i=0;i<3;i++){ v+=a*vnoise(p); p*=2.02; a*=0.5; } return v; }
 
 const int MAX_STEPS = 80;
@@ -156,6 +159,10 @@ void main() {
       }
       vec3 smoke = uColSmoke * (uAmbient + uLightColor * lit);
       smoke *= 1.0 - 0.55 * exp(-d * 3.0); // Beer-Powder: darker thin edges
+      if (uCoreDark > 0.001) { // sooty dark cores: dense regions go near-black, broken into wispy filaments (occluding black)
+        float soot = clamp(d * uCoreDark, 0.0, 1.0) * (0.35 + 0.65 * vnoise((p / uRadius) * uCoreNoise + vec3(uSeed * 1.7)));
+        smoke *= 1.0 - 0.8 * soot;
+      }
 
       // --- fire: temperature field -> blackbody emission (only when uEmissive > 0) ---
       vec3 emit = vec3(0.0);
@@ -234,6 +241,9 @@ export function createVolumetrics(scene, camera, opts = {}) {
         uDrift: { value: 0.3 },
         uSteps: { value: 32 },
         uSelfShadow: { value: 1 },
+        uOctaves: { value: 5 },
+        uCoreDark: { value: 0 },
+        uCoreNoise: { value: 7.0 },
         uColSmoke: { value: new THREE.Color() },
         uLightDir: { value: lightDir.clone() },
         uLightColor: { value: COL.light.clone() },
@@ -310,7 +320,9 @@ export function createVolumetrics(scene, camera, opts = {}) {
     const u = s.mat.uniforms;
     u.uCenter.value.copy(cpos);
     u.uSeed.value = s.seed;
-    u.uNoiseScale.value = 2.4; // finer detail
+    u.uNoiseScale.value = 3.0; // higher frequency -> finer detail
+    u.uCoreDark.value = 0.6;   // sooty dark cores in the smoke (fire emission glows on top while hot)
+    u.uCoreNoise.value = 6.0;
     u.uDrift.value = 0.5;
     u.uColSmoke.value.copy(COL.explSmoke);
     u.uBlobCount.value = 0;
@@ -349,7 +361,9 @@ export function createVolumetrics(scene, camera, opts = {}) {
     const u = s.mat.uniforms;
     u.uCenter.value.copy(pos);
     u.uSeed.value = s.seed;
-    u.uNoiseScale.value = 2.7;
+    u.uNoiseScale.value = 3.4; // higher frequency -> finer smoke detail
+    u.uCoreDark.value = 1.0;   // strong sooty dark cores -> rich, occluding smoke
+    u.uCoreNoise.value = 7.5;
     u.uDrift.value = 0.35;
     u.uColSmoke.value.copy(COL.trailSmoke);
     const nb = opts.blobs ?? 3;
@@ -389,6 +403,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
     if (near) st = quality === 'low' ? 10 : 16;
     u.uSteps.value = load > 0 ? Math.max(8, Math.round(st * (1 - 0.4 * load))) : st; // autoscaler trims steps under GPU load
     u.uSelfShadow.value = (quality === 'low' || near || distSq > 130 * 130 || load > 0.6) ? 0 : 1;
+    u.uOctaves.value = quality === 'low' ? 4 : (load > 0.6 ? 5 : 6); // finer detail on capable GPUs; trims under load/low tier
   }
 
   function stepPuff(s, dt) {
@@ -426,6 +441,7 @@ export function createVolumetrics(scene, camera, opts = {}) {
     // Self-shadow is the per-step 3-tap fbm march — easily the puff's heaviest cost. Drop it on low tier,
     // for distant puffs (illegible far away), when the camera is inside the puff, or under GPU load.
     u.uSelfShadow.value = (quality === 'low' || near || distSq > 110 * 110 || load > 0.5) ? 0 : 1;
+    u.uOctaves.value = quality === 'low' ? 4 : (load > 0.55 ? 5 : 6);
   }
 
   function retire(s) {

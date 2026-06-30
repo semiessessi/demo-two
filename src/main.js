@@ -27,6 +27,7 @@ import { createDamageModel } from './damage.js';
 import { createHud } from './hud.js';
 import { createTargetDisplay } from './targetDisplay.js';
 import { createWeaponSelect, REAR_GUN_PORTS } from './weaponSelect.js';
+import { createWeaponHud } from './weaponHud.js';
 import { createGameState } from './gameState.js';
 import { createDebug } from './debug.js';
 import { createRcs } from './rcs.js';
@@ -352,6 +353,7 @@ let damage = null;
 let hud = null;
 let targetDisplay = null;
 let weaponSelect = null;
+let weaponHud = null; // top-down weapon/ammo readout (flight-only)
 let frontGun = null;
 let gameState = null;
 const playerVel = new THREE.Vector3();
@@ -719,8 +721,9 @@ async function init() {
   weaponSelect = createWeaponSelect({
     scene, ship, projectiles, cannon,
     getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
-    settings, applyLoadout, vfx,
+    settings, applyLoadout, vfx, audio,
   });
+  weaponHud = createWeaponHud(); // top-down craft readout driven by weaponSelect.getHudState()
   // ?skirmish -> return to the menu after a mission; default -> drop straight back into flight.
   gameState = createGameState({ ship, camera, flight, hud, vfx, debris: playerDebris, playerVel, onRestart: restartWorld, onMenu: enterMenu, // mission over -> back to the title menu
     onOver: (t, r) => { if (mission) mission.onPlayerOut(r); else hud.showMissionOver(t, r); } }); // campaign routes the outcome to its own fail screen
@@ -942,7 +945,8 @@ function startLoop() {
     input.poll(); // keyboard + gamepad + touch -> shared signals (read by flight + cannon)
     const flying = gameState.mode === 'flying';
     touchControls.setVisible(flying); // show the on-screen stick/buttons only while actually flying
-    if (flying && weaponSelect) weaponSelect.update(dt, input, playerVel); // weapon-select nav + inject input.boost/fire BEFORE flight + cannon read them (playerVel is last frame's -> fine for bolt momentum)
+    if (flying && weaponSelect) { weaponSelect.update(dt, input, playerVel); if (weaponHud) { weaponHud.setVisible(true); weaponHud.update(weaponSelect.getHudState()); } } // weapon-select nav + inject input.boost/fire BEFORE flight + cannon read them (playerVel is last frame's -> fine for bolt momentum)
+    else if (weaponHud) weaponHud.setVisible(false);
     let res = { throttle: 0, speed: 0, boosting: false };
     if (flying) {
       flight.setSpeedScale(damage.speedScale()); // engine damage cuts top speed

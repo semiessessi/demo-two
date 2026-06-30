@@ -166,6 +166,55 @@ export function createAudioManager() {
     try { gain.gain.setTargetAtTime(base * clamp01(mult), ctx.currentTime, 0.12); } catch (_) { gain.gain.value = base * clamp01(mult); }
   }
 
+  // --- Missile lock tone (synth) ---------------------------------------------------------------------
+  // A rising "seeker" beep for the weapon HUD: discrete blips that speed up + climb in pitch as the 3s
+  // lock acquires, then a steady solid tone once locked. Lives here (not sfx.js) so it always plays,
+  // regardless of the ?sound gate. Caller drives it each frame: progress null/<=0 = off, 0..1 = acquiring,
+  // >=1 = locked; `vol` is master×effects.
+  let lockGain = null, lockNextBlip = 0, lockSolid = null, lockSolidGain = null;
+  function lockBus() {
+    ensureContext();
+    if (!lockGain) { lockGain = ctx.createGain(); lockGain.gain.value = 1; lockGain.connect(ctx.destination); }
+    return lockGain;
+  }
+  function lockBlip(freq, vol) {
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + 0.07);
+    o.connect(g).connect(lockBus());
+    o.start(t); o.stop(t + 0.085);
+    o.onended = () => { try { o.disconnect(); g.disconnect(); } catch (_) {} };
+  }
+  function lockStopSolid() {
+    if (lockSolid) { try { lockSolid.stop(); lockSolid.disconnect(); } catch (_) {} lockSolid = null; }
+    if (lockSolidGain) { try { lockSolidGain.disconnect(); } catch (_) {} lockSolidGain = null; }
+  }
+  function lockTone(progress, vol = 0.22) {
+    if (progress == null || progress <= 0) { lockStopSolid(); lockNextBlip = 0; return; }
+    ensureContext();
+    if (ctx.state === 'suspended') { try { ctx.resume(); } catch (_) {} return; } // needs a gesture first
+    const v = clamp01(vol);
+    if (progress >= 1) { // locked -> steady solid tone
+      if (!lockSolid) {
+        lockStopSolid();
+        lockSolid = ctx.createOscillator(); lockSolid.type = 'square'; lockSolid.frequency.value = 1380;
+        lockSolidGain = ctx.createGain(); lockSolidGain.gain.value = v * 0.8;
+        lockSolid.connect(lockSolidGain).connect(lockBus());
+        try { lockSolid.start(); } catch (_) {}
+      } else if (lockSolidGain) { lockSolidGain.gain.value = v * 0.8; }
+      return;
+    }
+    if (lockSolid) lockStopSolid(); // acquiring -> rising blips
+    const now = ctx.currentTime;
+    if (now >= lockNextBlip) {
+      lockBlip(600 + 760 * progress, v);       // pitch climbs 600 -> ~1360 Hz
+      lockNextBlip = now + (0.5 - 0.4 * progress); // interval shortens 0.5s -> 0.1s
+    }
+  }
+
   function getAmplitude() {
     if (!analyser) return 0;
     analyser.getByteTimeDomainData(timeBuf);
@@ -210,6 +259,7 @@ export function createAudioManager() {
     loadVoice,
     playVoice,
     duck,
+    lockTone, // missile lock seeker tone (rising blips -> solid on lock)
     getAmplitude,
     getBands,
     get isAvailable() {
