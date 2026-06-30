@@ -271,7 +271,7 @@ let jupiter = null, blackhole = null, cloudplanet = null, habitable = null, satu
 let asteroidField = null; // Trojan rock field (built lazily, shown only in jupiterTrojans)
 function ensureBody(kind) {
   if (kind === 'jupiter' && !jupiter) { jupiter = createJupiter(renderer, sunDir); scene.add(jupiter.group); }
-  else if (kind === 'blackhole' && !blackhole) { blackhole = createBlackHole(); scene.add(blackhole.group); }
+  else if (kind === 'blackhole' && !blackhole) { blackhole = createBlackHole(BH_DIR); scene.add(blackhole.group); }
   else if (kind === 'cloudplanet' && !cloudplanet) { cloudplanet = createCloudPlanet(); scene.add(cloudplanet.group); }
   else if (kind === 'habitable' && !habitable) { habitable = createHabitablePlanet(); scene.add(habitable.group); }
   else if (kind === 'saturn' && !saturn) { saturn = createRingedPlanet(renderer, sunDir); scene.add(saturn.group); }

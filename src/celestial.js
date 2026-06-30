@@ -116,9 +116,22 @@ export function createJupiter(renderer, sunDir) {
 // accretion disk is gravitationally lensed (you see its far side arc over + under the shadow), a
 // photon/Einstein ring forms, and the disk is doppler-beamed (approaching side brighter + bluer).
 // Where rays escape with no disk hit, alpha = 0 so the real scene background shows through.
-export function createBlackHole() {
+export function createBlackHole(bhDir) {
   const group = new THREE.Group();
   group.visible = false;
+
+  // Additive ~5% skybox (cerberus cube map) blended into the environment AND fed to the lensing shader so
+  // the hole distorts it. Loaded lazily with the black hole — the only external-texture backdrop.
+  const skyTex = new THREE.CubeTextureLoader().setPath('/skyboxes/').load(
+    ['cerberus_right.png', 'cerberus_left.png', 'cerberus_up.png', 'cerberus_down.png', 'cerberus_front.png', 'cerberus_back.png'],
+  );
+  skyTex.colorSpace = THREE.SRGBColorSpace;
+  // orient so the "right" (+X) cube face sits roughly BEHIND the hole: rotate a world dir so BH_DIR -> +X
+  const _bh = (bhDir ? bhDir.clone() : new THREE.Vector3(0.40, 0.18, -0.90)).normalize();
+  const skyRot = new THREE.Matrix3().setFromMatrix4(
+    new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(_bh, new THREE.Vector3(1, 0, 0))),
+  );
+  const SKY_AMT = 0.05; // 5% additive
 
   const Rs = 90; // event-horizon (Schwarzschild) radius in world units
   const DISK_IN = 2.2 * Rs;
@@ -138,6 +151,9 @@ export function createBlackHole() {
       uSteps: { value: 150 },
       uMwNormal: { value: new THREE.Vector3(0.9101, 0.4020, -0.1002).normalize() }, // galactic pole (lensed Milky Way)
       uSpokeBright: { value: 0.6 }, // brightness of the blue/purple nebula behind the hole (dimmed — it glowed too much)
+      uSkybox: { value: skyTex },
+      uSkyboxRot: { value: skyRot },
+      uSkyboxAmt: { value: SKY_AMT },
     },
     transparent: true,
     depthWrite: false,
@@ -151,6 +167,7 @@ export function createBlackHole() {
       uniform vec3 uCamPos, uCenter, uDiskN, uMwNormal;
       uniform float uRs, uDiskIn, uDiskOut, uTime, uSpokeBright;
       uniform int uSteps;
+      uniform samplerCube uSkybox; uniform mat3 uSkyboxRot; uniform float uSkyboxAmt;
 
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
@@ -267,6 +284,12 @@ export function createBlackHole() {
         vec3 bg = nebCol * neb * uSpokeBright;                   // nebula
         bg += backgroundSky(d) * zone * (1.0 + 4.0 * smoothstep(0.05, 0.5, bend)); // lensed stars, brightened where the bend is strong -> visible distorted arcs (fills the dark ring)
         acc += bg * (1.0 - alpha);
+        // the hole DISTORTS the additive skybox: sample the cube map along the LENSED ray and add the warped
+        // extra where the ray is actually bent (the flat 5% everywhere is the sky-sphere layer below).
+        vec3 skb = textureCube(uSkybox, uSkyboxRot * d).rgb;
+        float skLens = uSkyboxAmt * (0.4 + 2.2 * smoothstep(0.05, 0.5, bend)) * zone;
+        acc += skb * skLens * (1.0 - alpha);
+        alpha = max(alpha, skLens * 0.6);
         alpha = max(alpha, max(neb * 0.85, smoothstep(0.06, 0.55, bend) * zone));
         // photon ring / lensed arcs — ANIMATED: bright spots orbit the ring + a gentle pulse, so it shimmers
         vec3 upr = abs(axis.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
@@ -299,7 +322,23 @@ export function createBlackHole() {
   plane.renderOrder = -2;
   plane.frustumCulled = false; // centred on the camera -> always in view, never cull
   group.add(plane);
-  return { group, mat, plane, radius: DISK_OUT };
+
+  // Base additive skybox layer: 5% of the cube map everywhere in the sky (depth-tested so the foreground
+  // occludes it). The black-hole pass above adds the LENSED version near the hole on top of this. The group
+  // is re-centred on the camera each frame, so the sphere's object-space dir IS the world view dir.
+  const skyMat = new THREE.ShaderMaterial({
+    uniforms: { uSkybox: { value: skyTex }, uSkyboxRot: { value: skyRot }, uAmt: { value: SKY_AMT } },
+    transparent: true, depthWrite: false, depthTest: true, side: THREE.BackSide, blending: THREE.AdditiveBlending,
+    vertexShader: /* glsl */`varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */`precision highp float; uniform samplerCube uSkybox; uniform mat3 uSkyboxRot; uniform float uAmt; varying vec3 vDir;
+      void main(){ vec3 c = textureCube(uSkybox, uSkyboxRot * normalize(vDir)).rgb; gl_FragColor = vec4(c * uAmt, 1.0); }`,
+  });
+  const skySphere = new THREE.Mesh(new THREE.SphereGeometry(4200, 32, 24), skyMat);
+  skySphere.renderOrder = -19; // additive base layer (order-independent); just after the nebula
+  skySphere.frustumCulled = false;
+  group.add(skySphere);
+
+  return { group, mat, plane, skySphere, radius: DISK_OUT };
 }
 
 // --- Tartarus cloud planet (procedural white/cyan swirling clouds) ------------
