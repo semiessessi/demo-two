@@ -10,6 +10,10 @@ export default defineConfig({
     // The app chunk itself is ~157 kB. Raise the warning to the real vendor baseline so it stops false-alarming.
     chunkSizeWarningLimit: 800,
     rollupOptions: {
+      input: {
+        main: 'index.html',
+        shipPreview: 'ship-preview.html', // standalone dev viewer for the capital-ship models
+      },
       output: {
         // Split three.js into its own chunk: it rarely changes (caches across app deploys)
         // and keeps the app chunk well under the 500 kB warning. Trailing slash so three-mesh-bvh /
