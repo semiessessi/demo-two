@@ -266,8 +266,10 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
       flashLife -= dt;
       flash.position.copy(muzzle());
       const f = Math.max(0, flashLife / FLASH_TIME);
-      flash.scale.setScalar(0.4 + 0.6 * f); // 25% of the old size (1.6 + 2.4f) — the light carries it now
-      flash.material.opacity = f;
+      flash.scale.setScalar(0.4 + 0.6 * f); // 25% of the old size — the light carries it now
+      const p = flash.position, tt = performance.now() * 0.001;
+      const n = (Math.sin(p.x * 9 + tt * 25) + Math.sin(p.y * 7 - tt * 19) + Math.sin(p.z * 11 + tt * 30)) / 3; // -1..1, varies in space + time
+      flash.material.opacity = f * 0.5 * (0.7 + 0.3 * n); // dimmer (no bloom) + spatiotemporal brightness noise
       if (flashLife <= 0) flash.visible = false;
     }
 

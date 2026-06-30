@@ -139,7 +139,9 @@ export function createWeaponSelect({ scene, ship, projectiles, cannon, getEnemie
       fl.life -= dt;
       const f = Math.max(0, fl.life / REAR_FLASH_TIME);
       fl.s.scale.setScalar(0.4 + 0.6 * f); // match the front gun's (shrunk) flash size
-      fl.s.material.opacity = f;
+      const p = fl.s.position, tt = performance.now() * 0.001;
+      const n = (Math.sin(p.x * 9 + tt * 25) + Math.sin(p.y * 7 - tt * 19) + Math.sin(p.z * 11 + tt * 30)) / 3;
+      fl.s.material.opacity = f * 0.5 * (0.7 + 0.3 * n); // dimmer (no bloom) + spatiotemporal brightness noise
       if (fl.life <= 0) fl.s.visible = false;
     }
   }
