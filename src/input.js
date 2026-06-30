@@ -10,7 +10,7 @@
 // Sign conventions match flight.js: pitch -1 = nose down (W), yaw +1 = yaw left (A), roll +1 = roll
 // left (Q).
 
-import { activePad, padSummary } from './gamepad.js';
+import { activePad, padSummary, padBtn } from './gamepad.js';
 
 const DEADZONE = 0.12;
 const dz = (v) => (Math.abs(v) < DEADZONE ? 0 : v);
@@ -86,8 +86,7 @@ export function createInput(touchRead) {
     input.gamepad = !!gp;
     if (gp) {
       const ax = gp.axes || [];
-      const bt = gp.buttons || [];
-      const btn = (i) => (bt[i] ? bt[i].value || (bt[i].pressed ? 1 : 0) : 0);
+      const btn = (i) => padBtn(gp, i); // standard-layout index; remapped for non-standard Nintendo pads
       pitch += dz(ax[1] || 0) * (input.invertStick ? -1 : 1); // stick forward = nose down; invertStick flips it
       yaw += dz(-(ax[0] || 0)); // stick left (negative) = yaw left (+1)
       roll += (btn(4) > 0.5 ? 1 : 0) + (btn(5) > 0.5 ? -1 : 0); // LB roll left, RB roll right

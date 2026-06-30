@@ -21,15 +21,29 @@ export function isNintendo(pad) {
   return !!pad && /057e|pro controller|joy-?con|nintendo/i.test(pad.id || '');
 }
 
+// Standard-layout button index -> raw index on a NON-STANDARD Nintendo Switch Pro / Joy-Con. Handles the
+// common layout where A/B and X/Y are swapped vs the standard order and the d-pad sits on buttons 14-17;
+// the triggers/shoulders/sticks already line up. Applied ONLY when the pad is non-standard AND Nintendo, so
+// standard pads + other controllers are untouched. (If a given pad differs, ?gamepad reveals the real map.)
+const NINTENDO_BTN = { 0: 1, 1: 0, 2: 3, 3: 2, 12: 14, 13: 15, 14: 16, 15: 17 };
+function isNonStdNintendo(pad) { return !!pad && pad.mapping !== 'standard' && isNintendo(pad); }
+
+// Read button `stdIndex` (standard layout) as a 0..1 value, remapping for non-standard Nintendo pads.
+export function padBtn(pad, stdIndex) {
+  if (!pad) return 0;
+  const i = (isNonStdNintendo(pad) && NINTENDO_BTN[stdIndex] != null) ? NINTENDO_BTN[stdIndex] : stdIndex;
+  const bt = (pad.buttons || [])[i];
+  return bt ? (bt.value || (bt.pressed ? 1 : 0)) : 0;
+}
+
 // D-pad state from buttons 12-15, plus a HAT-AXIS fallback for non-standard pads (axes[9]). The W3C hat
 // convention encodes 8 directions on one axis: -1 = up, then clockwise in steps of 2/7, ~1.286 = released.
 // The fallback is only attempted for non-standard mappings, so standard pads are never affected by it.
 export function dpad(pad) {
   const o = { up: false, dn: false, lf: false, rt: false };
   if (!pad) return o;
-  const b = pad.buttons || [], ax = pad.axes || [];
-  const down = (i) => !!(b[i] && b[i].pressed);
-  o.up = down(12); o.dn = down(13); o.lf = down(14); o.rt = down(15);
+  const ax = pad.axes || [];
+  o.up = padBtn(pad, 12) > 0.5; o.dn = padBtn(pad, 13) > 0.5; o.lf = padBtn(pad, 14) > 0.5; o.rt = padBtn(pad, 15) > 0.5;
   if (pad.mapping !== 'standard' && ax.length > 9) {
     const h = ax[9];
     const dir = Math.round((h + 1) * 3.5); // 0=N 1=NE 2=E 3=SE 4=S 5=SW 6=W 7=NW; released -> 8 (ignored)

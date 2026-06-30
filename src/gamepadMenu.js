@@ -5,7 +5,7 @@
 //
 // Standard-mapping button indices: 0=A 1=B 12=Up 13=Down 14=Left 15=Right. Axes: 0=LX 1=LY.
 
-import { activePad, dpad } from './gamepad.js';
+import { activePad, dpad, padBtn } from './gamepad.js';
 
 const FOCUSABLE = 'button:not([disabled]), input[type=range], input[type=text], input[type=color]';
 
@@ -57,8 +57,9 @@ export function createGamepadMenu({ onFirstButton } = {}) {
     const p = activePad();
     if (!p) return;
     const b = p.buttons, ax = p.axes || [];
-    const down = (i) => !!(b[i] && b[i].pressed);
-    const edge = (i) => { const now = down(i); const was = prev[i]; prev[i] = now; return now && !was; };
+    const down = (i) => !!(b[i] && b[i].pressed);   // raw (any-press detection)
+    const sdn = (i) => padBtn(p, i) > 0.5;          // standard-semantic (remapped for non-standard Nintendo)
+    const edge = (i) => { const now = sdn(i); const was = prev[i]; prev[i] = now; return now && !was; };
 
     // first real button press -> unlock audio (valid user activation)
     let anyDown = false;
@@ -66,7 +67,7 @@ export function createGamepadMenu({ onFirstButton } = {}) {
     if (anyDown && !everPressed) { everPressed = true; if (onFirstButton) onFirstButton(); }
 
     // keep the edge state current even when no menu is active (so we don't fire a stale edge on open)
-    if (!container) { for (let i = 0; i < b.length; i++) prev[i] = down(i); return; }
+    if (!container) { for (let i = 0; i < b.length; i++) prev[i] = sdn(i); return; }
     if (!items.length) refresh();
 
     if (edge(0)) { const it = items[idx]; if (it && it.tagName === 'BUTTON') it.click(); } // A: activate
