@@ -17,9 +17,9 @@ function flashTexture() {
   cv.width = cv.height = s;
   const ctx = cv.getContext('2d');
   const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-  g.addColorStop(0.0, 'rgba(255,250,210,1)');
-  g.addColorStop(0.4, 'rgba(255,200,90,0.7)');
-  g.addColorStop(1.0, 'rgba(255,140,40,0)');
+  g.addColorStop(0.0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.4, 'rgba(255,255,255,0.7)');
+  g.addColorStop(1.0, 'rgba(255,255,255,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, s, s);
   const t = new THREE.CanvasTexture(cv);
@@ -85,7 +85,7 @@ export function createPlayerCannon(scene, ship, projectiles, opts = {}) {
   const aimDir = new THREE.Vector3(0, 0, -1);
 
   const flash = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: flashTexture(), color: 0xffe6a0, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
+    new THREE.SpriteMaterial({ map: flashTexture(), color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
   );
   flash.visible = false;
   flash.frustumCulled = false;

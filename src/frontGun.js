@@ -10,11 +10,11 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 // muzzle (flash + bolts); the visible mesh uses all of it. Distances are in the ship.pivot frame
 // (radius ~5), matching the other editors and the cannon muzzle.
 export const FRONT_GUN = {
-  mount: [0, -0.2, -3.35], // ship-local pivot the gun swings from
-  barrel: 1.4, //             mount -> muzzle-tip distance along the aim (flash + bolts spawn here)
-  rest: [0, 0, 0], //         euler (rad) orienting the mesh's barrel along the gun's local -Z at rest
-  offset: [0, 0, 0], //       mesh nudge off the pivot (after the bbox re-centre)
-  scale: 1.0, //              1 = the ship's render scale (the gun was cut from the same model)
+  mount: [0, -0.54, -2.18], // ship-local pivot the gun swings from (calibrated)
+  barrel: 0.58, //             mount -> muzzle-tip distance along the aim (flash + bolts spawn here)
+  rest: [0, 0, 0], //          euler (rad) orienting the mesh's barrel along the gun's local -Z at rest
+  offset: [0, 0, 0], //        mesh nudge off the pivot
+  scale: 1.0, //               1 = the ship's render scale (the gun was cut from the same model)
 };
 
 const _Y = new THREE.Vector3(0, 1, 0);

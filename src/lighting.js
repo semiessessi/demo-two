@@ -184,7 +184,7 @@ export function createLighting(scene, camera, renderer, opts = {}) {
   // 27 rounds/s with a ~60ms decay the two lights cross-fade into a steady muzzle glow that lights the
   // nose + any enemy in front. Pooled + parked at intensity 0 when idle (no shader recompiles).
   const MUZZLE_LIFE = 0.06;
-  const muzzleParams = { color: 0xffe6a0, peak: 90, distance: 55 };
+  const muzzleParams = { color: 0xffffff, peak: 90, distance: 55 }; // pure-white muzzle flash (sprite + light)
   const muzzlePool = [];
   for (let i = 0; i < 2; i++) {
     const pl = new THREE.PointLight(muzzleParams.color, 0, muzzleParams.distance, 2);
