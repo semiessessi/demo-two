@@ -60,34 +60,40 @@ const chigUniforms = {
   uLightDir: { value: new THREE.Vector3(6, 8, 4).normalize() },
   uCell: { value: 4.0 },         // grid frequency (cells across the model)
   uVStretch: { value: 0.35 },    // <1 = triangles stretched TALL
-  uLineW: { value: 0.14 },       // glowing line thickness
+  uLineW: { value: 0.03 },       // glowing line thickness
   uGlow: { value: 1.1 },         // emissive strength of the lines
   uNoiseScale: { value: 18.0 },  // band noise frequency
   uBandCenter: { value: 0.0 },   // band position along uBandAxis (normalised object coords)
   uBandW: { value: 0.0 },        // band half-extent (0 = pure soft falloff)
-  uBandSoft: { value: 0.66 },    // band edge softness
+  uBandSoft: { value: 0.35 },    // band edge softness
   uProjAxis: { value: 0 },       // 0=X (left/right), 1=Y, 2=Z
   uBandAxis: { value: 1 },       // axis the central band runs across
-  uBandTilt: { value: 0.0 },     // raise the band toward the front (where the hull angles up)
+  uBandTilt: { value: 1.0 },     // raise the band toward the front (slope; 1.0 ~ 45deg)
   uTiltAxis: { value: 2 },       // front/length axis (0=X, 1=Y, 2=Z)
   uTiltStart: { value: 1.0 },    // along uTiltAxis: where the rise begins
   uTiltSpan: { value: 2.0 },     // range over which it rises (negative -> rise toward the other end)
+  uRecess: { value: 0.45 },      // groove normal depth (previews the recessed grid edges before mesh work)
+  uSpecular: { value: 0.5 },     // specular highlight strength
+  uShininess: { value: 24.0 },   // specular tightness
+  uView: { value: 0 },           // 0 = lit, 1 = normals, 2 = specular only
 };
 
 const CHIG_VERT = /* glsl */`
-  varying vec3 vObj; varying vec3 vN;
+  varying vec3 vObj; varying vec3 vN; varying vec3 vWorld;
   void main(){
     vObj = position;
     vN = normalize(mat3(modelMatrix) * normal);
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vWorld = wp.xyz;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 const CHIG_FRAG = /* glsl */`
   precision highp float;
-  varying vec3 vObj; varying vec3 vN;
-  uniform float uTime, uCell, uVStretch, uLineW, uGlow, uNoiseScale, uBandCenter, uBandW, uBandSoft, uBandTilt, uTiltStart, uTiltSpan;
+  varying vec3 vObj; varying vec3 vN; varying vec3 vWorld;
+  uniform float uTime, uCell, uVStretch, uLineW, uGlow, uNoiseScale, uBandCenter, uBandW, uBandSoft, uBandTilt, uTiltStart, uTiltSpan, uRecess, uSpecular, uShininess;
   uniform vec3 uBase, uLine, uBandColor, uLightDir;
-  uniform int uProjAxis, uBandAxis, uTiltAxis;
+  uniform int uProjAxis, uBandAxis, uTiltAxis, uView;
   float hash(vec3 p){ p=fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
   float vnoise(vec3 x){ vec3 i=floor(x),f=fract(x); f=f*f*(3.0-2.0*f);
     return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
@@ -116,24 +122,38 @@ const CHIG_FRAG = /* glsl */`
     vec2 p = uProjAxis == 0 ? vObj.zy : (uProjAxis == 1 ? vObj.xz : vObj.xy);
     p *= uCell; p.y *= uVStretch;
     float edge = gridEdge(p);
-    float line = 1.0 - smoothstep(0.0, uLineW, edge);   // glowing triangle lines
+    float line = 1.0 - smoothstep(0.0, uLineW, edge);   // glowing grid lines
 
-    vec3 col = uBase;
-    float ndl = max(dot(normalize(vN), normalize(uLightDir)), 0.0);
-    col *= 0.22 + 0.95 * ndl;                            // hull shading
-    col += uLine * line * uGlow;                         // emissive triangle grid
+    // RECESS via normal perturbation: finite-difference gradient of the edge field -> tilt the normal into
+    // the grooves so the grid edges read as recesses (a live preview before they're modelled into the mesh).
+    float hh = 0.05;
+    vec2 grad = vec2(gridEdge(p + vec2(hh, 0.0)) - edge, gridEdge(p + vec2(0.0, hh)) - edge) / hh;
+    vec3 inPlane = uProjAxis == 0 ? vec3(0.0, grad.y, grad.x) : (uProjAxis == 1 ? vec3(grad.x, 0.0, grad.y) : vec3(grad.x, grad.y, 0.0));
+    float wall = 1.0 - smoothstep(0.0, uLineW * 2.0, edge); // only perturb near the grooves
+    vec3 N = normalize(vN - inPlane * uRecess * wall);
 
-    // bright cyan, noise-modulated band across the central ("cuboid") section. The centreline can TILT up
-    // toward the front (along uTiltAxis) so it follows where the hull changes angle.
+    vec3 L = normalize(uLightDir);
+    vec3 Vd = normalize(cameraPosition - vWorld);
+    float ndl = max(dot(N, L), 0.0);
+    vec3 Hh = normalize(L + Vd);
+    float spec = pow(max(dot(N, Hh), 0.0), uShininess) * uSpecular * step(0.0, dot(vN, L));
+
+    if (uView == 1) { gl_FragColor = vec4(N * 0.5 + 0.5, 1.0); return; } // normal-map preview
+    if (uView == 2) { gl_FragColor = vec4(vec3(spec), 1.0); return; }    // specular only
+
+    vec3 col = uBase * (0.22 + 0.95 * ndl);              // hull shading (recess-perturbed normal)
+    col += uLine * line * uGlow;                         // emissive grid
+    col += vec3(spec);                                   // specular highlight
+
+    // cyan noise band across the central section; centreline can tilt toward the front
     float bc = uBandAxis == 0 ? vObj.x : (uBandAxis == 1 ? vObj.y : vObj.z);
     float fa = uTiltAxis == 0 ? vObj.x : (uTiltAxis == 1 ? vObj.y : vObj.z);
-    float tt = clamp((fa - uTiltStart) / uTiltSpan, 0.0, 1.0);
-    float center = uBandCenter + uBandTilt * (tt * tt * (3.0 - 2.0 * tt)); // smooth rise toward the front
-    float band = 1.0 - smoothstep(uBandW, uBandW + uBandSoft, abs(bc - center));
+    float frontDist = max(0.0, (fa - uTiltStart) * sign(uTiltSpan)); // distance past the bevel, toward the front
+    float bcenter = uBandCenter + uBandTilt * frontDist;             // constant-angle ramp (slope; 1.0 ~ 45deg)
+    float band = 1.0 - smoothstep(uBandW, uBandW + uBandSoft, abs(bc - bcenter));
     if (band > 0.001) {
       float nz = fbm(vObj * uNoiseScale + vec3(0.0, uTime * 0.35, 0.0));
-      vec3 bandCol = uBandColor * (0.45 + 1.5 * nz);
-      col = mix(col, bandCol, band);
+      col = mix(col, uBandColor * (0.45 + 1.5 * nz), band);
     }
     gl_FragColor = vec4(col, 1.0);
   }
@@ -233,10 +253,16 @@ bf.add(chigUniforms.uBandCenter, 'value', -6, 6, 0.05).name('Band center');
 bf.add(chigUniforms.uBandW, 'value', 0, 5, 0.05).name('Band width');
 bf.add(chigUniforms.uBandSoft, 'value', 0.01, 3, 0.05).name('Band softness');
 bf.add(chigUniforms.uNoiseScale, 'value', 0.5, 40, 0.5).name('Noise scale');
-bf.add(chigUniforms.uBandTilt, 'value', -4, 4, 0.05).name('Front tilt');
+bf.add(chigUniforms.uBandTilt, 'value', -3, 3, 0.05).name('Front tilt (slope)');
 bf.add(chigUniforms.uTiltAxis, 'value', { 'X': 0, 'Y': 1, 'Z': 2 }).name('Tilt/front axis');
-bf.add(chigUniforms.uTiltStart, 'value', -6, 6, 0.05).name('Tilt start');
-bf.add(chigUniforms.uTiltSpan, 'value', -6, 6, 0.05).name('Tilt span');
+bf.add(chigUniforms.uTiltStart, 'value', -6, 6, 0.05).name('Tilt start (bevel)');
+bf.add(chigUniforms.uTiltSpan, 'value', -2, 2, 1).name('Front dir (+/-)');
+
+const sf = gui.addFolder('Surface (normal / specular)');
+sf.add(chigUniforms.uView, 'value', { 'Lit': 0, 'Normals': 1, 'Specular only': 2 }).name('View');
+sf.add(chigUniforms.uRecess, 'value', 0, 1.5, 0.01).name('Recess depth');
+sf.add(chigUniforms.uSpecular, 'value', 0, 2, 0.02).name('Specular');
+sf.add(chigUniforms.uShininess, 'value', 2, 120, 1).name('Shininess');
 
 // ---------------------------------------------------------------------------
 window.addEventListener('resize', () => {
