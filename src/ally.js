@@ -76,6 +76,14 @@ export function createAlly(scene, opts) {
   const _m = new THREE.Matrix4();
   const _q = new THREE.Quaternion();
   let curSpeed = T.speed; // energy-managed flight speed (brakes into turns)
+  // Per-ally flight personality (used when a `squad` ctx is supplied — attract). Makes each ship weave on
+  // its own rhythm and fan across targets so the group reads as individuals breaking and reforming, not a
+  // rigid block. Campaign/co-op allies pass no squad ctx, so their flight is unchanged.
+  let tAcc = 0;
+  const wPhase = Math.random() * Math.PI * 2; // weave phase offset
+  const wFreq = 0.45 + Math.random() * 0.5;   // weave rate (rad/s)
+  const wAmp = 7 + Math.random() * 9;          // weave amplitude on the steer point (world units)
+  const tPref = Math.floor(Math.random() * 3); // prefer the 1st..3rd nearest enemy -> fan out
 
   const ally = {
     pivot, model, radius, pos, quat, vel, alive: true,
@@ -110,19 +118,21 @@ export function createAlly(scene, opts) {
   }
 
   function pickTarget(enemies) {
-    let best = null, bd = Infinity;
-    for (const e of enemies) {
-      if (!e.alive) continue;
-      const d = pos.distanceToSquared(e.pos);
-      if (d < bd) { bd = d; best = e; }
-    }
-    return best;
+    // fan across the furball: sort the alive enemies by range and take THIS ally's preferred rank among the
+    // nearest (tPref 0..2) so the allies don't all dive the single closest Chig.
+    const alive = [];
+    for (const e of enemies) if (e.alive) alive.push(e);
+    if (!alive.length) return null;
+    alive.sort((a, b) => pos.distanceToSquared(a.pos) - pos.distanceToSquared(b.pos));
+    return alive[Math.min(tPref, alive.length - 1)];
   }
 
   function update(dt, ctx) {
     if (!ally.alive) return;
+    tAcc += dt;
     const enemies = ctx.enemies || [];
     const friends = ctx.friends || null;
+    const squad = ctx.squad || null; // attract: { mode:'break'|'reform', anchor } drives break/reform flying
 
     if (!ally.target || !ally.target.alive) ally.target = pickTarget(enemies);
     const tgt = ally.target;
@@ -139,11 +149,24 @@ export function createAlly(scene, opts) {
     } else {
       st.copy(pos).addScaledVector(vel, 2); // no target -> cruise straight
     }
+    // SQUAD reform: regroup toward the moving formation anchor ahead of the group (separation below still
+    // spaces them into a loose formation). BREAK keeps the normal individual chase.
+    if (squad && squad.mode === 'reform' && squad.anchor) st.copy(squad.anchor);
     // separation from other allies so they fan out instead of stacking
     if (friends) for (const o of friends) {
       if (o === ally || !o.alive) continue;
       const d = pos.distanceTo(o.pos);
       if (d > 1e-3 && d < T.sepDist) { _away.copy(pos).sub(o.pos).multiplyScalar(1 / d); st.addScaledVector(_away, (T.sepDist - d) * T.sepStrength); }
+    }
+    // per-ally weave so the squad never flies as one rigid block (attract only; campaign/co-op pass no squad).
+    // A slowly-varying world-space offset on the steer point -> each ship S-turns on its own rhythm, more so
+    // when breaking than when reforming.
+    if (squad) {
+      const a1 = tAcc * wFreq + wPhase;
+      const amp = squad.mode === 'reform' ? wAmp * 0.4 : wAmp;
+      st.x += Math.sin(a1) * amp;
+      st.y += Math.sin(a1 * 0.7 + 1.3) * amp * 0.45;
+      st.z += Math.cos(a1 * 0.9) * amp;
     }
 
     // how on-target are we? (drives both the sharper steer and the energy management)
@@ -199,7 +222,7 @@ export function createAlly(scene, opts) {
       if (healWait <= 0) for (const z of damageModel.zones) {
         if (z.hp >= z.maxHp) continue;
         z.hp = Math.min(z.maxHp, z.hp + z.maxHp * HEAL_RATE * dt);
-        if (!z.alive && z.hp >= z.maxHp * 0.5) { z.alive = true; if (z.node) z.node.visible = true; } // regrow a blown part
+        if (!z.alive && z.hp >= z.maxHp * 0.5 && z.kind !== 'wing') { z.alive = true; if (z.node) z.node.visible = true; } // regrow a blown part — but NOT a torn-off wing (it stays gone until the next wave reset; an instant pop-back read as a bug)
       }
     }
     damageModel.update(dt, vfx); // per-zone smoke/embers (auto-stops once a zone heals back above the smoke threshold)

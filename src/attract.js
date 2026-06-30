@@ -24,6 +24,12 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     return createAlly(scene, {
       pivot, model, radius: ship.radius, engineMaterials, thrusters: thr,
       projectiles, vfx, lighting, team: 'player', mortal: false,
+      // per-ally flight personality so the squad reads as individuals (varied speed / turn / bank / spacing)
+      tune: {
+        brakeSpeed: 20 + Math.random() * 6, boostSpeed: 50 + Math.random() * 12,
+        turnRate: 0.72 + Math.random() * 0.3, aimTurnRate: 1.45 + Math.random() * 0.45,
+        bankGain: 2.6 + Math.random() * 1.0, sepDist: 24 + Math.random() * 10,
+      },
       onDestroy: (a) => { if (hullDebris) hullDebris.burst({ pos: a.pos, obj: a.pivot, vel: a.vel }, 1.3); },
     });
   }
@@ -112,6 +118,26 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
     let n = 0;
     for (const a of allies) if (a.alive) { focus.pos.add(a.pos); n++; }
     if (n) focus.pos.multiplyScalar(1 / n); else focus.pos.copy(allies[0].pos);
+  }
+
+  // --- squad flight mode: mostly BREAK (individual dogfighting + per-ally weave), occasionally REFORM into a
+  // loose moving formation for a few seconds, then break again — keeps the attract dogfight from looking static.
+  let flightMode = 'break', flightT = 0, flightDur = 16 + Math.random() * 12;
+  const _sc = new THREE.Vector3(), _sv = new THREE.Vector3(), _anchor = new THREE.Vector3();
+  function updateFlightMode(dt) {
+    flightT += dt;
+    if (flightT < flightDur) return;
+    flightT = 0;
+    flightMode = flightMode === 'break' ? 'reform' : 'break';
+    flightDur = flightMode === 'reform' ? 5 + Math.random() * 4 : 16 + Math.random() * 14; // break >> reform
+  }
+  function squadAnchor() {
+    _sc.set(0, 0, 0); _sv.set(0, 0, 0); let n = 0;
+    for (const a of allies) if (a.alive) { _sc.add(a.pos); _sv.add(a.vel); n++; }
+    if (!n) return _anchor.copy(focus.pos);
+    _sc.multiplyScalar(1 / n); _sv.multiplyScalar(1 / n);
+    if (_sv.lengthSq() < 1e-4) _sv.set(0, 0, -1);
+    return _anchor.copy(_sc).addScaledVector(_sv.normalize(), 140); // lead ahead so the group flies forward as a formation
   }
 
   // --- Chig waves (12, looping) --------------------------------------------
@@ -423,7 +449,9 @@ export function createAttract(scene, camera, { ship, thrusters, chigKit, enemyMg
       processSpawnQueue(dt); // drain the staggered Chig warp-ins during the reveal
       if (phaseT >= TC) { phase = 'battle'; beginBattle(); }
     } else {
-      for (const a of allies) a.update(dt, { enemies: enemyMgr.enemies, friends: allies });
+      updateFlightMode(dt);
+      const squad = { mode: flightMode, anchor: flightMode === 'reform' ? squadAnchor() : null };
+      for (const a of allies) a.update(dt, { enemies: enemyMgr.enemies, friends: allies, squad });
       if (allyRcs) for (let i = 0; i < allyRcs.length; i++) allyRcs[i].update(dt, allies[i].alive);
       maybeDramaDeath(dt);
       maybeRespawn(dt);
