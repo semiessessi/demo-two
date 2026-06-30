@@ -167,12 +167,12 @@ export function createRcs(scene, ship, ports = RCS_PORTS) {
       cone.position.set(u.p.pos[0], u.p.pos[1], u.p.pos[2]).addScaledVector(dir, len * 0.5); // base at the port
       cone.material.opacity = Math.min(1, u.level * 1.4) * 0.9 * flick;
       cone.visible = true;
-      // little white thruster light: 0.15 along the jet from the port, subtle, pulses with the jet
+      // little white thruster light: 0.15 along the jet from the port, pulses with the jet
       const light = u.light;
-      const lsz = 0.3 + u.level * 0.25;
+      const lsz = 0.55 + u.level * 0.75; // bigger glow so it actually reads as a light on the hull
       light.scale.set(lsz, lsz, lsz);
       light.position.set(u.p.pos[0], u.p.pos[1], u.p.pos[2]).addScaledVector(dir, 0.15);
-      light.material.opacity = Math.min(0.38, u.level * 0.55) * flick;
+      light.material.opacity = Math.min(0.85, u.level * 1.1) * flick;
       light.visible = true;
     }
   }
