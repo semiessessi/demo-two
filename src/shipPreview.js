@@ -64,11 +64,11 @@ const chigUniforms = {
   uGlow: { value: 1.1 },         // emissive strength of the lines
   uNoiseScale: { value: 18.0 },  // band noise frequency
   uBandCenter: { value: 0.0 },   // band position along uBandAxis (normalised object coords)
-  uBandW: { value: 0.0 },        // band half-extent (0 = pure soft falloff)
+  uBandW: { value: 0.2 },        // band half-extent
   uBandSoft: { value: 0.35 },    // band edge softness
   uProjAxis: { value: 0 },       // 0=X (left/right), 1=Y, 2=Z
   uBandAxis: { value: 1 },       // axis the central band runs across
-  uBandTilt: { value: 1.0 },     // raise the band toward the front (slope; 1.0 ~ 45deg)
+  uBandTilt: { value: 0.5 },     // raise the band toward the front (slope; 1.0 ~ 45deg)
   uTiltAxis: { value: 2 },       // front/length axis (0=X, 1=Y, 2=Z)
   uTiltStart: { value: 1.0 },    // along uTiltAxis: where the rise begins
   uTiltSpan: { value: 2.0 },     // range over which it rises (negative -> rise toward the other end)
