@@ -37,6 +37,9 @@ sortie is a roll you might not survive."
 - **In Vitros** ("tanks") — vat-grown adult humans, a resented underclass. (Loaded is one.)
 - **58th "Wild Cards" · Lt. Col. McQueen · USS Saratoga** — the canon squadron we keep rescuing/supporting.
   We are *not* them — we're the unsung 88th alongside them.
+- **88th "Longshots" · USS Lexington** — OUR home carrier. A Lexington-class **sister ship of the Saratoga**
+  (same hull → the same 3D model serves both). This replaces the earlier "Coral Sea" working name. We fly off
+  *the Lex*, running parallel to the 58th on the Saratoga.
 - **Kazbek** — our own original prison-moon location (Silicate-run; Act 3 rescue of House).
 - **SA-43 Hammerhead** — our jet (canon designation).
 
@@ -52,6 +55,13 @@ sortie is a roll you might not survive."
 
 ## Production notes
 
+- **Capital ships** — built from a CC BY-NC-SA Saratoga STL (alpokemon / orig. Katase, Thingiverse
+  [#1889381](https://www.thingiverse.com/thing:1889381); **attribution required, non-commercial only**).
+  One mesh serves every carrier. Three roles for the same asset:
+  - *Set-dressing* — a carrier looming in the attract/skirmish backdrop.
+  - *Story combatant* — the **Lexington** fights alongside us in the campaign.
+  - *Skirmish refuel/reload point* — its carrier name is randomised from a pool of historic US carriers
+    (Saratoga, Lexington, Ranger, Yorktown, Hornet, Belleau Wood, …).
 - Campaign is gated behind **`?singleplayer`**.
 - Per-mission **VO scripts** live in `public/vo/<missionId>/README.md`; the user records the lines, drops
   them in, and they play (subtitle-only until then).
