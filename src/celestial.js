@@ -454,12 +454,18 @@ export function createRingedPlanet(renderer, sunDir) {
 
   // grey banded body (subtle Saturn-like zonal banding, a faint sandy-grey tint), custom-lit like the others
   const planetMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uSunDir: { value: SUN.clone() }, uExposure: { value: 0.95 }, uAmbient: { value: 0.05 } },
+    uniforms: {
+      uTime: { value: 0 }, uSunDir: { value: SUN.clone() }, uExposure: { value: 0.95 }, uAmbient: { value: 0.05 },
+      uPlanetCenter: { value: new THREE.Vector3() }, uRingN: { value: new THREE.Vector3(0, 1, 0) },
+      uRingIn: { value: R * 1.18 }, uRingOut: { value: R * 2.30 },
+      uRingTex: { value: null }, uRingHasTex: { value: 0 },
+    },
     vertexShader: /* glsl */`
-      varying vec3 vN; varying vec3 vP;
-      void main(){ vN = normalize(mat3(modelMatrix) * normal); vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      varying vec3 vN; varying vec3 vP; varying vec3 vWorldPos;
+      void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWorldPos = wp.xyz; vN = normalize(mat3(modelMatrix) * normal); vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */`
-      precision highp float; varying vec3 vN; varying vec3 vP; uniform float uTime, uExposure, uAmbient; uniform vec3 uSunDir;
+      precision highp float; varying vec3 vN; varying vec3 vP; varying vec3 vWorldPos;
+      uniform float uTime, uExposure, uAmbient, uRingIn, uRingOut, uRingHasTex; uniform vec3 uSunDir, uPlanetCenter, uRingN; uniform sampler2D uRingTex;
       float hash(vec3 p){ p = fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
       float noise(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.0-2.0*f);
         return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
@@ -468,12 +474,29 @@ export function createRingedPlanet(renderer, sunDir) {
       void main(){
         vec3 q = vP; float lat = q.y;
         float warp = fbm(q*3.0 + uTime*0.01) - 0.5;
-        float bands = 0.5 + 0.5*sin(lat*20.0 + warp*5.0);     // soft zonal banding
+        float bands = 0.5 + 0.5*sin(lat*9.0 + warp*4.0);      // FEWER zonal bands
         float mott = fbm(q*7.0 + warp*1.5);
-        vec3 darkB = vec3(0.34,0.33,0.31), lightZ = vec3(0.66,0.64,0.59); // greys, faint warm tint
-        vec3 base = mix(darkB, lightZ, clamp(bands*0.7 + mott*0.35, 0.0, 1.0));
-        base *= 0.9 + 0.2*fbm(q*16.0);                         // fine mottle
+        vec3 darkB = vec3(0.45,0.44,0.42), lightZ = vec3(0.57,0.555,0.52); // LOWER-contrast greys
+        vec3 base = mix(darkB, lightZ, clamp(bands*0.65 + mott*0.3, 0.0, 1.0));
+        base *= 0.94 + 0.12*fbm(q*16.0);                       // fine mottle (gentler)
         float ndl = max(dot(normalize(vN), normalize(uSunDir)), 0.0);
+        // RINGS' shadow cast onto the planet: from this point march toward the sun; if the ray crosses the
+        // ring plane within the (textured) annulus, darken it -> the iconic banded Saturn ring shadow.
+        vec3 L = normalize(uSunDir);
+        vec3 Pp = vWorldPos - uPlanetCenter;
+        float denom = dot(L, uRingN);
+        float ringSh = 0.0;
+        if (abs(denom) > 1e-4) {
+          float t = -dot(Pp, uRingN) / denom;                 // distance along L to the ring plane
+          if (t > 0.0) {
+            vec3 H = Pp + L * t;                               // crossing point, relative to the planet centre
+            float rr = length(H - uRingN * dot(H, uRingN));   // its radius in the ring plane
+            float inAnn = smoothstep(uRingIn*0.99, uRingIn*1.01, rr) * (1.0 - smoothstep(uRingOut*0.99, uRingOut*1.01, rr));
+            float dens = uRingHasTex > 0.5 ? texture2D(uRingTex, vec2(clamp((rr-uRingIn)/(uRingOut-uRingIn), 0.0, 1.0), 0.5)).a : 1.0;
+            ringSh = inAnn * dens;
+          }
+        }
+        ndl *= mix(1.0, 0.08, ringSh);                        // ring shadow darkens the direct sun (gaps let light through)
         gl_FragColor = vec4(base * (uAmbient + (1.0-uAmbient)*ndl) * uExposure, 1.0);
       }`,
   });
@@ -482,7 +505,7 @@ export function createRingedPlanet(renderer, sunDir) {
 
   // faint grey fresnel limb
   const atmoMat = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color(0xb8b4ac) }, uSunDir: { value: SUN.clone() }, uPower: { value: 3.2 }, uStrength: { value: 1.4 } },
+    uniforms: { uColor: { value: new THREE.Color(0xb8b4ac) }, uSunDir: { value: SUN.clone() }, uPower: { value: 3.2 }, uStrength: { value: 4.2 } }, // 3x denser atmosphere rim
     vertexShader: /* glsl */`varying vec3 vN; varying vec3 vWorld; void main(){ vec4 wp=modelMatrix*vec4(position,1.0); vWorld=wp.xyz; vN=normalize(mat3(modelMatrix)*normal); gl_Position=projectionMatrix*viewMatrix*wp; }`,
     fragmentShader: /* glsl */`uniform vec3 uColor; uniform vec3 uSunDir; uniform float uPower, uStrength; varying vec3 vN; varying vec3 vWorld;
       void main(){ vec3 V=normalize(cameraPosition-vWorld); float f=pow(1.0-max(dot(normalize(vN),V),0.0),uPower);
@@ -546,12 +569,17 @@ export function createRingedPlanet(renderer, sunDir) {
     t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
     if (renderer) t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     ringMat.uniforms.uTex.value = t; ringMat.uniforms.uHasTex.value = 1;
+    planetMat.uniforms.uRingTex.value = t; planetMat.uniforms.uRingHasTex.value = 1; // same strip drives the ring shadow's gaps
   }, undefined, () => {});
 
+  const _rq = new THREE.Quaternion(), _rn = new THREE.Vector3();
   function update(dt) {
     planetMat.uniforms.uTime.value += dt;
     planet.rotation.y += 0.006 * dt;
     ringMat.uniforms.uPlanetCenter.value.copy(group.position); // group is re-centred on the camera each frame
+    planetMat.uniforms.uPlanetCenter.value.copy(group.position);
+    ring.getWorldQuaternion(_rq); _rn.set(0, 0, 1).applyQuaternion(_rq); // ring's world normal (RingGeometry normal = +Z)
+    planetMat.uniforms.uRingN.value.copy(_rn);
   }
 
   return { group, planet, planetMat, atmoMat, ring, ringMat, radius: R, update };
