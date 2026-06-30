@@ -73,7 +73,8 @@ sortie is a roll you might not survive."
     Yorktown, Hornet, Belleau Wood, …).
   - *Chig battleship* — `assets-src/source/chig-battleship.fbx`; dark-green hull + a glowing hex/triangle
     grid (hexagons split into six triangles) with recessed seams + a cyan noise core band that tilts up at
-    the angled front. Roles: the **Battle of the Belt** set-piece (TWO of them, missiled to death by FOUR
+    the angled front. **In-game scale: ~30× the Chig fighter's height** (capital-ship presence — apply when
+    integrating). Roles: the **Battle of the Belt** set-piece (TWO of them, missiled to death by FOUR
     human carriers while the 88th saves the 58th); a **fighter source** in later missions; and in
     **skirmish**, warps in after wave 3 to spawn fighters.
 - Campaign is gated behind **`?singleplayer`**.
