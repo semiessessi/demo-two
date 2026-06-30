@@ -64,8 +64,8 @@ const chigUniforms = {
   uGlow: { value: 1.6 },         // emissive strength of the lines
   uNoiseScale: { value: 5.0 },   // band noise frequency
   uBandCenter: { value: 0.0 },   // band position along uBandAxis (normalised object coords)
-  uBandW: { value: 1.1 },        // band half-extent
-  uBandSoft: { value: 0.5 },     // band edge softness
+  uBandW: { value: 0.3 },        // band half-extent (narrow slice across the middle)
+  uBandSoft: { value: 0.12 },    // band edge softness
   uProjAxis: { value: 0 },       // 0=X (left/right), 1=Y, 2=Z
   uBandAxis: { value: 1 },       // axis the central band runs across
 };
