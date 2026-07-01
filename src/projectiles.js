@@ -44,7 +44,7 @@ const BLOB_FRAG = /* glsl */`
                mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z); }
   float fbm3(vec3 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { v += a * vn3(p); p *= 2.03; a *= 0.5; } return v; }
   void main() {
-    float headV = 0.72;                                    // blob sits near the leading end
+    float headV = 0.5;                                     // blob centred so it stays a full circle head-on
     vec2 pb = vec2(vUv.x - 0.5, (vUv.y - headV) / max(uAspect, 0.02));
     float bd = length(pb) * 2.67;                          // 2.0 = full, 4.0 = half -> 2.67 ≈ 75% blob diameter
     float blob = 1.0 - smoothstep(0.3, 1.0, bd);           // soft round core
@@ -85,7 +85,7 @@ export function createProjectiles(scene, camera) {
 
   const live = [];
   const zAxis = new THREE.Vector3(0, 0, 1);
-  const _dir = new THREE.Vector3(), _toCam = new THREE.Vector3(), _right = new THREE.Vector3(), _nrm = new THREE.Vector3();
+  const _dir = new THREE.Vector3(), _toCam = new THREE.Vector3(), _right = new THREE.Vector3(), _screenVel = new THREE.Vector3();
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion();
 
   function spawn({ pos, vel, color, team, damage = 20, life = 2.0, radius = 0.6, scale = 1, width = 1, glow = 1.0, noise = 0, round = 0 }) {
@@ -101,10 +101,9 @@ export function createProjectiles(scene, camera) {
     const u = b.mesh.material.uniforms;
     u.uColor.value.set(color); u.uGlow.value = glow; u.uNoise.value = noise; u.uSeed.value = Math.random();
     if (round) {
-      const w = scale * width * 0.5;   // blob diameter
-      const len = w * 3.2;             // total streak length (blob + trail behind)
-      u.uAspect.value = w / len;
-      b.blob.scale.set(w, len, 1);
+      b.blobW = scale * width * 0.5;   // quad width = blob size
+      b.trailLen = b.blobW * 2.8;      // extra length added along the SCREEN velocity when side-on
+      // orientation + length + aspect are set per-frame in update (screen-facing, velocity-stretched)
     } else {
       b.box.scale.set(scale * width, scale * width, scale);
     }
@@ -131,12 +130,18 @@ export function createProjectiles(scene, camera) {
       b.mesh.position.copy(b.pos);
       _dir.copy(b.vel); if (_dir.lengthSq() < 1e-8) _dir.set(0, 0, 1); _dir.normalize();
       if (b.round) {
-        // cylindrical billboard: long axis (local +Y) along travel, flat face turned toward the camera
-        _toCam.copy(camera.position).sub(b.pos);
-        _right.crossVectors(_dir, _toCam); if (_right.lengthSq() < 1e-8) _right.set(1, 0, 0); _right.normalize();
-        _nrm.crossVectors(_right, _dir).normalize();
-        _m.makeBasis(_right, _dir, _nrm);
+        // SCREEN-facing billboard, stretched along the velocity's screen projection. Head-on (velocity toward
+        // the camera) -> no stretch -> a plain round circle; side-on -> blob + trail. Round from every angle.
+        _toCam.copy(camera.position).sub(b.pos); const tl = _toCam.length() || 1; _toCam.multiplyScalar(1 / tl);
+        _screenVel.copy(_dir).addScaledVector(_toCam, -_dir.dot(_toCam)); // velocity projected into the view plane
+        let sv = _screenVel.length();
+        if (sv < 1e-3) { _screenVel.set(0, 1, 0).applyQuaternion(camera.quaternion); sv = 0; } else _screenVel.multiplyScalar(1 / sv);
+        _right.crossVectors(_screenVel, _toCam); if (_right.lengthSq() < 1e-8) _right.set(1, 0, 0); _right.normalize();
+        _m.makeBasis(_right, _screenVel, _toCam); // X=screen-right, Y=screen velocity, Z=toward camera
         b.blob.quaternion.setFromRotationMatrix(_m);
+        const len = b.blobW + b.trailLen * sv; // square (round) head-on -> elongated side-on
+        b.blob.scale.set(b.blobW, len, 1);
+        b.blob.material.uniforms.uAspect.value = b.blobW / len;
       } else {
         _q.setFromUnitVectors(zAxis, _dir);
         b.box.quaternion.copy(_q);
