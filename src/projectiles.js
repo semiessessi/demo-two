@@ -48,8 +48,10 @@ const BLOB_FRAG = /* glsl */`
     vec2 pb = vec2(vUv.x - 0.5, (vUv.y - headV) / max(uAspect, 0.02));
     float bd = length(pb) * 2.67;                          // 2.0 = full, 4.0 = half -> 2.67 ≈ 75% blob diameter
     float blob = 1.0 - smoothstep(0.3, 1.0, bd);           // soft round core
-    float n = fbm3(vec3(vUv * 6.0 + uSeed * 30.0, uTime * 3.0));
-    n = smoothstep(0.12, 0.85, n);                         // contrast -> clear fractal patches
+    // fractal noise ON the blob — sampled in the aspect-corrected blob coords (isotropic, doesn't smear when
+    // the billboard stretches) at a frequency fine enough that the fbm patches actually read across the blob.
+    float n = fbm3(vec3(pb * 9.0 + uSeed * 30.0, uTime * 2.0));
+    n = smoothstep(0.2, 0.9, n);                           // contrast -> clear fractal patches
     float bright = mix(1.0 - uNoise, 1.0, n);              // WHITE modulated by fractal noise (the primary element)
     blob *= bright;
     // secondary trail: a fading, tapering streak behind the blob
