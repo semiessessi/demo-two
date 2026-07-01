@@ -5,7 +5,8 @@
 // fully playable before any VO is recorded. Triggers poll isDone(lineId) (e.g. {commsDone:'co.checkin'}).
 
 export function createComms({ audio, missionHud, characters = {}, getVoiceGain, duckLevel = 0.35 } = {}) {
-  let lines = {};        // lineId -> { speaker, text, dur, audio? }
+  let lines = {};        // lineId -> { speaker, text, dur, audio?, face? }
+  let faces = {};        // per-mission speaker -> portrait override (e.g. { house: 'house-operations' })
   const buffers = {};    // lineId -> decoded AudioBuffer | null (null once probed-and-missing)
   let queue = [];        // pending line ids
   let active = null;     // { id, dur, elapsed, handle }
@@ -16,9 +17,10 @@ export function createComms({ audio, missionHud, characters = {}, getVoiceGain, 
   }
 
   // Register a mission's lines + prefetch/decode its VO (fire-and-forget; missing files -> subtitle-only).
-  function load(missionId, lineMap) {
+  function load(missionId, lineMap, faceMap) {
     clear();
     lines = lineMap || {};
+    faces = faceMap || {};
     for (const id of Object.keys(lines)) {
       const stem = lines[id].audio || id;
       buffers[id] = null;
@@ -38,7 +40,9 @@ export function createComms({ audio, missionHud, characters = {}, getVoiceGain, 
     const def = lines[id];
     if (!def) { played.add(id); return; } // unknown line — mark done so a {commsDone} trigger can't hang
     const ch = speakerOf(def);
-    if (missionHud && missionHud.showSubtitle) missionHud.showSubtitle(ch.name, def.text, ch.color, def.face || def.speaker); // per-line `face` override -> /faces/<face>.png, else the speaker's default
+    // portrait: per-line `face` > per-mission `faces[speaker]` (e.g. House grounded -> house-operations) > speaker default
+    const faceKey = def.face || faces[def.speaker] || def.speaker;
+    if (missionHud && missionHud.showSubtitle) missionHud.showSubtitle(ch.name, def.text, ch.color, faceKey);
     let dur = def.dur || 3;
     let handle = null;
     const buf = buffers[id];

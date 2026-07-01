@@ -18,6 +18,7 @@ export const m3 = {
   loadout: 'default',
   vo: 'm3-deadmanshand',
   music: { track: null, duck: 0.3 },
+  faces: { house: 'house-operations' }, // House still grounded (commands from ops)
 
   briefing: {
     location: 'ACHILLES SYSTEM · OUTER EDGE',

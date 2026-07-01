@@ -17,6 +17,7 @@ export const m1 = {
   loadout: 'default',
   vo: 'm1-shakedown',
   music: { track: null, duck: 0.35 },
+  faces: { house: 'house-operations' }, // House is GROUNDED early — she commands from the Lex's ops, not a cockpit
 
   briefing: {
     location: 'GROOMBRIDGE 34 · RECON SWEEP',
@@ -60,7 +61,7 @@ export const m1 = {
       do: [ { comms: ['boxcars.empty', 'snakeeyes.quiet'] }, { waypoint: { id: 'RECON3', label: 'RECON 3' } } ] },
     { id: 'b_r3', when: { or: [ { waypoint: 'RECON3', radius: 200 }, { after: 'b_r2', delay: 150 } ] },
       do: [ { comms: 'house.recon3' }, { objective: { id: 'recon', state: 'complete' } } ] },
-    // the recon was clean — and then the real news breaks: the Chigs are already at Earth.
+    // the recon is CLEAN — and the emptiness itself is the alarm: they never massed here, so they've gone for Earth.
     { id: 'b_flash', when: { commsDone: 'house.recon3' },
       do: [ { comms: 'house.flash' },
             { objective: { id: 'rtb', state: 'active', label: 'Get back to the wormhole' } },
@@ -69,19 +70,19 @@ export const m1 = {
     { id: 'b_jump', when: { or: [ { waypoint: 'GATE', radius: 90 }, { after: 'b_flash', delay: 240 } ] },
       do: [ { comms: 'house.jump' }, { objective: { id: 'rtb', state: 'complete' } } ] },
     { id: 'b_end', when: { commsDone: 'house.jump' },
-      do: [ { complete: { title: 'JUMPING OUT', sub: 'Groombridge was a feint. The Wild Cards are dying at the Belt — and the 88th is the only thing close enough to matter.' } } ] },
+      do: [ { complete: { title: 'JUMPING OUT', sub: 'Groombridge was empty — and empty means the Chigs never came here. They are already driving on the inner worlds. The Longshots race home a step behind a war.' } } ] },
   ],
 
   lines: {
-    'house.checkin':  { speaker: 'house',     text: "Longshot flight, House. We're through the Groombridge gate — recon sweep. Command thinks the Chigs might be staging here; we go and find out. Form on Hardway, weapons cold.", dur: 7.5 },
+    'house.checkin':  { speaker: 'house',     text: "Longshot flight, this is House, on the Lex. You're through the Groombridge gate — recon sweep. Command reckons the Chigs are massing out there for a push; you go confirm it. Form on Hardway, weapons cold.", dur: 8.5 },
     'hardway.formup': { speaker: 'hardway',   text: "Comeout — your slot's the blue box. Slide in nice and easy and hold it. Stay off the gas.", dur: 5.5 },
     'hardway.in':     { speaker: 'hardway',   text: "Good, you're in the pocket. Flight, pushing up. Let's see what's out here.", dur: 4.5 },
-    'house.recon1':   { speaker: 'house',     text: "First mark... clear. Nothing on the scope — no reactors, no traffic, nothing at all.", dur: 5.5 },
+    'house.recon1':   { speaker: 'house',     text: "First mark's clear — I've got your take up here. Nothing on the scope: no reactors, no traffic, nothing at all.", dur: 5.5 },
     'boxcars.empty':  { speaker: 'boxcars',   text: "Boss, there's nothing out here. Where's this build-up they dragged us out for?", dur: 4.5 },
     'snakeeyes.quiet':{ speaker: 'snakeeyes', text: "Empty suits me fine. Nobody out here to roll snake-eyes on me.", dur: 4.0 },
-    'house.recon3':   { speaker: 'house',     text: "Last mark's clear too. Whole system's a ghost — no build-up, no Chigs, nothing. That's our recon: there's nothing here.", dur: 7.5 },
-    'house.flash':    { speaker: 'house',     text: "Longshot flight — flash traffic. The 58th just got bounced hard at the Belt; they're going under, and we're the closest thing to help. Recon's scrubbed — back to the gate and jump, now.", dur: 8.5 },
-    'hardway.burn':   { speaker: 'hardway',   text: "You heard her — the Wild Cards are out of time. Firewall it for the gate; we jump together.", dur: 5.0 },
-    'house.jump':     { speaker: 'house',     text: "Gate's hot. Punch through, Longshot — the 58th can't hold much longer. See you on the other side.", dur: 6.0 },
+    'house.recon3':   { speaker: 'house',     text: "Last mark's clear too. Whole system reads a ghost from up here — no build-up, no Chigs, nothing. That's your recon, Longshot: there's nothing there.", dur: 7.5 },
+    'house.flash':    { speaker: 'house',     text: "Longshot flight, House — and 'nothing' is the problem. Command staged for a war here and the system's empty; they never came. If they're not massing at Groombridge, they've already slipped past us for the inner worlds. For Earth. Scrub the recon — back to the gate and jump. Now.", dur: 11.0 },
+    'hardway.burn':   { speaker: 'hardway',   text: "You heard her — if they're driving on Earth, we're already behind. Firewall it for the gate; form on me, we jump together.", dur: 5.5 },
+    'house.jump':     { speaker: 'house',     text: "Gate's hot. Punch through, Longshot — every second's Earth's now. I'll have Command lit before you're through. Go.", dur: 6.0 },
   },
 };

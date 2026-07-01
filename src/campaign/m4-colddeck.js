@@ -18,6 +18,7 @@ export const m4 = {
   loadout: 'default',
   vo: 'm4-colddeck',
   music: { track: null, duck: 0.3 },
+  faces: { house: 'house-operations' }, // House still grounded (commands from ops)
 
   briefing: {
     location: 'TARTARUS · BEYOND THE LINE',

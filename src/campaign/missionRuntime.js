@@ -107,7 +107,7 @@ export function createMission(def, world) {
       scene.add(inst);
       placedShips.push(inst);
     }
-    if (comms) comms.load(def.vo, def.lines || {});
+    if (comms) comms.load(def.vo, def.lines || {}, def.faces || {});
     if (missionHud) { missionHud.clearObjectives(); missionHud.setWaypoint(null); missionHud.setSlot(null); missionHud.show(); }
   }
 

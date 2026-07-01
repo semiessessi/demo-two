@@ -16,12 +16,13 @@ export const m2 = {
   loadout: 'default',
   vo: 'm2-belt',
   music: { track: null, duck: 0.3 },
+  faces: { house: 'house-operations' }, // House still grounded — directs from the Lex's ops
 
   briefing: {
     location: 'JUPITER TROJANS · THE BELT',
     body: [
-      "You came out of the gate into someone else's disaster. The 58th — the Wild Cards, off the Saratoga — got bounced in the Belt and they're being torn apart. The 88th is the only flight close enough to reach them.",
-      "We go in on radio silence — no chatter on the run-in, just the 58th's traffic over the net as we close. Form up, then break and pull the Chigs off them. Their fighters are faster and climb harder, but you turn tighter and hit heavier — out-fly them, don't chase. Get the Wild Cards out alive.",
+      "After Groombridge turned up empty, the picture came clear fast: the Chigs bypassed the staging system and drove for the inner worlds — for Earth. The 58th 'Wild Cards', off the Saratoga, were thrown into the Belt — the Jupiter Trojans — to blunt that push and buy Earth time.",
+      "They bought it. But they're being torn apart out there, and the 88th is the closest flight that can reach them. You go in on radio silence — no chatter on the run-in, just the 58th's traffic over the net as you close. Form up, then break and pull the Chigs off them. They're faster and climb harder, but you turn tighter and hit heavier — out-fly them, don't chase. Get the Wild Cards out alive.",
     ],
     objectives: ['Reach the Wild Cards', 'Clear the Chigs off the 58th'],
   },
@@ -53,11 +54,11 @@ export const m2 = {
             { spawn: { count: 4, at: [180, 20, -520], heading: [0, 0, 1], difficulty: 0.3 } },
             { spawn: { count: 3, at: [-220, -10, -560], heading: [0, 0, 1], difficulty: 0.3 } } ] },
     { id: 'b_w2', when: { and: [ { after: 'b_engage', delay: 2 }, { allEnemiesDead: true } ] },
-      do: [ { comms: 'boxcars.splash' },
+      do: [ { comms: ['boxcars.splash', 'sixshooter.two'] },
             { spawn: { count: 4, at: [260, 40, -600], heading: [0, 0, 1], difficulty: 0.45 } },
             { spawn: { count: 4, at: [-180, 30, -640], heading: [0, 0, 1], difficulty: 0.45 } } ] },
     { id: 'b_w3', when: { and: [ { after: 'b_w2', delay: 2 }, { allEnemiesDead: true } ] },
-      do: [ { comms: ['house.push', 'snakeeyes.odds'] },
+      do: [ { comms: ['house.push', 'pips.highside', 'snakeeyes.odds'] },
             { spawn: { count: 5, at: [120, -30, -700], heading: [0, 0, 1], difficulty: 0.6 } },
             { spawn: { count: 5, at: [-260, 50, -700], heading: [0, 0, 1], difficulty: 0.6 } } ] },
     { id: 'b_clear', when: { and: [ { after: 'b_w3', delay: 2 }, { allEnemiesDead: true } ] },
@@ -75,6 +76,8 @@ export const m2 = {
     'boxcars.splash':{ speaker: 'boxcars',   text: "Splash one! Hold on, Wild Cards — the Longshots are buying you out.", dur: 4.5 },
     'house.push':    { speaker: 'house',     text: "More inbound — they want the 58th dead. Keep your spacing, stay between them and the Wild Cards.", dur: 5.5 },
     'snakeeyes.odds':{ speaker: 'snakeeyes', text: "Whole sky full of teeth. Just the odds I like — terrible.", dur: 4.0 },
-    'house.holds':   { speaker: 'house',     text: "That's the last of them. The Wild Cards are clear — they'll make the Saratoga. Good flying, Comeout. Form up, we're going home.", dur: 7.0 },
+    'sixshooter.two':{ speaker: 'sixshooter',text: "Six-Shooter — two for two! Keep 'em coming, I'm just warming up.", dur: 4.0 },
+    'pips.highside': { speaker: 'pips',      text: "Pips has the high side. Boxcars, break right — I'll clean up behind you.", dur: 4.5 },
+    'house.holds':   { speaker: 'house',     text: "That's the last of them. The Wild Cards are clear — they'll make the Saratoga. Good flying, Comeout. Form up and bring my flight home.", dur: 7.0 },
   },
 };

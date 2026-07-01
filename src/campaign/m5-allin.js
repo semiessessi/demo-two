@@ -19,6 +19,7 @@ export const m5 = {
   loadout: 'default',
   vo: 'm5-allin',
   music: { track: null, duck: 0.3 },
+  faces: { house: 'house-operations' }, // House commands from the Lex's ops — until it's lost here (pilot portrait comes after)
 
   briefing: {
     location: 'PROXIMA CENTAURI · THE LINE',
@@ -61,12 +62,12 @@ export const m5 = {
             { spawn: { count: 5, at: [220, 30, -560], heading: [0, 0, 1], difficulty: 0.45 } },
             { spawn: { count: 5, at: [-240, -20, -600], heading: [0, 0, 1], difficulty: 0.45 } } ] },
     { id: 'b_w2', when: { and: [ { after: 'b_engage', delay: 2 }, { allEnemiesDead: true } ] },
-      do: [ { comms: 'snakeeyes.many' },
+      do: [ { comms: ['snakeeyes.many', 'sixshooter.wall'] },
             { spawn: { count: 6, at: [300, 50, -640], heading: [0, 0, 1], difficulty: 0.55 } },
             { spawn: { count: 5, at: [-200, 30, -660], heading: [0, 0, 1], difficulty: 0.55 } } ] },
     // strike group breaks for the Lexington
     { id: 'b_bombers', when: { and: [ { after: 'b_w2', delay: 2 }, { allEnemiesDead: true } ] },
-      do: [ { comms: 'hardway.bombers' }, { objective: { id: 'lex', state: 'active', label: 'Stop the strike on the Lexington' } },
+      do: [ { comms: ['hardway.bombers', 'pips.onit'] }, { objective: { id: 'lex', state: 'active', label: 'Stop the strike on the Lexington' } },
             { spawn: { count: 6, at: [60, -30, -720], heading: [0, 0, 1], difficulty: 0.65 } },
             { spawn: { count: 4, at: [-160, 60, -700], heading: [0, 0, 1], difficulty: 0.6 } } ] },
     // the gut-punch — held the line, still lost her
@@ -87,14 +88,16 @@ export const m5 = {
   ],
 
   lines: {
-    'house.brief':    { speaker: 'house',     text: "Longshot flight, House. This is the line — Proxima. The Chigs are throwing everything they have at the fleet, and we are the screen over the carriers. The Lex is behind us. We hold. Whatever it costs, we hold.", dur: 9.5 },
+    'house.brief':    { speaker: 'house',     text: "Longshot flight, House. This is the line — Proxima. The Chigs are throwing everything they have at the fleet, and you are the screen over the carriers. The Lex — my ship — is right behind you. We hold this line together, whatever it costs.", dur: 10.0 },
     'hardway.in':     { speaker: 'hardway',   text: "Forming up — tight as you've ever flown it, Comeout. This is the big one. Here they come...", dur: 5.5 },
     'house.wall':     { speaker: 'house',     text: "That's not a wave — that's a wall. Pick your targets, keep moving, and do not let one of them past you to the carriers. Break!", dur: 6.5 },
     'snakeeyes.many': { speaker: 'snakeeyes', text: "Always said the odds would catch up to me. Didn't figure they'd bring the whole house with 'em.", dur: 5.0 },
     'hardway.bombers':{ speaker: 'hardway',   text: "Strike group — heavy birds, breaking low for the Lexington! They get through and she is done. Get on them — now, now, NOW!", dur: 6.5 },
+    'sixshooter.wall':{ speaker: 'sixshooter',text: "Six-Shooter, still in it! There's a hundred of them — I don't care, nothing gets past me to those carriers!", dur: 5.0 },
+    'pips.onit':      { speaker: 'pips',      text: "Pips on the bombers — I've got the leader. Somebody keep my six clear!", dur: 4.5 },
     'house.lex':      { speaker: 'house',     text: "...No. No — the Lex is hit. She's hit bad, they came in under the screen. She's... oh, God. She's burning.", dur: 7.5 },
     'house.evac':     { speaker: 'house',     text: "Lifeboats away — cover them! Every soul that made it off that ship is the only thing that matters now. Keep the Chigs off the boats!", dur: 7.5 },
     'snakeeyes.quiet':{ speaker: 'snakeeyes', text: "...all those people.", dur: 2.5 },
-    'house.gone':     { speaker: 'house',     text: "The Lexington is gone. We held the line — we held it, and it still wasn't enough to save her. Form up on me, what's left of us. Tonight we just get the living home.", dur: 9.5 },
+    'house.gone':     { speaker: 'house',     text: "The Lexington is gone. We held the line — we held it, and it still wasn't enough to save her. Form up, what's left of us. Tonight we just get the living home.", dur: 9.5 },
   },
 };
