@@ -18,6 +18,8 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
   // co-op: when set, a player bolt hitting an enemy calls this instead of mutating e.hp/killing —
   // host applies + may kill + broadcasts; joiner reports the hit. null = single-player (local hp).
   let onEnemyHit = null;
+  // capital ships (battleships): big multi-sphere targets a player bolt can hit. () => [{ spheres, hit }].
+  let getCapitalTargets = opts.getCapitalTargets || null;
 
   const seg = new THREE.Vector3();
   const toC = new THREE.Vector3();
@@ -56,6 +58,7 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
       segStart.copy(b.pos).addScaledVector(b.vel, -dt); // where the bolt was at the start of the frame
 
       if (b.team === 'player') {
+        let killed = false;
         for (const e of enemyMgr.enemies) {
           if (!e.alive) continue;
           const rr = e.radius + b.radius;
@@ -70,7 +73,19 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
               e.hp -= b.damage;
               if (e.hp <= 0) enemyMgr.kill(e); // death sequence (instant / spin-out / chained) owns the blast
             }
+            killed = true;
             break;
+          }
+        }
+        // capital ships (battleships): test the bolt segment against each hull sphere
+        if (!killed && getCapitalTargets) {
+          for (const t of getCapitalTargets()) {
+            let hit = false;
+            for (const s of t.spheres) {
+              const rr = s.radius + b.radius;
+              if (segDistSq(segStart, b.pos, s.pos) <= rr * rr) { hit = true; break; }
+            }
+            if (hit) { projectiles.kill(b); t.hit(b.damage, b.pos); break; }
           }
         }
       } else if (b.team === 'enemy') {
@@ -131,6 +146,9 @@ export function createCombat(projectiles, enemyMgr, vfx, opts = {}) {
     },
     setOnEnemyHit(fn) {
       onEnemyHit = fn;
+    },
+    setCapitalTargets(fn) {
+      getCapitalTargets = fn;
     },
   };
 }
