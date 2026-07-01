@@ -13,6 +13,7 @@ export function createWaveManager(enemies, opts = {}) {
     rampRate: 0.08, // difficulty gained per wave (0..1 over ~12 waves)
   };
   Object.assign(params, opts.params || {});
+  const spawnOrigin = typeof opts.spawnOrigin === 'function' ? opts.spawnOrigin : null; // () => Vector3|null : emit fighters from a battleship
 
   let timer = 2.0; // first wave shortly after start
   let wave = 0;
@@ -27,15 +28,22 @@ export function createWaveManager(enemies, opts = {}) {
     wave++;
     const size = Math.min(params.maxSize, params.minSize + Math.floor(wave / 3));
     const pattern = FORMATION_PATTERNS[(wave - 1) % FORMATION_PATTERNS.length];
-    fwd.set(0, 0, -1).applyQuaternion(player.quat);
-    right.crossVectors(fwd, up).normalize();
-    const ox = (Math.random() * 2 - 1) * 120;
-    const oy = (Math.random() * 2 - 1) * 55;
-    pos
-      .copy(player.pos)
-      .addScaledVector(fwd, params.spawnDist)
-      .addScaledVector(right, ox)
-      .addScaledVector(up, oy);
+    const origin = spawnOrigin ? spawnOrigin() : null;
+    if (origin) {
+      // fighters pour out of the battleship (scattered around it), then head for the player
+      pos.copy(origin);
+      pos.x += (Math.random() * 2 - 1) * 60;
+      pos.y += (Math.random() * 2 - 1) * 60;
+      pos.z += (Math.random() * 2 - 1) * 60;
+    } else {
+      fwd.set(0, 0, -1).applyQuaternion(player.quat);
+      right.crossVectors(fwd, up).normalize();
+      pos
+        .copy(player.pos)
+        .addScaledVector(fwd, params.spawnDist)
+        .addScaledVector(right, (Math.random() * 2 - 1) * 120)
+        .addScaledVector(up, (Math.random() * 2 - 1) * 55);
+    }
     heading.copy(player.pos).sub(pos).normalize();
     const difficulty = Math.min(1, (wave - 1) * params.rampRate); // ramps up as waves climb
     enemies.spawnFormation({ pattern, count: size, pos, heading, difficulty });

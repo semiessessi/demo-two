@@ -9,6 +9,7 @@ import { buildStarfield } from './starfield.js';
 import { loadShip } from './ship.js';
 import { loadChig, layoutChigGlows, chigThruster } from './enemyShip.js';
 import { loadChigBattleship } from './chigBattleship.js';
+import { createBattleships } from './battleships.js';
 import { createThrusters } from './thruster.js';
 import { createFlight } from './flight.js';
 import { createAudioManager } from './audio.js';
@@ -409,6 +410,7 @@ let flight = null;
 let stars = null;
 let chigKit = null;
 let chigBattleship = null;
+let battleships = null; // skirmish capital-ship spawner (wave 3 & 5; maintain two)
 let enemyMgr = null;
 let waves = null;
 let debug = null;
@@ -432,6 +434,7 @@ function restartWorld() {
   enemyMgr.reset();
   projectiles.reset();
   if (waves) waves.reset();
+  if (battleships) battleships.reset();
   if (debris) debris.reset();
   if (playerDebris) playerDebris.reset();
   if (ship.model) ship.model.visible = true; // re-show the hull after a destroyed cutscene
@@ -724,22 +727,36 @@ async function init() {
   // register the lit hull materials so the cascaded sun shadows fall on them (self + ship-to-ship)
   lighting.registerTree(ship.pivot);
   lighting.registerTree(chigKit.template);
-  // TEST: one Chig battleship as capital-ship set-dressing, sized to ~30x the fighter's height (bible).
-  // Procedural shader ported from /ship-preview. Positioned off to one side + ahead, framed by its own size.
+  // Chig battleship (capital-ship enemy), sized to ~30x the fighter's height (bible). Procedural shader ported
+  // from /ship-preview. Placement differs by mode (below); the template stays out of the scene until placed.
   try {
     chigBattleship = await loadChigBattleship(sunDir);
     const fh = new THREE.Box3().setFromObject(chigKit.template).getSize(new THREE.Vector3()).y || chigKit.radius;
-    const H = 30 * fh;
-    chigBattleship.template.scale.setScalar(H / chigBattleship.normalizedHeight);
-    chigBattleship.template.position.set(H * 0.6, H * 0.12, -H * 4.0);
-    scene.add(chigBattleship.template);
-    console.log('[chigBattleship] placed — height', H.toFixed(1), '(30x fighter', fh.toFixed(2), ')');
+    chigBattleship.worldHeight = 30 * fh;
+    chigBattleship.template.scale.setScalar(chigBattleship.worldHeight / chigBattleship.normalizedHeight);
+    console.log('[chigBattleship] loaded — height', chigBattleship.worldHeight.toFixed(1), '(30x fighter', fh.toFixed(2), ')');
   } catch (e) { console.warn('[chigBattleship] load failed', e); }
   enemyMgr = createEnemyManager(scene, chigKit, projectiles, { onFire: (pos) => sfx.chigShot(pos) });
-  if (!ATTRACT) waves = createWaveManager(enemyMgr); // attract owns its own wave loop
+  // skirmish: once a battleship is up, fighter waves pour out of it (attract runs its own wave loop)
+  if (!ATTRACT) waves = createWaveManager(enemyMgr, { spawnOrigin: () => (battleships ? battleships.spawnOrigin() : null) });
   vfx = createVfx(scene, camera, { lightDir: sunDir, onExplosion: (p, s) => sfx.onExplosion(p, s) }); // align smoke self-shadow with the real sun; SFX boom on every explosion
   if (OCCLUDE) vfx.setOcclusion(depthTexture(), camera.near, camera.far); // feed the smoke the opaque depth
   enemyMgr.setVfx(vfx); // death sequences (explosions/smoke) need VFX
+  // Battleship placement: attract shows ONE as looming set-dressing; skirmish uses the spawner (warps one in
+  // at wave 3, another at wave 5, then keeps two alive — a destroyed one is replaced; kills don't touch waves).
+  if (chigBattleship) {
+    if (ATTRACT) {
+      const H = chigBattleship.worldHeight;
+      chigBattleship.template.position.set(H * 0.6, H * 0.12, -H * 4.0);
+      scene.add(chigBattleship.template);
+    } else {
+      battleships = createBattleships(scene, {
+        template: chigBattleship.template, worldHeight: chigBattleship.worldHeight, vfx,
+        getWave: () => (waves ? waves.wave : 0),
+        getPlayer: () => ({ pos: ship.pivot.position, quat: ship.pivot.quaternion }),
+      });
+    }
+  }
   debris = createDebris(scene, { template: chigKit.template, material: chigKit.material, vfx, count: IS_MOBILE ? 24 : 64, cap: IS_MOBILE ? 96 : 240 });
   enemyMgr.setDebris(debris); // ship-fracture chunks on death
   // Wing-fracture debris: a slice of the ship (whole aileron + the fuselage root inside the wing collision
@@ -1036,7 +1053,8 @@ function startLoop() {
     combat.update(dt);
     if (flying) damage.update(dt, vfx);
     vfx.update(dt);
-    if (chigBattleship) chigBattleship.update(dt); // advance the core-band noise
+    if (chigBattleship) chigBattleship.update(dt); // advance the core-band noise (shared by all clones)
+    if (battleships) battleships.update(); // skirmish: warp in / maintain two battleships per the wave count
     if (debris) debris.update(dt, debrisPlayer, enemyMgr.enemies); // enemy debris: drift, bounce, cull
     if (asteroidField) asteroidField.update(dt, { player: debrisPlayer, enemies: enemyMgr.enemies, projectiles, damage, enemyMgr, mode: gameState.mode }); // Trojan rocks: drift + collide with ships/bolts
     if (playerDebris) playerDebris.update(dt, null, enemyMgr.enemies); // player wreck debris (no self-collide)
