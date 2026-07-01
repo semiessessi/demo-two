@@ -38,7 +38,7 @@ export function createComms({ audio, missionHud, characters = {}, getVoiceGain, 
     const def = lines[id];
     if (!def) { played.add(id); return; } // unknown line — mark done so a {commsDone} trigger can't hang
     const ch = speakerOf(def);
-    if (missionHud && missionHud.showSubtitle) missionHud.showSubtitle(ch.name, def.text, ch.color);
+    if (missionHud && missionHud.showSubtitle) missionHud.showSubtitle(ch.name, def.text, ch.color, def.speaker);
     let dur = def.dur || 3;
     let handle = null;
     const buf = buffers[id];

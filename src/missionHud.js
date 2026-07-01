@@ -45,16 +45,27 @@ export function createMissionHud() {
   }
   function clearObjectives() { objectives.clear(); renderObjectives(); }
 
-  // --- comms subtitle (bottom-centre) ---
-  const sub = el('div', `position:fixed;left:50%;bottom:84px;transform:translateX(-50%);max-width:min(720px,86vw);`
-    + `padding:9px 16px;${PANEL}${FONT}text-align:center;z-index:58;display:none;pointer-events:none;`, document.body);
-  const subName = el('div', 'font-size:10px;letter-spacing:0.16em;margin-bottom:3px;', sub);
-  const subText = el('div', 'font-size:14px;line-height:1.4;color:#eef2fb;', sub);
-  function showSubtitle(name, text, color = '#9ec7ff') {
+  // --- comms subtitle (bottom-centre) — optional speaker portrait + name + text ---
+  const sub = el('div', `position:fixed;left:50%;bottom:84px;transform:translateX(-50%);max-width:min(760px,88vw);`
+    + `padding:9px 14px;${PANEL}${FONT}z-index:58;display:none;pointer-events:none;align-items:center;gap:12px;`, document.body);
+  const subFace = el('img', 'width:54px;height:54px;flex:none;border-radius:8px;object-fit:cover;'
+    + 'border:2px solid rgba(150,180,255,0.5);display:none;', sub);
+  const subBody = el('div', 'flex:1;min-width:0;text-align:left;', sub);
+  const subName = el('div', 'font-size:10px;letter-spacing:0.16em;margin-bottom:3px;', subBody);
+  const subText = el('div', 'font-size:14px;line-height:1.4;color:#eef2fb;', subBody);
+  // speaker key -> portrait at /faces/<key>.png (missing file -> no portrait, text-only; fully graceful)
+  function showSubtitle(name, text, color = '#9ec7ff', key) {
     subName.textContent = name || '';
     subName.style.color = color;
     subText.textContent = text || '';
-    sub.style.display = 'block';
+    if (key) {
+      subFace.style.display = 'none';
+      subFace.style.borderColor = color;
+      subFace.onload = () => { subFace.style.display = 'block'; };
+      subFace.onerror = () => { subFace.style.display = 'none'; };
+      subFace.src = `/faces/${key}.png`;
+    } else { subFace.style.display = 'none'; subFace.removeAttribute('src'); }
+    sub.style.display = 'flex';
   }
   function hideSubtitle() { sub.style.display = 'none'; }
 
