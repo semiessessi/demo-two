@@ -446,8 +446,8 @@ export function createCloudPlanet() {
         vec3 w = vec3(fbm3(q*3.0 + uTime*0.004), fbm3(q*3.0 + 19.0), fbm3(q*3.0 + 41.0)) - 0.5;
         float clouds = fbm(q*8.5 + w*0.35);                       // mostly clean 3D noise
         float detail = fbm3(q*22.0 + w*0.5);                      // fine high-freq detail
-        clouds = clamp(clouds*0.82 + detail*0.18, 0.0, 1.0);      // less harsh high-freq
-        clouds = clamp((clouds - 0.5) * 0.8 + 0.5, 0.0, 1.0);     // gentle, LIGHT fractal base (low contrast, soft)
+        clouds = clamp(clouds*0.78 + detail*0.22, 0.0, 1.0);      // a touch more fine noise showing through
+        clouds = clamp((clouds - 0.5) * 0.92 + 0.5, 0.0, 1.0);    // gentle LIGHT fractal base, contrast nudged back up a little
         // 3-tone: deep cyan shadow -> cyan -> white tops
         vec3 trough = vec3(0.08, 0.28, 0.44);
         vec3 deep   = vec3(0.20, 0.56, 0.72);
@@ -465,7 +465,7 @@ export function createCloudPlanet() {
   // cyan-white atmosphere limb (same fresnel idea as Jupiter) — a THIN but DENSE rim (shell only ~1% out,
   // strength way up) so it reads as a substantial atmosphere hugging the planet, not a wide soft haze.
   const atmoMat = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color(0xbfeaff) }, uSunDir: { value: new THREE.Vector3(-55, 30, -30).normalize() }, uPower: { value: 2.2 }, uStrength: { value: 2.4 } },
+    uniforms: { uColor: { value: new THREE.Color(0xbfeaff) }, uSunDir: { value: new THREE.Vector3(-55, 30, -30).normalize() }, uPower: { value: 2.2 }, uStrength: { value: 1.85 } },
     vertexShader: /* glsl */`varying vec3 vN; varying vec3 vWorld; void main(){ vec4 wp=modelMatrix*vec4(position,1.0); vWorld=wp.xyz; vN=normalize(mat3(modelMatrix)*normal); gl_Position=projectionMatrix*viewMatrix*wp; }`,
     fragmentShader: /* glsl */`uniform vec3 uColor; uniform vec3 uSunDir; uniform float uPower, uStrength; varying vec3 vN; varying vec3 vWorld;
       void main(){ vec3 V=normalize(cameraPosition-vWorld); float f=pow(1.0-max(dot(normalize(vN),V),0.0),uPower);
@@ -736,9 +736,9 @@ export function createHabitablePlanet() {
   let moonAng = 0.6;
   function updateMoon(dt) {
     if (!moon.visible) return;
-    moonAng += 0.025 * dt; // slow orbit
+    moonAng += 0.0025 * dt; // slow orbit (~10% of the first pass — was much too fast)
     moon.position.copy(MOON_U).multiplyScalar(Math.cos(moonAng) * MOON_ORBIT).addScaledVector(MOON_V, Math.sin(moonAng) * MOON_ORBIT);
-    moon.rotation.y += 0.01 * dt;
+    moon.rotation.y += 0.001 * dt;
   }
   function setMoon(on) { moon.visible = !!on; }
 
