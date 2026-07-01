@@ -393,9 +393,9 @@ export function createCloudPlanet() {
     const y = 1 - (i + 0.5) / 8 * 2, rr = Math.sqrt(Math.max(0, 1 - y * y)), th = i * 2.39996323;
     centers.push(new THREE.Vector3(rr * Math.cos(th), y, rr * Math.sin(th)));
     const h = rng(i * 17.3 + 1.7);
-    const str = (0.07 + 0.15 * h) * (h > 0.5 ? 1 : -1); // very subtle local eddies (was 0.3-0.8 -> too smeary/oily)
+    const str = (0.05 + 0.10 * h) * (h > 0.5 ? 1 : -1); // very subtle local eddies (gentle, not stormy)
     const tight = 3.0 + 5.0 * rng(i * 7.1 + 3.3);
-    const spin = (0.02 + 0.08 * rng(i * 13.7 + 9.1)) * (rng(i * 3.3 + 5.5) > 0.5 ? 1 : -1);
+    const spin = (0.0022 + 0.007 * rng(i * 13.7 + 9.1)) * (rng(i * 3.3 + 5.5) > 0.5 ? 1 : -1); // ~10x slower — a gentle planet-scale drift, not a fast spin
     swirls.push(new THREE.Vector4(str, tight, spin, 0));
   }
   const mat = new THREE.ShaderMaterial({
@@ -442,12 +442,12 @@ export function createCloudPlanet() {
       }
       void main(){
         vec3 q = swirl(vP);                                       // gentle, localized eddies only (no global smear)
-        // a TINY domain-warp for a touch of life — small, not the oily smear it was (w*2.4 -> w*0.35)
-        vec3 w = vec3(fbm3(q*3.0 + uTime*0.02), fbm3(q*3.0 + 19.0), fbm3(q*3.0 + 41.0)) - 0.5;
+        // a TINY, SLOW domain-warp for a touch of life — drift ~5x slower so it barely creeps
+        vec3 w = vec3(fbm3(q*3.0 + uTime*0.004), fbm3(q*3.0 + 19.0), fbm3(q*3.0 + 41.0)) - 0.5;
         float clouds = fbm(q*8.5 + w*0.35);                       // mostly clean 3D noise
         float detail = fbm3(q*22.0 + w*0.5);                      // fine high-freq detail
-        clouds = clamp(clouds*0.7 + detail*0.3, 0.0, 1.0);
-        clouds = clamp((clouds - 0.5) * 1.4 + 0.5, 0.0, 1.0);     // crisp, not smeary
+        clouds = clamp(clouds*0.82 + detail*0.18, 0.0, 1.0);      // less harsh high-freq
+        clouds = clamp((clouds - 0.5) * 0.8 + 0.5, 0.0, 1.0);     // gentle, LIGHT fractal base (low contrast, soft)
         // 3-tone: deep cyan shadow -> cyan -> white tops
         vec3 trough = vec3(0.08, 0.28, 0.44);
         vec3 deep   = vec3(0.20, 0.56, 0.72);

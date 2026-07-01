@@ -317,7 +317,7 @@ function updateBackdropBodies(dt) {
   if (cloudplanet && cloudplanet.group.visible) {
     cloudplanet.group.position.copy(camera.position).addScaledVector(CLOUD_DIR, 3000); // pushed back 2x (was 1500) -> large but no longer fills the sky
     cloudplanet.mat.uniforms.uTime.value += dt; // animate the swirling clouds
-    cloudplanet.planet && (cloudplanet.planet.rotation.y += 0.004 * dt);
+    cloudplanet.planet && (cloudplanet.planet.rotation.y += 0.0005 * dt); // very slow, planet-scale rotation (was 0.004 -> way too fast)
   }
   if (saturn && saturn.group.visible) {
     saturn.group.position.copy(camera.position).addScaledVector(SATURN_DIR, 3000); // big ringed world on the far side
