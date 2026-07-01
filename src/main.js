@@ -10,7 +10,7 @@ import { loadShip } from './ship.js';
 import { loadChig, layoutChigGlows, chigThruster } from './enemyShip.js';
 import { loadChigBattleship } from './chigBattleship.js';
 import { createBattleships } from './battleships.js';
-// Saratoga carrier loader lives in ./saratoga.js — imported when the campaign capital-ship set-piece wires it in.
+import { loadSaratoga } from './saratoga.js'; // carrier (Lexington/Saratoga) — cloned + placed by campaign missions
 import { createThrusters } from './thruster.js';
 import { createFlight } from './flight.js';
 import { createAudioManager } from './audio.js';
@@ -411,6 +411,7 @@ let flight = null;
 let stars = null;
 let chigKit = null;
 let chigBattleship = null;
+let saratoga = null; // carrier template (loaded once; campaign missions clone + place it via def.ships)
 let battleships = null; // skirmish capital-ship spawner (wave 3 & 5; maintain two)
 let enemyMgr = null;
 let waves = null;
@@ -737,8 +738,9 @@ async function init() {
     chigBattleship.template.scale.setScalar(chigBattleship.worldHeight / chigBattleship.normalizedHeight);
     console.log('[chigBattleship] loaded — height', chigBattleship.worldHeight.toFixed(1), '(30x fighter', fh.toFixed(2), ')');
   } catch (e) { console.warn('[chigBattleship] load failed', e); }
-  // Friendly carrier (Lexington/Saratoga): loader ready (src/saratoga.js, public/saratoga.glb) but deliberately
-  // NOT placed in skirmish/attract — it's a campaign/story ship, wired in when the capital-ship set-piece lands.
+  // Friendly carrier (Lexington/Saratoga): load the template (campaign missions clone + place it via def.ships).
+  // Deliberately NOT added to the scene in skirmish/attract — it's a campaign/story ship.
+  try { saratoga = await loadSaratoga(); saratoga.template.scale.setScalar(170); } catch (e) { console.warn('[saratoga] load failed', e); }
   enemyMgr = createEnemyManager(scene, chigKit, projectiles, { onFire: (pos) => sfx.chigShot(pos) });
   // skirmish: once a battleship is up, fighter waves pour out of it (attract runs its own wave loop)
   if (!ATTRACT) waves = createWaveManager(enemyMgr, { spawnOrigin: () => (battleships ? battleships.spawnOrigin() : null) });
