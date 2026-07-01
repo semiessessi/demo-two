@@ -393,7 +393,7 @@ export function createCloudPlanet() {
     const y = 1 - (i + 0.5) / 8 * 2, rr = Math.sqrt(Math.max(0, 1 - y * y)), th = i * 2.39996323;
     centers.push(new THREE.Vector3(rr * Math.cos(th), y, rr * Math.sin(th)));
     const h = rng(i * 17.3 + 1.7);
-    const str = (0.05 + 0.10 * h) * (h > 0.5 ? 1 : -1); // very subtle local eddies (gentle, not stormy)
+    const str = (0.035 + 0.06 * h) * (h > 0.5 ? 1 : -1); // small, subtle local eddies (gentle twist)
     const tight = 3.0 + 5.0 * rng(i * 7.1 + 3.3);
     const spin = (0.0022 + 0.007 * rng(i * 13.7 + 9.1)) * (rng(i * 3.3 + 5.5) > 0.5 ? 1 : -1); // ~10x slower — a gentle planet-scale drift, not a fast spin
     swirls.push(new THREE.Vector4(str, tight, spin, 0));
@@ -433,7 +433,7 @@ export function createCloudPlanet() {
           float a=dot(p,c);
           float r=sqrt(max(0.0,1.0-a*a));                         // 0 on the axis line, 1 at c's equator
           // rotation scales UP then DOWN with that line distance (a tight eyewall ring), per sp.y tightness:
-          float ring=4.0*r*(1.0-r); ring=ring*ring; ring=ring*ring; // tight, SMALL eyewall ring (4th power; no per-pixel pow/exp)
+          float ring=smoothstep(0.26, 0.015, r); ring=ring*ring; // SMALL swirl localized right at each vortex centre (was a broad ring at r=0.5)
           float ang=(sp.x+uTime*sp.z)*ring;
           float s=sin(ang), co=cos(ang);
           p = p*co + cross(c,p)*s + c*dot(c,p)*(1.0-co);          // Rodrigues rotation about axis c
