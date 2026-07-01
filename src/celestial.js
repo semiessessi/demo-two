@@ -139,7 +139,7 @@ export function createBlackHole(bhDir) {
   );
   flowTex.colorSpace = THREE.LinearSRGBColorSpace;
   const flowTimeU = { value: 0 }; // shared between the lensing shader + the base sky-sphere layer
-  const FLOW_AMT = 0.06;
+  const FLOW_AMT = 0.12; // flow displacement — 2x so the nebula drift/swirl actually reads
 
   const Rs = 90; // event-horizon (Schwarzschild) radius in world units
   const DISK_IN = 2.2 * Rs;
@@ -165,7 +165,7 @@ export function createBlackHole(bhDir) {
       uSkyFlow: { value: flowTex },
       uFlowTime: flowTimeU,
       uFlowAmt: { value: FLOW_AMT },
-      uSuck: { value: 0.22 },
+      uSuck: { value: 0.34 }, // accretion drag toward the hole — stronger so the "suck" is visible near it
     },
     transparent: true,
     depthWrite: false,

@@ -338,7 +338,7 @@ function updateBackdropBodies(dt) {
     u.uCamPos.value.copy(camera.position);
     u.uCenter.value.copy(camera.position).addScaledVector(BH_DIR, 7200); // the hole sits in the BH_DIR sky direction (2x farther -> ~half the apparent size)
     u.uTime.value += dt;
-    u.uFlowTime.value += dt * 0.06; // slow nebula flow / accretion drift on the skybox
+    u.uFlowTime.value += dt * 0.10; // nebula flow / accretion drift on the skybox (a touch faster so it reads)
   }
 }
 // Backdrop bodies sit at infinity (3000+ units); the foreground smoke is always nearer, so they NEVER
