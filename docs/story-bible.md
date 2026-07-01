@@ -49,8 +49,10 @@ sortie is a roll you might not survive."
 - **M1 "Shakedown"** — Groombridge 34 recon sweep; the system is empty; flash traffic: the 58th has been
   bounced hard at the Belt and is going under; scrub the recon, jump to help. *(Built, on master.)*
 - **M2 "Battle of the Belt"** — arrive as the **rescuers**: clear the Chig swarm off the Wild Cards before
-  they're wiped out, while behind the furball FOUR human carriers missile TWO Chig battleships to death.
-  The pilot's climactic battle, from our side. *(Built; reframed as the rescue. Capital-ship set-piece TBD.)*
+  they're wiped out. Set-piece behind the furball: **TWO Chig battleships** push through the asteroids and are
+  held off by the **58th's ACMs** before the 88th can arrive; as it turns, the **Coral Sea** (a task-force
+  carrier — *not* the Lexington) picks off the last Chig fighter on **Vansen's** tail. The pilot's climactic
+  battle, from our side. *(Built; reframed as the rescue. Capital-ship set-piece TBD.)*
 - **M3 "Dead Man's Hand"** — salvage on the Achilles outer edge: recover the data core from a silent
   **AeroTech** courier (the *Cassandra*) under a Chig ambush, and meet the **Silicates** for the first time
   (they were there first). Opens the AeroTech conspiracy thread; introduces the `silicate` speaker. *(Built,

@@ -8,6 +8,7 @@ import { createNebula } from './nebula.js';
 import { buildStarfield } from './starfield.js';
 import { loadShip } from './ship.js';
 import { loadChig, layoutChigGlows, chigThruster } from './enemyShip.js';
+import { loadChigBattleship } from './chigBattleship.js';
 import { createThrusters } from './thruster.js';
 import { createFlight } from './flight.js';
 import { createAudioManager } from './audio.js';
@@ -407,6 +408,7 @@ input.invertKeys = !!settings.invertKeys; input.invertStick = !!settings.invertS
 let flight = null;
 let stars = null;
 let chigKit = null;
+let chigBattleship = null;
 let enemyMgr = null;
 let waves = null;
 let debug = null;
@@ -722,6 +724,17 @@ async function init() {
   // register the lit hull materials so the cascaded sun shadows fall on them (self + ship-to-ship)
   lighting.registerTree(ship.pivot);
   lighting.registerTree(chigKit.template);
+  // TEST: one Chig battleship as capital-ship set-dressing, sized to ~30x the fighter's height (bible).
+  // Procedural shader ported from /ship-preview. Positioned off to one side + ahead, framed by its own size.
+  try {
+    chigBattleship = await loadChigBattleship(sunDir);
+    const fh = new THREE.Box3().setFromObject(chigKit.template).getSize(new THREE.Vector3()).y || chigKit.radius;
+    const H = 30 * fh;
+    chigBattleship.template.scale.setScalar(H / chigBattleship.normalizedHeight);
+    chigBattleship.template.position.set(H * 0.6, H * 0.12, -H * 4.0);
+    scene.add(chigBattleship.template);
+    console.log('[chigBattleship] placed — height', H.toFixed(1), '(30x fighter', fh.toFixed(2), ')');
+  } catch (e) { console.warn('[chigBattleship] load failed', e); }
   enemyMgr = createEnemyManager(scene, chigKit, projectiles, { onFire: (pos) => sfx.chigShot(pos) });
   if (!ATTRACT) waves = createWaveManager(enemyMgr); // attract owns its own wave loop
   vfx = createVfx(scene, camera, { lightDir: sunDir, onExplosion: (p, s) => sfx.onExplosion(p, s) }); // align smoke self-shadow with the real sun; SFX boom on every explosion
@@ -1023,6 +1036,7 @@ function startLoop() {
     combat.update(dt);
     if (flying) damage.update(dt, vfx);
     vfx.update(dt);
+    if (chigBattleship) chigBattleship.update(dt); // advance the core-band noise
     if (debris) debris.update(dt, debrisPlayer, enemyMgr.enemies); // enemy debris: drift, bounce, cull
     if (asteroidField) asteroidField.update(dt, { player: debrisPlayer, enemies: enemyMgr.enemies, projectiles, damage, enemyMgr, mode: gameState.mode }); // Trojan rocks: drift + collide with ships/bolts
     if (playerDebris) playerDebris.update(dt, null, enemyMgr.enemies); // player wreck debris (no self-collide)
