@@ -715,7 +715,7 @@ async function init() {
     flight = createFlight(ship.pivot, camera, renderer.domElement, input);
   }
 
-  projectiles = createProjectiles(scene);
+  projectiles = createProjectiles(scene, camera);
   if (!ATTRACT) {
     cannon = createPlayerCannon(scene, ship, projectiles, {
       getEnemies: () => (enemyMgr ? enemyMgr.enemies : []),
