@@ -15,6 +15,8 @@ export function createBattleships(scene, { template, worldHeight, vfx, getWave, 
   const targetCount = () => { const w = getWave(); return w >= 5 ? 2 : w >= 3 ? 1 : 0; };
   const aliveCount = () => list.reduce((n, b) => n + (b.alive ? 1 : 0), 0);
 
+  const HP = 600; // takes sustained fire / a few missiles — tunable
+
   function spawnOne() {
     const p = getPlayer();
     const obj = template.clone(true); // shares geometry + shader material
@@ -28,7 +30,31 @@ export function createBattleships(scene, { template, worldHeight, vfx, getWave, 
       .addScaledVector(_up, H * 0.25);
     obj.lookAt(p.pos);
     scene.add(obj);
-    list.push({ obj, alive: true });
+    obj.updateMatrixWorld(true);
+    // Static collision proxy (it doesn't move): a stack of spheres along the hull's longest world extent, so
+    // bolts hit the actual slab rather than a giant enclosing sphere.
+    const bb = new THREE.Box3().setFromObject(obj);
+    const size = bb.getSize(new THREE.Vector3());
+    const cen = bb.getCenter(new THREE.Vector3());
+    const dims = [size.x, size.y, size.z];
+    const la = dims[0] >= dims[1] && dims[0] >= dims[2] ? 0 : (dims[1] >= dims[2] ? 1 : 2); // longest axis
+    const r = Math.max(dims[(la + 1) % 3], dims[(la + 2) % 3]) * 0.55;
+    const n = Math.max(3, Math.round(dims[la] / (r * 1.1)));
+    const spheres = [];
+    for (let k = 0; k < n; k++) {
+      const t = n > 1 ? k / (n - 1) - 0.5 : 0;
+      const q = cen.clone();
+      q.setComponent(la, cen.getComponent(la) + t * (dims[la] - r));
+      spheres.push({ pos: q, radius: r });
+    }
+    const b = { obj, alive: true, hp: HP, maxHp: HP, spheres };
+    b.hit = (dmg, point) => {
+      if (!b.alive) return;
+      b.hp -= dmg;
+      if (vfx) vfx.spark(point, 0xff9464);
+      if (b.hp <= 0) destroy(b);
+    };
+    list.push(b);
     if (vfx) vfx.firework(obj.position, 2.5); // warp-in flash
   }
 
@@ -38,17 +64,20 @@ export function createBattleships(scene, { template, worldHeight, vfx, getWave, 
     while (aliveCount() < targetCount() && guard++ < 4) spawnOne();
   }
 
+  // Live capital-ship targets for combat.js: each is { spheres:[{pos,radius}], hit(dmg, point) }.
+  function targets() { return list.filter((b) => b.alive); }
+
   // The live spawn point for fighter waves (first live battleship), or null before wave 3.
   function spawnOrigin() {
     for (const b of list) if (b.alive) return b.obj.position;
     return null;
   }
 
-  // Destruction hook (no capital-ship damage yet): mark one dead + remove; update() spawns a replacement.
+  // Death: a string of blasts down the hull, then remove it; update() spawns a replacement.
   function destroy(b) {
     if (!b || !b.alive) return;
     b.alive = false;
-    if (vfx) vfx.explosion(b.obj.position, 4.0);
+    if (vfx) { for (const s of b.spheres) vfx.explosion(s.pos, 3.0); vfx.firework(b.obj.position, 4.0); }
     scene.remove(b.obj);
   }
 
@@ -57,5 +86,5 @@ export function createBattleships(scene, { template, worldHeight, vfx, getWave, 
     list.length = 0;
   }
 
-  return { update, spawnOrigin, destroy, reset, list };
+  return { update, spawnOrigin, targets, destroy, reset, list };
 }

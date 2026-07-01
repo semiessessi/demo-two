@@ -789,6 +789,7 @@ async function init() {
   // only route hits to the player while actually flying — in the menu the ship is an immortal attract
   // ally (handled via combat friendlies), so enemy bolts must not damage the player's real hull.
   combat.setOnPlayerHit((pt, dmg, from) => { if (gameState.mode === 'flying') damage.applyHit(pt, dmg, from); });
+  combat.setCapitalTargets(() => (battleships ? battleships.targets() : [])); // player bolts/missiles can damage + kill battleships
 
   hud = createHud(damage, { getKills: () => enemyMgr.kills, onRestart: () => gameState.restart() });
   targetDisplay = createTargetDisplay(chigKit.template);
