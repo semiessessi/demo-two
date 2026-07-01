@@ -91,6 +91,6 @@ export const m4 = {
     'house.push':       { speaker: 'house',     text: "More inbound — they want this thorough. Keep your spacing, watch each other's backs.", dur: 5.0 },
     'boxcars.mad':      { speaker: 'boxcars',   text: "They sold us out! When we get home I'm gonna— ahh, just point me at the next one.", dur: 4.5 },
     'house.clear':      { speaker: 'house',     text: "That's the last of them. We're alive — and we know what they didn't want us to. Form up, back to the gate, before AeroTech sends the next surprise.", dur: 8.0 },
-    'house.jump':       { speaker: 'house',     text: "Gate's hot. Punch through, Longshot — the Lex needs to hear this, all of it. See you on the other side.", dur: 6.0 },
+    'house.jump':       { speaker: 'house',     text: "Gate's hot. Punch through, Longshot — the Coral Sea needs to hear this, all of it. See you on the other side.", dur: 6.0 },
   },
 };

@@ -39,9 +39,10 @@ sortie is a roll you might not survive."
 - **In Vitros** ("tanks") — vat-grown adult humans, a resented underclass. (Loaded is one.)
 - **58th "Wild Cards" · Lt. Col. McQueen · USS Saratoga** — the canon squadron we keep rescuing/supporting.
   We are *not* them — we're the unsung 88th alongside them.
-- **88th "Longshots" · USS Lexington** — OUR home carrier. A Lexington-class **sister ship of the Saratoga**
-  (same hull → the same 3D model serves both). This replaces the earlier "Coral Sea" working name. We fly off
-  *the Lex*, running parallel to the 58th on the Saratoga.
+- **88th "Longshots" — carrier arc: the *Coral Sea*, then the *Lexington*.** OUR home carrier through Act 1 is
+  the **USS Coral Sea** (a Lexington-class sister of the Saratoga; one 3D model serves all carriers). She is
+  **lost at Proxima (M5)** — the survivors regroup onto the **USS Lexington** for Act 2+. (This supersedes the
+  earlier "Lexington = home" note; there are TWO ships, in that order.) We run parallel to the 58th's Saratoga.
 - **Kazbek** — our own original prison-moon location (Silicate-run; Act 3 rescue of House).
 - **SA-43 Hammerhead** — our jet (canon designation).
 
@@ -51,8 +52,8 @@ sortie is a roll you might not survive."
   bounced hard at the Belt and is going under; scrub the recon, jump to help. *(Built, on master.)*
 - **M2 "Battle of the Belt"** — arrive as the **rescuers**: clear the Chig swarm off the Wild Cards before
   they're wiped out. Set-piece behind the furball: **TWO Chig battleships** push through the asteroids and are
-  held off by the **58th's ACMs** before the 88th can arrive; as it turns, the **Coral Sea** (a task-force
-  carrier — *not* the Lexington) picks off the last Chig fighter on **Vansen's** tail. The pilot's climactic
+  held off by the **58th's ACMs** before the 88th can arrive; as it turns, the **Coral Sea** (the 88th's own
+  home carrier) picks off the last Chig fighter on **Vansen's** tail. The pilot's climactic
   battle, from our side. *(Built; reframed as the rescue. Capital-ship set-piece TBD.)*
 - **M3 "Dead Man's Hand"** — salvage on the Achilles outer edge: recover the data core from a silent
   **AeroTech** courier (the *Cassandra*) under a Chig ambush, and meet the **Silicates** for the first time
@@ -63,7 +64,7 @@ sortie is a roll you might not survive."
   bury what they know. Confirms the contractor is dealing with the enemy; the war grows a second front, at
   our backs. *(Built, gated `?singleplayer`.)*
 - **M5 "All In"** — the Proxima gut-punch (act climax). The fleet's stand at Proxima; the 88th flies the
-  screen over the carriers, and despite holding the line the **USS Lexington is lost** with most of her crew
+  screen over the carriers, and despite holding the line the **USS Coral Sea is lost** with most of her crew
   — a Pyrrhic survival. Emotional nadir of Act 1. New **`proxima`** env: red-dwarf primary + two distant
   companions (white + yellow, Alpha-Centauri-like), an Earth-like world (atmosphere + normal map) with a
   moon. *(Built, gated `?singleplayer`.)*
@@ -76,7 +77,7 @@ sortie is a roll you might not survive."
   the **ship-preview** dev tool (`/ship-preview`):
   - *Human carriers* — a CC BY-NC-SA Saratoga STL (alpokemon / orig. Katase, Thingiverse
     [#1889381](https://www.thingiverse.com/thing:1889381); **attribution required, non-commercial only**).
-    One mesh serves every carrier. Roles: set-dressing; story combatant (the **Lexington**); and a skirmish
+    One mesh serves every carrier. Roles: set-dressing; story combatant (the **Coral Sea**, then the **Lexington**); and a skirmish
     refuel/reload point whose name is randomised from historic US carriers (Saratoga, Lexington, Ranger,
     Yorktown, Hornet, Belleau Wood, …).
   - *Chig battleship* — `assets-src/source/chig-battleship.fbx`; dark-green hull + a glowing hex/triangle

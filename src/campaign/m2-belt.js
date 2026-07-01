@@ -16,7 +16,7 @@ export const m2 = {
   loadout: 'default',
   vo: 'm2-belt',
   music: { track: null, duck: 0.3 },
-  faces: { house: 'house-operations' }, // House still grounded — directs from the Lex's ops
+  faces: { house: 'house-operations' }, // House still grounded — directs from the Coral Sea's ops
 
   briefing: {
     location: 'JUPITER TROJANS · THE BELT',

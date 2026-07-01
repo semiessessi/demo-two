@@ -1,4 +1,4 @@
-// Mission 3 — "Dead Man's Hand" (salvage / first contact). Off the books, the Lexington sends the 88th to a
+// Mission 3 — "Dead Man's Hand" (salvage / first contact). Off the books, the Coral Sea sends the 88th to a
 // silent AeroTech courier — the Cassandra — on the cold edge of the Achilles system to recover her data core.
 // First contact with the SILICATES: the Chigs' rebel-AI collaborators are NOT fighter pilots — they're
 // infiltrators/saboteurs who BOARDED the Cassandra before she went dark and are scrubbing the core from
@@ -23,7 +23,7 @@ export const m3 = {
   briefing: {
     location: 'ACHILLES SYSTEM · OUTER EDGE',
     body: [
-      "Off the books: an AeroTech courier — the Cassandra — went silent on the cold edge of the Achilles system. No escort, no distress call, no reason to be out this far. The Lexington wants her data core in our hands before anyone else reaches her.",
+      "Off the books: an AeroTech courier — the Cassandra — went silent on the cold edge of the Achilles system. No escort, no distress call, no reason to be out this far. The Coral Sea wants her data core in our hands before anyone else reaches her.",
       "Fly out, hold station while we pull the core, and bring it home. Nobody loses an AeroTech ship and stays this quiet about it — so expect company. Stay sharp.",
     ],
     objectives: ['Reach the derelict Cassandra', 'Recover the data core', 'Carry it home'],
@@ -83,7 +83,7 @@ export const m3 = {
   ],
 
   lines: {
-    'house.brief':      { speaker: 'house',     text: "Longshot flight, House. Quiet one, off the books — an AeroTech courier, the Cassandra, went dark out on the Achilles edge. The Lex wants her data core before anyone else digs it up. Form on Hardway, weapons warm.", dur: 9.0 },
+    'house.brief':      { speaker: 'house',     text: "Longshot flight, House. Quiet one, off the books — an AeroTech courier, the Cassandra, went dark out on the Achilles edge. The Coral Sea wants her data core before anyone else digs it up. Form on Hardway, weapons warm.", dur: 9.0 },
     'hardway.formup':   { speaker: 'hardway',   text: "Comeout — tuck into the blue box and hold it. Long way out to nowhere; let's not get sloppy.", dur: 5.0 },
     'hardway.in':       { speaker: 'hardway',   text: "Good, you're in. Flight, coming up on the courier's last position. Eyes open.", dur: 4.5 },
     'house.wreck':      { speaker: 'house',     text: "There she is. No escort, no distress call, no business being this far out — and she's running stone cold. AeroTech doesn't lose a ship and stay this quiet. Get me that core. I want to know what they were hiding.", dur: 9.5 },
@@ -94,6 +94,6 @@ export const m3 = {
     'house.core':       { speaker: 'house',     text: "They're wiping it from the inside — we're pulling what we can. Keep the Chigs off us, just a little longer.", dur: 5.5 },
     'house.gotit':      { speaker: 'house',     text: "Got it — what the machines didn't manage to erase. Two enemies came to keep this buried; that tells me it's worth carrying. We're taking it home. Form up, back to the gate.", dur: 8.5 },
     'snakeeyes.bad':    { speaker: 'snakeeyes', text: "Two armies guarding one dead ship's secrets. Even I don't like those odds. Let's go.", dur: 5.0 },
-    'house.jump':       { speaker: 'house',     text: "Gate's hot. Punch through, Longshot — the Lex will want to see what we found. See you on the other side.", dur: 6.0 },
+    'house.jump':       { speaker: 'house',     text: "Gate's hot. Punch through, Longshot — the Coral Sea will want to see what we found. See you on the other side.", dur: 6.0 },
   },
 };

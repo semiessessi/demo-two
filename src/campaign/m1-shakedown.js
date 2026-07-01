@@ -17,7 +17,7 @@ export const m1 = {
   loadout: 'default',
   vo: 'm1-shakedown',
   music: { track: null, duck: 0.35 },
-  faces: { house: 'house-operations' }, // House is GROUNDED early — she commands from the Lex's ops, not a cockpit
+  faces: { house: 'house-operations' }, // House is GROUNDED early — she commands from the Coral Sea's ops, not a cockpit
 
   briefing: {
     location: 'GROOMBRIDGE 34 · RECON SWEEP',
@@ -74,7 +74,7 @@ export const m1 = {
   ],
 
   lines: {
-    'house.checkin':  { speaker: 'house',     text: "Longshot flight, this is House, on the Lex. You're through the Groombridge gate — recon sweep. Command reckons the Chigs are massing out there for a push; you go confirm it. Form on Hardway, weapons cold.", dur: 8.5 },
+    'house.checkin':  { speaker: 'house',     text: "Longshot flight, this is House, on the Coral Sea. You're through the Groombridge gate — recon sweep. Command reckons the Chigs are massing out there for a push; you go confirm it. Form on Hardway, weapons cold.", dur: 8.5 },
     'hardway.formup': { speaker: 'hardway',   text: "Comeout — your slot's the blue box. Slide in nice and easy and hold it. Stay off the gas.", dur: 5.5 },
     'hardway.in':     { speaker: 'hardway',   text: "Good, you're in the pocket. Flight, pushing up. Let's see what's out here.", dur: 4.5 },
     'house.recon1':   { speaker: 'house',     text: "First mark's clear — I've got your take up here. Nothing on the scope: no reactors, no traffic, nothing at all.", dur: 5.5 },
