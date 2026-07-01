@@ -15,7 +15,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 const ZERO = new THREE.Vector3();
 
 export function createMission(def, world) {
-  const { scene, ship, enemyMgr, projectiles, vfx, lighting, comms, missionHud } = world;
+  const { scene, ship, enemyMgr, projectiles, vfx, lighting, comms, missionHud, saratoga, chigBattleship } = world;
   const wingmen = [];          // { id, speaker, slot, mode, ally, pivot, thr, rcs }
   const wpVec = {};            // waypoint id -> THREE.Vector3 (world)
   const firedAt = {};          // beat id -> mission-clock time it fired
@@ -35,6 +35,7 @@ export function createMission(def, world) {
   let formationMoving = false; // form-up holds the formation; set true once we push off
   let slotShown = false;       // is the player's form-up slot marker visible
   let gateMesh = null;         // wormhole ring placeholder
+  const placedShips = [];      // mission-placed capital ships (carriers / battleships) — set-dressing
 
   const _off = new THREE.Vector3();
   const _ps = new THREE.Vector3();
@@ -91,6 +92,20 @@ export function createMission(def, world) {
       gateMesh = new THREE.Mesh(geo, mat);
       gateMesh.position.fromArray(def.gate.pos || [0, 0, 160]);
       scene.add(gateMesh);
+    }
+    // capital ships (carriers / Chig battleships) placed by the mission. Clone the shared template; hide the
+    // ambient set-dressing carrier so it doesn't also float in deep-space missions.
+    if (saratoga && saratoga.template) saratoga.template.visible = false;
+    for (const s of (def.ships || [])) {
+      const src = s.type === 'chigbattleship' ? chigBattleship : saratoga;
+      if (!src || !src.template) continue;
+      const inst = src.template.clone();
+      if (s.scale != null) inst.scale.setScalar(s.scale);
+      inst.position.fromArray(s.pos || [0, 0, 0]);
+      inst.rotation.y = s.rotY || 0;
+      inst.visible = true;
+      scene.add(inst);
+      placedShips.push(inst);
     }
     if (comms) comms.load(def.vo, def.lines || {});
     if (missionHud) { missionHud.clearObjectives(); missionHud.setWaypoint(null); missionHud.setSlot(null); missionHud.show(); }
@@ -206,6 +221,9 @@ export function createMission(def, world) {
     }
     wingmen.length = 0;
     if (gateMesh) { try { scene.remove(gateMesh); gateMesh.geometry.dispose(); gateMesh.material.dispose(); } catch (_) {} gateMesh = null; }
+    for (const s of placedShips) { try { scene.remove(s); } catch (_) {} } // clones share geo/mat -> don't dispose
+    placedShips.length = 0;
+    if (saratoga && saratoga.template) saratoga.template.visible = true; // restore the ambient set-dressing carrier
     if (comms) comms.clear();
     if (missionHud) { missionHud.hide(); missionHud.clearObjectives(); }
   }

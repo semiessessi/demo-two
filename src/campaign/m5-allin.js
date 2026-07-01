@@ -39,6 +39,13 @@ export const m5 = {
     { id: 'snakeeyes', speaker: 'snakeeyes', slot: [18, 2, 9],  mortal: false },
   ],
 
+  // the Proxima fleet: the USS Lexington (the ship you protect + lose) sits on the LEX nav marker, + two more
+  ships: [
+    { type: 'carrier', pos: [0, 18, 240], scale: 200, rotY: 0.0 },   // USS Lexington — home
+    { type: 'carrier', pos: [-440, -30, 430], scale: 165, rotY: 0.5 },
+    { type: 'carrier', pos: [410, -45, 500], scale: 165, rotY: -0.45 },
+  ],
+
   waypoints: {
     LEX: [0, 18, 240], // the USS Lexington, behind the screen — what you're dying to protect
     GATE: [0, -10, 250],

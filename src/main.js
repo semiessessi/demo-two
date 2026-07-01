@@ -593,7 +593,7 @@ function launchMission(def) {
   if (weaponSelect) { weaponSelect.rebuild(); weaponSelect.setVisible(true); } // campaign also gets the weapon stack
   if (pilotBar) pilotBar.hide();
   missionHud.show();
-  mission = createMission(def, { scene, camera, ship, enemyMgr, projectiles, vfx, lighting, hullDebris: playerDebris, comms, missionHud, onComplete, onFail });
+  mission = createMission(def, { scene, camera, ship, enemyMgr, projectiles, vfx, lighting, hullDebris: playerDebris, comms, missionHud, saratoga, chigBattleship, onComplete, onFail });
   if (combat) combat.setFriendlies(mission.friendlies); // enemy bolts can hit wingmen (combat missions)
   mission.start();
   firstGesture(); // the launch click is a user gesture -> unlock audio (VO + music)

@@ -34,6 +34,14 @@ export const m2 = {
     { id: 'snakeeyes', speaker: 'snakeeyes', slot: [18, 2, 9],  mortal: false },
   ],
 
+  // the fleet the screen is protecting: human carriers standing off behind the furball
+  ships: [
+    { type: 'carrier', pos: [-520, -70, 780], scale: 170, rotY: 0.4 },
+    { type: 'carrier', pos: [340, -100, 980], scale: 170, rotY: -0.3 },
+    { type: 'carrier', pos: [-140, -50, 1180], scale: 170, rotY: 0.1 },
+    { type: 'carrier', pos: [560, -80, 860], scale: 170, rotY: -0.6 },
+  ],
+
   script: [
     // Radio silence on the run-in: no 88th chatter — we drop into the battle hearing only the 58th's traffic
     // over the net (episode samples ep.* -> public/vo/m2-belt/, user-supplied). Silence breaks at contact.
