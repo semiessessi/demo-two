@@ -46,7 +46,7 @@ const BLOB_FRAG = /* glsl */`
   void main() {
     float headV = 0.72;                                    // blob sits near the leading end
     vec2 pb = vec2(vUv.x - 0.5, (vUv.y - headV) / max(uAspect, 0.02));
-    float bd = length(pb) * 4.0;                           // *4 -> blob is HALF the diameter (trail unchanged)
+    float bd = length(pb) * 2.67;                          // 2.0 = full, 4.0 = half -> 2.67 ≈ 75% blob diameter
     float blob = 1.0 - smoothstep(0.3, 1.0, bd);           // soft round core
     float n = fbm3(vec3(vUv * 6.0 + uSeed * 30.0, uTime * 3.0));
     n = smoothstep(0.12, 0.85, n);                         // contrast -> clear fractal patches
