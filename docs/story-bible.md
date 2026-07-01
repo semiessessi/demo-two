@@ -21,10 +21,11 @@ sortie is a roll you might not survive."
 | Callsign | Role | Notes |
 |---|---|---|
 | **Comeout** | the player | the new arrival; everything starts on the come-out |
-| **House** | CO | British (RN/RM secondment), dry, composed. Creed: *there's no such thing as luck, only odds you failed to read.* |
+| **House** | CO | British **woman** (RN/RM secondment), dry, composed. Creed: *there's no such thing as luck, only odds you failed to read.* |
 | **Hardway** | flight lead | by-the-book grinder; moral centre; survives |
-| **Boxcars** | wingman | hotshot glory-hound |
-| **Snake-Eyes** | wingman | the unlucky fatalist who never quite dies |
+| **Boxcars** | wingman | hotshot glory-hound (**she**) |
+| **Snake-Eyes** | wingman | the unlucky fatalist who never quite dies (he) |
+| — portraits | — | `public/faces/`: **women** = House, Boxcars, Dice, Pips, Six-Shooter; **men** = Snake-Eyes, Gambler, Lucky-Seven (Hardway/Natural TBD by their art) |
 | Push / Loaded / Natural | reserve cast | introduce later (Loaded = an In Vitro) |
 
 ## The world (canon backdrop we borrow)

@@ -45,7 +45,7 @@ By-the-book grinder, the steady moral centre. Calm, patient — talks you throug
 | `hardway.burn.mp3` | "You heard her — the Wild Cards are out of time. Firewall it for the gate; we jump together." | 5s |
 
 ## BOXCARS — hotshot wingman  (files `boxcars.*`)
-Cocky glory-hound, itching for a fight — here he's just let down/bored that there's nothing to shoot.
+Cocky glory-hound, itching for a fight — here she's just let down/bored that there's nothing to shoot.
 
 | File | Line | ~len |
 |---|---|---|

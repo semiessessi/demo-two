@@ -47,7 +47,7 @@ The line that **breaks radio silence** at contact — it's the mission kicking o
 | `hardway.break.mp3` | "Radio silence is blown — they've made us. Break and engage, weapons free! Pull the Chigs off the Wild Cards." | 6s |
 
 ## BOXCARS — hotshot wingman  (files `boxcars.*`)
-Cocky, gleeful — first to score and bragging, but it's also reassurance to the people he's saving.
+Cocky, gleeful — first to score and bragging, but it's also reassurance to the people she's saving.
 
 | File | Line | ~len |
 |---|---|---|

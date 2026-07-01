@@ -16,7 +16,7 @@ deck swapped in to cheat you.)
 
 ## HOUSE — squadron CO  (files `house.*`)
 Dry, composed — but this one lands personal. The betrayal hardens him; `house.betrayed` is the emotional
-centre: quiet, controlled fury, a CO holding his people together.
+centre: quiet, controlled fury, a CO holding her people together.
 
 | File | Line | ~len |
 |---|---|---|
@@ -37,7 +37,7 @@ Steady. `hardway.trap` is the jaws closing — sharp, fast, no panic but real ur
 | `hardway.trap.mp3` | "Contacts — a lot of them! They were sitting dark, waiting on us. Break, weapons free — it's an ambush!" | 5.5s |
 
 ## BOXCARS — hotshot wingman  (files `boxcars.*`)
-The betrayal makes him furious — bravado cracking into real anger, then he channels it into the fight.
+The betrayal makes her furious — bravado cracking into real anger, then she channels it into the fight.
 
 | File | Line | ~len |
 |---|---|---|

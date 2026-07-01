@@ -9,15 +9,15 @@ Centauri**; the 88th flies the screen over the carriers with the **USS Lexington
 fight a wall of enemies and a strike group that breaks for the Lex; and despite holding the line, **the
 Lexington is mortally hit and lost** with most of her crew. A Pyrrhic survival: you do everything right and
 it still isn't enough. **Tone:** grim resolve → the worst fight of the war → a desperate scramble to stop the
-strike → House's composure shattering as his ship burns → quiet, gutted survival. The emotional nadir of
+strike → House's composure shattering as her ship burns → quiet, gutted survival. The emotional nadir of
 Act 1 — don't undersell `house.lex` and `house.gone`.
 
 ---
 
 ## HOUSE — squadron CO  (files `house.*`)
-The British, never-rattled CO — **broken open** here. `house.lex` is the moment his composure fails (his
-ship, his home); `house.gone` is him putting himself back together for his people, hollow and quiet. This is
-the big performance of the campaign so far.
+The British, never-rattled CO (she) — **broken open** here. `house.lex` is the moment her composure fails
+(her ship, her home); `house.gone` is her putting herself back together for her people, hollow and quiet.
+This is the big performance of the campaign so far.
 
 | File | Line | ~len |
 |---|---|---|
@@ -43,7 +43,7 @@ The fatalist, for once not joking. `snakeeyes.quiet` is two words, barely voiced
 | `snakeeyes.many.mp3` | "Always said the odds would catch up to me. Didn't figure they'd bring the whole house with 'em." | 5s |
 | `snakeeyes.quiet.mp3` | "...all those people." | 2.5s |
 
-*(Boxcars has no line this mission — he's silent here, which says enough.)*
+*(Boxcars has no line this mission — she's silent here, which says enough.)*
 
 ---
 
