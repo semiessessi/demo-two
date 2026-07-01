@@ -22,6 +22,9 @@ export function createBriefing({ onLaunch, onBack } = {}) {
   const panel = el('div', `position:relative;width:min(560px,92vw);max-height:88vh;overflow-y:auto;padding:26px 28px;`
     + `pointer-events:auto;${PANEL}${FONT}display:flex;flex-direction:column;gap:14px;box-shadow:0 0 50px rgba(0,0,0,0.55);`, root);
 
+  // briefing-scene portrait banner (House at the tactical map, etc.) — per-mission via def.briefing.portrait
+  const portrait = el('img', 'width:100%;height:156px;object-fit:cover;object-position:center 28%;border-radius:10px;'
+    + 'border:1px solid rgba(150,180,255,0.18);display:none;', panel);
   const eyebrow = el('div', 'font-size:10px;letter-spacing:0.22em;color:#9fb0d0;', panel);
   const title = el('div', 'font-size:26px;letter-spacing:0.14em;color:#eaeefc;text-shadow:0 0 16px rgba(120,170,255,0.4);', panel);
   const body = el('div', 'font-size:13px;line-height:1.6;color:#c2ccdf;display:flex;flex-direction:column;gap:8px;', panel);
@@ -41,6 +44,11 @@ export function createBriefing({ onLaunch, onBack } = {}) {
   function show(def) {
     current = def;
     const b = def.briefing || {};
+    const pf = b.portrait || 'house-briefing'; // scene portrait for the briefing banner (missing -> hidden)
+    portrait.style.display = 'none';
+    portrait.onload = () => { portrait.style.display = 'block'; };
+    portrait.onerror = () => { portrait.style.display = 'none'; };
+    portrait.src = `/faces/${pf}.png`;
     eyebrow.textContent = b.location || `MISSION ${def.act || 1}`;
     title.textContent = def.title || 'Mission';
     body.innerHTML = '';
